@@ -1,0 +1,205 @@
+body {
+    background-color: #fff;
+    color: #444;
+}
+
+#search-bar {
+    text-align: center;
+    margin-top: 20px;
+}
+
+#search-input {
+    width: 300px;
+    padding: 10px;
+    font-size: 16px;
+    margin-bottom: 20px; /* Space between search input and upload button */
+}
+
+.upload-container {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 20px;
+}
+
+#upload-button {
+    padding: 10px;
+    font-size: 16px;
+    cursor: pointer;
+}
+
+#metadata {
+    text-align: center;
+    margin-top: 10px;
+    font-size: 14px;
+    color: grey;
+}
+
+#content {
+    position: relative;
+    top: 0;
+    width: 100%;
+    z-index: 1;
+    padding: 3em 0 0 0;
+}
+
+#c {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -1;
+}
+
+.folder-container {
+    width: 100%;
+    border: 1px solid #ccc;
+    padding: 10px;
+    margin-bottom: 20px;
+}
+
+.folder-container h3 {
+    text-align: center;
+    margin-top: 20px;
+}
+
+.list-item {
+    margin-bottom: 20px;
+}
+
+.rendering {
+    width: 100%;
+    height: 400px;
+    margin-bottom: 1em;
+    overflow: hidden;
+    position: relative;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+}
+
+
+.list-item > div:nth-child(2),
+.list-item > div:nth-child(3) {
+    color: #888;
+    font-family: sans-serif;
+    font-size: large;
+    width: 100%;
+    text-align: center;
+    margin-top: 0.5em;
+}
+
+button {
+    margin-top: 5px;
+    padding: 5px 10px;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.other-item {
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.other-item img {
+    max-width: 100%;
+    height: auto;
+    margin-bottom: 1em;
+    cursor: pointer;
+}
+
+.pdf-item {
+    width: 100%;
+    margin-bottom: 20px;
+}
+
+/* The Modal (background) */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    padding-top: 60px;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0, 0, 0, 0.9);
+}
+
+/* Modal Content Wrapper */
+#modal-content-wrapper {
+    position: relative;
+    margin: auto;
+    max-width: 100%;
+    max-height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+#modal-content-wrapper img {
+    max-width: 90vw;
+    max-height: 90vh;
+    width: auto;
+    height: auto;
+}
+
+/* Close Button */
+.close {
+    position: absolute;
+    top: 15px;
+    right: 35px;
+    color: #fff;
+    font-size: 40px;
+    font-weight: bold;
+    cursor: pointer;
+    z-index: 1001;
+}
+
+/* Borders around sections */
+.section {
+    border: 1px solid #ccc;
+    padding: 20px;
+    margin-bottom: 40px;
+    border-radius: 5px;
+}
+
+.section h3 {
+    margin-top: 0;
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+/* Adjusting spacing between images and PDFs */
+.other-item,
+.pdf-item {
+    margin-bottom: 20px;
+}
+
+/* Optional: Add border around individual items */
+.other-item img,
+.pdf-item iframe {
+    border: 1px solid #ddd;
+    padding: 5px;
+    border-radius: 5px;
+}
+
+/* G-code items */
+.gcode-item {
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.metadata {
+    text-align: left;
+    font-size: 14px;
+    margin-top: 10px;
+}
+
+/* Optional: Add border around G-code renderings */
+.gcode-item .rendering {
+    border: 1px solid #ddd;
+    border-radius: 5px;
+}
+
