@@ -1,0 +1,5 @@
+Flask==3.0.3
+pyyaml==6.0.2
+gunicorn==23.0.0
+ruff==0.6.9
+Flask-Compress==1.15

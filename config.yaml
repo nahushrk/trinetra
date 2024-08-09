@@ -1,0 +1,4 @@
+base_path: "/home/pi/trinetra-data/3dfiles/"
+gcode_path: "/home/pi/printer_data/gcodes/"
+log_level: "ERROR"
+mode: "PROD"

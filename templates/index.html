@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Trinetra</title>
+    <link rel="icon" href="/static/images/trinetra.ico" type="image/x-icon">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- Include Bootstrap CSS -->
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Include Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+    <!-- Include Three.js and OrbitControls -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.110/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.110/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.110/examples/js/loaders/STLLoader.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+<div class="container mt-4">
+    <!-- Search Bar -->
+    <div class="row justify-content-center">
+        <div class="col-md-10">
+            <div id="search-bar" class="input-group mb-3">
+                <input type="text" id="search-input" class="form-control" placeholder="Search STL files or folders...">
+            </div>
+            <!-- Upload Button Moved Below Search Bar -->
+            <div class="upload-container">
+                <div class="btn-group">
+                    <button id="upload-button" class="btn btn-outline-secondary dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                        <i class="bi bi-upload"></i> Upload
+                    </button>
+                    <div class="dropdown-menu">
+                        <a class="dropdown-item" href="#" id="upload-file">Upload File</a>
+                        <a class="dropdown-item" href="#" id="upload-directory">Upload Directory</a>
+                    </div>
+                </div>
+            </div>
+            <div id="metadata" class="text-center text-muted"></div>
+        </div>
+    </div>
+
+    <!-- Hidden file inputs for uploads -->
+    <input type="file" id="file-input" style="display: none;" multiple accept=".zip">
+    <input type="file" id="directory-input" style="display: none;" webkitdirectory directory multiple>
+
+    <canvas id="c" class="d-block mx-auto"></canvas>
+
+    <div id="content" class="mt-4"></div>
+</div>
+
+<!-- Include jQuery and Bootstrap JS for dropdown functionality -->
+<script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+    const stlFiles = {{stl_files | tojson}};
+</script>
+<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+
+</body>
+</html>
