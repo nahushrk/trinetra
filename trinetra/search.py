@@ -2,9 +2,7 @@ import re
 
 
 def tokenize(text) -> [str]:
-    split_text = re.split(r"\W+|_", text)
-    split_text = [word.lower() for word in split_text if word]
-    return split_text
+    return [word.lower() for word in re.split(r"\W+|_", text) if word]
 
 
 def search_tokens_all_match(query_tokens: [str], target_tokens: [str]) -> bool:

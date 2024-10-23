@@ -2,28 +2,44 @@ import io
 import logging
 import os
 import zipfile
-from crypt import methods
 
 import yaml
-from flask import Flask, jsonify, render_template, request, send_file
+from flask import (
+    Flask,
+    abort,
+    jsonify,
+    render_template,
+    request,
+    send_file,
+    send_from_directory,
+)
 from flask_compress import Compress
 from werkzeug.utils import secure_filename
 
 from trinetra import gcode_handler, search
 
 
+def safe_join(base, *paths):
+    """Safely join one or more path components to a base path to prevent directory traversal."""
+    base_path = os.path.abspath(base)
+    final_path = os.path.abspath(os.path.join(base, *paths))
+    if not final_path.startswith(base_path + os.sep):
+        raise Exception("Attempted Path Traversal")
+    return final_path
+
+
 def load_config(yaml_file=None):
     """Loads configuration from a YAML file."""
     if not yaml_file:
-        yaml_file = os.getenv("CONFIG_FILE")  # Get the config file from the environment variable
+        yaml_file = os.getenv("CONFIG_FILE", "config.yaml")  # Default config file name
 
     try:
         with open(yaml_file) as file:
             config = yaml.safe_load(file)
-            return config
+            return config or {}
     except Exception as e:
-        print(f"Error loading configuration file: {e}")
-        return None
+        logging.error(f"Error loading configuration file: {e}")
+        return {}
 
 
 config = load_config()
@@ -34,12 +50,13 @@ Compress(app)
 log_level = config.get("log_level", "INFO")
 app.logger.setLevel(getattr(logging, log_level.upper(), logging.INFO))
 
-logging.info(f"Config: {config}")
+app.logger.info(f"Config: {config}")
 
-STL_FILES_PATH = os.path.expanduser(config.get("base_path"))
+STL_FILES_PATH = os.path.expanduser(config.get("base_path", "./stl_files"))
 os.makedirs(STL_FILES_PATH, exist_ok=True)
 
-GCODE_FILES_PATH = os.path.expanduser(config.get("gcode_path"))
+GCODE_FILES_PATH = os.path.expanduser(config.get("gcode_path", "./gcode_files"))
+os.makedirs(GCODE_FILES_PATH, exist_ok=True)
 
 
 def get_stl_files(base_path):
@@ -47,13 +64,12 @@ def get_stl_files(base_path):
     for root, dirs, files in os.walk(base_path):
         folder_files = []
         for file in files:
-            if file.endswith(".stl"):
+            if file.lower().endswith(".stl"):
                 abs_path = os.path.join(root, file)
                 rel_path = os.path.relpath(abs_path, base_path)
-                folder_files.append({"file_name": file, "path": abs_path, "rel_path": rel_path})
+                folder_files.append({"file_name": file, "rel_path": rel_path})
         if folder_files:
             folder_name = os.path.relpath(root, base_path)
-
             top_level_folder = folder_name.split(os.sep)[0]
             stl_files.append(
                 {
@@ -75,13 +91,18 @@ def extract_gcode_metadata_from_file(file_path):
     return metadata
 
 
-# ruff: noqa: C901, PLR0912
 def get_folder_contents(folder_name):
-    folder_path = os.path.join(STL_FILES_PATH, folder_name)
+    try:
+        folder_path = safe_join(STL_FILES_PATH, folder_name)
+    except Exception as e:
+        app.logger.error(f"Invalid folder path: {e}")
+        return [], [], [], []
+
     stl_files = []
     image_files = []
     pdf_files = []
     gcode_files = []
+
     if not os.path.isdir(folder_path):
         app.logger.error(f"Folder {folder_path} does not exist")
         return stl_files, image_files, pdf_files, gcode_files
@@ -96,13 +117,13 @@ def get_folder_contents(folder_name):
                 app.logger.debug(f"Found file {file}")
                 if ext == ".stl":
                     stl_files.append(
-                        {"file_name": file, "path": "STL_FILES_PATH", "rel_path": rel_path}
+                        {"file_name": file, "path": "STL_BASE_PATH", "rel_path": rel_path}
                     )
                 elif ext in [".png", ".jpg", ".jpeg", ".gif", ".bmp"]:
                     image_files.append(
                         {
                             "file_name": file,
-                            "path": "STL_FILES_PATH",
+                            "path": "STL_BASE_PATH",
                             "rel_path": rel_path,
                             "ext": ext,
                         }
@@ -111,7 +132,7 @@ def get_folder_contents(folder_name):
                     pdf_files.append(
                         {
                             "file_name": file,
-                            "path": "STL_FILES_PATH",
+                            "path": "STL_BASE_PATH",
                             "rel_path": rel_path,
                             "ext": ext,
                         }
@@ -121,7 +142,7 @@ def get_folder_contents(folder_name):
                     gcode_files.append(
                         {
                             "file_name": file,
-                            "path": "STL_FILES_PATH",
+                            "path": "STL_BASE_PATH",
                             "rel_path": rel_path,
                             "metadata": metadata,
                         }
@@ -141,7 +162,7 @@ def get_folder_contents(folder_name):
                         gcode_files.append(
                             {
                                 "file_name": gcode_file,
-                                "path": "GCODE_FILES_PATH",
+                                "path": "GCODE_BASE_PATH",
                                 "rel_path": rel_gcode_path,
                                 "metadata": metadata,
                             }
@@ -179,37 +200,36 @@ def folder_view(folder_name):
 
 @app.route("/stl/<path:filename>")
 def serve_stl(filename):
-    abs_path = os.path.join(STL_FILES_PATH, filename)
-    if os.path.isfile(abs_path):
-        app.logger.debug(f"serving stl: {abs_path}")
-        return send_file(abs_path, mimetype="application/octet-stream")
-    return "File not found", 404
+    try:
+        return send_from_directory(STL_FILES_PATH, filename, mimetype="application/octet-stream")
+    except Exception as e:
+        app.logger.error(f"Error serving STL file {filename}: {e}")
+        return "File not found", 404
 
 
 @app.route("/file/<path:filename>")
 def serve_file(filename):
-    abs_path = os.path.join(STL_FILES_PATH, filename)
-    if os.path.isfile(abs_path):
-        app.logger.debug(f"serving file: {abs_path}")
-        return send_file(abs_path)
-    return ("File not found", 404)
+    try:
+        return send_from_directory(STL_FILES_PATH, filename)
+    except Exception as e:
+        app.logger.error(f"Error serving file {filename}: {e}")
+        return "File not found", 404
 
 
-@app.route("/gcode/<path:base_path>/<path:filename>")
+@app.route("/gcode/<base_path>/<path:filename>")
 def serve_gcode(base_path, filename):
-    _base_path = ""
-    if base_path == "STL_FILES_PATH":
+    if base_path == "STL_BASE_PATH":
         _base_path = STL_FILES_PATH
-    elif base_path == "GCODE_FILES_PATH":
+    elif base_path == "GCODE_BASE_PATH":
         _base_path = GCODE_FILES_PATH
     else:
         return "File not found", 404
 
-    abs_path = os.path.join(_base_path, filename)
-    if os.path.isfile(abs_path):
-        app.logger.debug(f"serving gcode: {abs_path}")
-        return send_file(abs_path)
-    return "File not found", 404
+    try:
+        return send_from_directory(_base_path, filename)
+    except Exception as e:
+        app.logger.error(f"Error serving G-code file {filename}: {e}")
+        return "File not found", 404
 
 
 @app.route("/upload", methods=["POST"])
@@ -219,21 +239,39 @@ def upload():
     files = request.files.getlist("file")
     for file in files:
         filename = secure_filename(file.filename)
-        file_path = os.path.join(STL_FILES_PATH, filename)
-        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        if not filename:
+            continue
+        if not allowed_file(filename):
+            continue
         if filename.endswith(".zip"):
-            # Save the zip file to a temporary location
-            temp_zip_path = file_path
+            temp_zip_path = os.path.join(STL_FILES_PATH, filename)
             file.save(temp_zip_path)
-
-            with zipfile.ZipFile(temp_zip_path, "r") as zip_ref:
-                extract_path = os.path.join(STL_FILES_PATH, os.path.splitext(filename)[0])
-                zip_ref.extractall(extract_path)
-
-            os.remove(temp_zip_path)
+            try:
+                with zipfile.ZipFile(temp_zip_path, "r") as zip_ref:
+                    safe_extract(zip_ref, STL_FILES_PATH)
+            except Exception as e:
+                app.logger.error(f"Error extracting zip file: {e}")
+                return jsonify({"error": "Invalid zip file"}), 400
+            finally:
+                os.remove(temp_zip_path)
         else:
+            file_path = os.path.join(STL_FILES_PATH, filename)
             file.save(file_path)
     return jsonify({"success": True}), 200
+
+
+def allowed_file(filename):
+    allowed_extensions = {".stl", ".gcode", ".zip", ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".pdf"}
+    return os.path.splitext(filename)[1].lower() in allowed_extensions
+
+
+def safe_extract(zip_file, path):
+    """Safely extract zip files to prevent zip slip vulnerabilities."""
+    for member in zip_file.namelist():
+        member_path = os.path.realpath(os.path.join(path, member))
+        if not member_path.startswith(os.path.realpath(path) + os.sep):
+            raise Exception("Attempted Path Traversal in Zip File")
+    zip_file.extractall(path)
 
 
 @app.route("/delete_folder", methods=["POST"])
@@ -244,7 +282,10 @@ def delete_folder():
     if not folder_name:
         return jsonify({"success": False, "error": "Folder name is required."}), 400
 
-    folder_path = os.path.join(STL_FILES_PATH, secure_filename(folder_name))
+    try:
+        folder_path = safe_join(STL_FILES_PATH, folder_name)
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 400
 
     if not os.path.isdir(folder_path):
         return jsonify({"success": False, "error": "Folder does not exist."}), 404
@@ -255,6 +296,7 @@ def delete_folder():
         shutil.rmtree(folder_path)
         return jsonify({"success": True}), 200
     except Exception as e:
+        app.logger.error(f"Error deleting folder: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
 
@@ -265,7 +307,10 @@ def download_folder():
     if not folder_name:
         return "Folder name is required.", 400
 
-    folder_path = os.path.join(STL_FILES_PATH, secure_filename(folder_name))
+    try:
+        folder_path = safe_join(STL_FILES_PATH, folder_name)
+    except Exception as e:
+        return "Invalid folder path.", 400
 
     if not os.path.isdir(folder_path):
         return "Folder does not exist.", 404
@@ -280,33 +325,47 @@ def download_folder():
                     arcname = os.path.relpath(file_path, folder_path)
                     zipf.write(file_path, arcname)
         memory_file.seek(0)
-        return send_file(memory_file, download_name=f"{folder_name}.zip", as_attachment=True)
+        return send_file(
+            memory_file,
+            download_name=f"{os.path.basename(folder_name)}.zip",
+            as_attachment=True,
+        )
     except Exception as e:
+        app.logger.error(f"Error zipping folder: {e}")
         return f"Error zipping folder: {e!s}", 500
 
 
 @app.route("/copy_path/<path:filename>", methods=["GET"])
 def copy_path(filename):
-    abs_path = os.path.join(STL_FILES_PATH, filename)
-    if os.path.isfile(abs_path):
-        return jsonify({"path": abs_path})
-    return jsonify({"path": ""}), 404
+    try:
+        abs_path = safe_join(STL_FILES_PATH, filename)
+        if os.path.isfile(abs_path):
+            return jsonify({"path": abs_path})
+        else:
+            return jsonify({"path": ""}), 404
+    except Exception as e:
+        app.logger.error(f"Error copying path: {e}")
+        return jsonify({"path": ""}), 404
 
 
-@app.route("/copy_gcode_path/<path:base_path>/<path:filename>", methods=["GET"])
+@app.route("/copy_gcode_path/<base_path>/<path:filename>", methods=["GET"])
 def copy_gcode_path(base_path, filename):
-    _base_path = ""
-    if base_path == "STL_FILES_PATH":
+    if base_path == "STL_BASE_PATH":
         _base_path = STL_FILES_PATH
-    elif base_path == "GCODE_FILES_PATH":
+    elif base_path == "GCODE_BASE_PATH":
         _base_path = GCODE_FILES_PATH
     else:
         return jsonify({"path": ""}), 404
 
-    abs_path = os.path.join(_base_path, filename)
-    if os.path.isfile(abs_path):
-        return jsonify({"path": abs_path})
-    return jsonify({"path": ""}), 404
+    try:
+        abs_path = safe_join(_base_path, filename)
+        if os.path.isfile(abs_path):
+            return jsonify({"path": abs_path})
+        else:
+            return jsonify({"path": ""}), 404
+    except Exception as e:
+        app.logger.error(f"Error copying G-code path: {e}")
+        return jsonify({"path": ""}), 404
 
 
 @app.route("/search", methods=["GET"])
