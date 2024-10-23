@@ -365,7 +365,8 @@ function loadGCodeFiles(files) {
 
     files.forEach((file, index) => {
         const gcodeFile = file['file_name'];
-        const relPath = file['path'];
+        const relPath = file['rel_path'];
+        const basePath = file['path'];
         const metadata = file['metadata'];
 
         const scene = new THREE.Scene();
@@ -394,14 +395,14 @@ function loadGCodeFiles(files) {
         const downloadButton = document.createElement('button');
         downloadButton.innerText = 'Download G-code';
         downloadButton.onclick = function () {
-            window.location.href = `/abs_file/${encodeURIComponent(relPath)}`;
+            window.location.href = `/gcode/${encodeURIComponent(basePath)}/${encodeURIComponent(relPath)}`;
         };
         containerElement.appendChild(downloadButton);
 
         const copyButton = document.createElement('button');
         copyButton.innerText = 'Copy Path';
         copyButton.onclick = function () {
-            fetch(`/copy_path_abs/${encodeURIComponent(relPath)}`)
+            fetch(`/copy_gcode_path/${encodeURIComponent(basePath)}/${encodeURIComponent(relPath)}`)
                 .then(response => response.json())
                 .then(data => {
                     navigator.clipboard.writeText(data.path)
@@ -437,7 +438,7 @@ function loadGCodeFiles(files) {
         const observer = new IntersectionObserver((entries) => {
             entries.forEach(entry => {
                 if (entry.isIntersecting) {
-                    loadGCodeFile(relPath, scene, controls, camera);
+                    loadGCodeFile(relPath, basePath, scene, controls, camera);
                     observer.unobserve(containerElement);
                 }
             });
@@ -449,8 +450,8 @@ function loadGCodeFiles(files) {
     content.appendChild(rowContainer);
 }
 
-function loadGCodeFile(gcodeFile, scene, controls, camera) {
-    fetch(`/abs_file/${encodeURIComponent(gcodeFile)}`)
+function loadGCodeFile(gcodeFile, basePath, scene, controls, camera) {
+    fetch(`/gcode/${encodeURIComponent(basePath)}/${encodeURIComponent(gcodeFile)}`)
         .then(response => response.text())
         .then(text => {
             parseGCode(text, scene, controls, camera);
