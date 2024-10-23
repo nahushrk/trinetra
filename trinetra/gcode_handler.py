@@ -4,11 +4,8 @@ import json
 
 def yaml_config_to_dict(yaml_text):
     config = configparser.ConfigParser()
-
     config.read_string(yaml_text)
-
-    config_dict = {section: dict(config.items(section)) for section in config.sections()}
-    return config_dict
+    return {section: dict(config.items(section)) for section in config.sections()}
 
 
 def extract_gcode_metadata_from_cura_config(cura_config_dict):
@@ -34,24 +31,21 @@ def extract_gcode_metadata_from_cura_config(cura_config_dict):
     for key in extract_keys:
         if key in global_quality_dict.get("values", {}):
             metadata[key] = global_quality_dict["values"][key]
-
         elif key in extruder_quality_dict.get("values", {}):
             metadata[key] = extruder_quality_dict["values"][key]
 
     return metadata
 
 
-def extract_gcode_metadata_from_header(file):
+def extract_gcode_metadata_from_header(file_content):
     extract_keys = {"M140", "M104", "TIME", "Filament used", "M117 Time Left"}
     metadata = {}
+    file_lines = file_content.splitlines()
 
-    file_iterator = iter(file.splitlines())
-    for line in file_iterator:
+    for line in file_lines:
         line = line.strip()
-
         if "G28 ;Home" in line:
             break
-
         for key in extract_keys:
             if key in line:
                 if key == "M117 Time Left":
@@ -67,22 +61,20 @@ def extract_gcode_metadata(file):
     cura_config_lines = []
     in_cura_config = False
 
-    file_iterator = iter(file)
-
-    for line in file_iterator:
+    for line in file:
         line = line.strip()
         if "G28 ;Home" in line:
             break
         header_lines.append(line)
 
-    for line in file_iterator:
+    for line in file:
         line = line.strip()
         if ";End of Gcode" in line:
             in_cura_config = True
             break
 
     if in_cura_config:
-        for line in file_iterator:
+        for line in file:
             cura_config_lines.append(line.strip())
 
     cura_config_data = "".join(cura_config_lines).replace(";SETTING_3 ", "").replace("\n", "")
@@ -93,7 +85,11 @@ def extract_gcode_metadata(file):
     if header_lines:
         metadata_from_header = extract_gcode_metadata_from_header("\n".join(header_lines))
     if cura_config_data:
-        metadata_from_cura = extract_gcode_metadata_from_cura_config(json.loads(cura_config_data))
+        try:
+            cura_config_dict = json.loads(cura_config_data)
+            metadata_from_cura = extract_gcode_metadata_from_cura_config(cura_config_dict)
+        except json.JSONDecodeError as e:
+            pass
 
     metadata = {**metadata_from_header, **metadata_from_cura}
 
