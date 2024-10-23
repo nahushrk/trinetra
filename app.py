@@ -2,6 +2,7 @@ import io
 import logging
 import os
 import zipfile
+from crypt import methods
 
 import yaml
 from flask import Flask, jsonify, render_template, request, send_file
@@ -94,21 +95,33 @@ def get_folder_contents(folder_name):
             if os.path.isfile(abs_path):
                 app.logger.debug(f"Found file {file}")
                 if ext == ".stl":
-                    stl_files.append({"file_name": file, "path": abs_path, "rel_path": rel_path})
+                    stl_files.append(
+                        {"file_name": file, "path": "STL_FILES_PATH", "rel_path": rel_path}
+                    )
                 elif ext in [".png", ".jpg", ".jpeg", ".gif", ".bmp"]:
                     image_files.append(
-                        {"file_name": file, "path": abs_path, "rel_path": rel_path, "ext": ext}
+                        {
+                            "file_name": file,
+                            "path": "STL_FILES_PATH",
+                            "rel_path": rel_path,
+                            "ext": ext,
+                        }
                     )
                 elif ext == ".pdf":
                     pdf_files.append(
-                        {"file_name": file, "path": abs_path, "rel_path": rel_path, "ext": ext}
+                        {
+                            "file_name": file,
+                            "path": "STL_FILES_PATH",
+                            "rel_path": rel_path,
+                            "ext": ext,
+                        }
                     )
                 elif ext == ".gcode":
                     metadata = extract_gcode_metadata_from_file(abs_path)
                     gcode_files.append(
                         {
                             "file_name": file,
-                            "path": abs_path,
+                            "path": "STL_FILES_PATH",
                             "rel_path": rel_path,
                             "metadata": metadata,
                         }
@@ -128,7 +141,7 @@ def get_folder_contents(folder_name):
                         gcode_files.append(
                             {
                                 "file_name": gcode_file,
-                                "path": abs_gcode_path,
+                                "path": "GCODE_FILES_PATH",
                                 "rel_path": rel_gcode_path,
                                 "metadata": metadata,
                             }
@@ -168,6 +181,7 @@ def folder_view(folder_name):
 def serve_stl(filename):
     abs_path = os.path.join(STL_FILES_PATH, filename)
     if os.path.isfile(abs_path):
+        app.logger.debug(f"serving stl: {abs_path}")
         return send_file(abs_path, mimetype="application/octet-stream")
     return "File not found", 404
 
@@ -176,15 +190,24 @@ def serve_stl(filename):
 def serve_file(filename):
     abs_path = os.path.join(STL_FILES_PATH, filename)
     if os.path.isfile(abs_path):
+        app.logger.debug(f"serving file: {abs_path}")
         return send_file(abs_path)
     return ("File not found", 404)
 
 
-@app.route("/abs_file/<path:filename>")
-def serve_file_abs(filename):
-    abs_path = os.path.join("/", filename)
-    app.logger.debug(f"filename: {abs_path}")
+@app.route("/gcode/<path:base_path>/<path:filename>")
+def serve_gcode(base_path, filename):
+    _base_path = ""
+    if base_path == "STL_FILES_PATH":
+        _base_path = STL_FILES_PATH
+    elif base_path == "GCODE_FILES_PATH":
+        _base_path = GCODE_FILES_PATH
+    else:
+        return "File not found", 404
+
+    abs_path = os.path.join(_base_path, filename)
     if os.path.isfile(abs_path):
+        app.logger.debug(f"serving gcode: {abs_path}")
         return send_file(abs_path)
     return "File not found", 404
 
@@ -270,9 +293,17 @@ def copy_path(filename):
     return jsonify({"path": ""}), 404
 
 
-@app.route("/copy_path_abs/<path:filename>", methods=["GET"])
-def copy_path_abs(filename):
-    abs_path = os.path.join("/", filename)
+@app.route("/copy_gcode_path/<path:base_path>/<path:filename>", methods=["GET"])
+def copy_gcode_path(base_path, filename):
+    _base_path = ""
+    if base_path == "STL_FILES_PATH":
+        _base_path = STL_FILES_PATH
+    elif base_path == "GCODE_FILES_PATH":
+        _base_path = GCODE_FILES_PATH
+    else:
+        return jsonify({"path": ""}), 404
+
+    abs_path = os.path.join(_base_path, filename)
     if os.path.isfile(abs_path):
         return jsonify({"path": abs_path})
     return jsonify({"path": ""}), 404
