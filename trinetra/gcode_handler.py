@@ -1,11 +1,26 @@
 import configparser
 import json
+import re
 
 
 def yaml_config_to_dict(yaml_text):
     config = configparser.ConfigParser()
     config.read_string(yaml_text)
     return {section: dict(config.items(section)) for section in config.sections()}
+
+
+def seconds_to_readable_duration(seconds: int):
+    hours = seconds // 3600
+    minutes = (seconds % 3600) // 60
+    remaining_seconds = seconds % 60
+
+    # Determine the format
+    if hours > 0:
+        # If there are hours, display in h:m:s format
+        return f"{hours}h:{minutes}m:{remaining_seconds}s"
+    else:
+        # Otherwise, display in m:s format
+        return f"{minutes}m:{remaining_seconds}s"
 
 
 def extract_gcode_metadata_from_cura_config(cura_config_dict):
@@ -52,6 +67,19 @@ def extract_gcode_metadata_from_header(file_content):
                     metadata[key] = line.split("M117 Time Left", 1)[-1].strip()
                 else:
                     metadata[key] = line.split(key, 1)[-1].strip()
+
+    # Format metadata for readability
+    if "TIME" in metadata:
+        time_value = metadata.pop("TIME")
+        time_value = re.sub(r"\D", "", time_value)
+        time_value = seconds_to_readable_duration(int(time_value))
+        metadata["Time"] = time_value
+
+    if "M104" in metadata:
+        metadata["Extruder_Temp"] = metadata.pop("M104")
+
+    if "M140" in metadata:
+        metadata["Bed_Temp"] = metadata.pop("M140")
 
     return metadata
 
