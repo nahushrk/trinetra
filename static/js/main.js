@@ -197,27 +197,45 @@ function loadSTLFile(stlFile, scene, controls, sizeElement, camera) {
     loader.load(`/stl/${encodeURIComponent(stlFile)}`, function (geometry) {
         const material = new THREE.MeshNormalMaterial({flatShading: true});
         const mesh = new THREE.Mesh(geometry, material);
+
+        // Center the geometry and compute its bounding box
+        geometry.center();
+        geometry.computeBoundingBox();
+        const bbox = geometry.boundingBox;
+        const size = bbox.getSize(new THREE.Vector3());
+
+        // Calculate the offset to place the bottom of the object at Z=0
+        const zOffset = size.z / 2;
+
+        // Position the mesh at (110, 110) in the XY plane and adjust Z position
+        mesh.position.set(110, 110, zOffset);
         scene.add(mesh);
 
-        geometry.computeBoundingSphere();
-        const boundingSphere = geometry.boundingSphere;
-        const center = boundingSphere.center;
-        const radius = boundingSphere.radius;
+        // Add grid
+        var grid = createPrinterGrid();
+        scene.add(grid);
 
-        geometry.center();
+        // Set up camera and controls
+        const center = new THREE.Vector3(110, 110, zOffset);
+        const radius = Math.max(size.x, size.y, size.z) / 2;
 
         const fov = camera.fov * (Math.PI / 180);
         let distance = radius / Math.sin(fov / 2);
         distance *= 1.5;
 
-        camera.position.set(distance, distance, distance);
+        // Calculate tilt angle in radians
+        const tiltAngle = THREE.Math.degToRad(30);
+
+        // Position camera with a 30-degree tilt around the X-axis
+        const cameraY = center.y - distance * Math.cos(tiltAngle);
+        const cameraZ = center.z + distance * Math.sin(tiltAngle);
+        camera.position.set(center.x, cameraY, cameraZ);
+
         camera.lookAt(center);
 
         controls.target.copy(center);
         controls.update();
 
-        const size = new THREE.Vector3();
-        geometry.boundingBox.getSize(size);
         const sizeText = `Size: ${size.x.toFixed(2)} mm x ${size.y.toFixed(2)} mm x ${size.z.toFixed(2)} mm`;
         sizeElement.innerText = sizeText;
     });
@@ -291,4 +309,56 @@ function animate() {
 
         renderer.render(scene, camera);
     });
+}
+
+function createPrinterGrid() {
+    var geometry = new THREE.Geometry();
+
+    var vertices = [
+        // Bottom face
+        new THREE.Vector3(0, 0, 0),
+        new THREE.Vector3(220, 0, 0),
+
+        new THREE.Vector3(220, 0, 0),
+        new THREE.Vector3(220, 220, 0),
+
+        new THREE.Vector3(220, 220, 0),
+        new THREE.Vector3(0, 220, 0),
+
+        new THREE.Vector3(0, 220, 0),
+        new THREE.Vector3(0, 0, 0),
+
+        // Top face
+        new THREE.Vector3(0, 0, 270),
+        new THREE.Vector3(220, 0, 270),
+
+        new THREE.Vector3(220, 0, 270),
+        new THREE.Vector3(220, 220, 270),
+
+        new THREE.Vector3(220, 220, 270),
+        new THREE.Vector3(0, 220, 270),
+
+        new THREE.Vector3(0, 220, 270),
+        new THREE.Vector3(0, 0, 270),
+
+        // Vertical edges
+        new THREE.Vector3(0, 0, 0),
+        new THREE.Vector3(0, 0, 270),
+
+        new THREE.Vector3(220, 0, 0),
+        new THREE.Vector3(220, 0, 270),
+
+        new THREE.Vector3(220, 220, 0),
+        new THREE.Vector3(220, 220, 270),
+
+        new THREE.Vector3(0, 220, 0),
+        new THREE.Vector3(0, 220, 270),
+    ];
+
+    geometry.vertices.push(...vertices);
+
+    var material = new THREE.LineBasicMaterial({color: 0x000000});
+    var wireframe = new THREE.LineSegments(geometry, material);
+
+    return wireframe;
 }
