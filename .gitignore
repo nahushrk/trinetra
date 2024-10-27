@@ -1,6 +1,6 @@
 *.log
 venv/
-config_*.yaml
+config*
 data/
 .idea/
 
