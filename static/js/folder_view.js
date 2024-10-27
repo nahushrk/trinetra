@@ -199,28 +199,45 @@ function loadSTLFile(stlFile, scene, controls, sizeElement, camera) {
     loader.load(`/stl/${encodeURIComponent(stlFile)}`, function (geometry) {
         const material = new THREE.MeshNormalMaterial({flatShading: true});
         const mesh = new THREE.Mesh(geometry, material);
+
+        // Center the geometry and compute its bounding box
+        geometry.center();
+        geometry.computeBoundingBox();
+        const bbox = geometry.boundingBox;
+        const size = bbox.getSize(new THREE.Vector3());
+
+        // Calculate the offset to place the bottom of the object at Z=0
+        const zOffset = size.z / 2;
+
+        // Position the mesh at (110, 110) in the XY plane and adjust Z position
+        mesh.position.set(110, 110, zOffset);
         scene.add(mesh);
 
-        geometry.computeBoundingSphere();
-        const boundingSphere = geometry.boundingSphere;
-        const center = boundingSphere.center;
-        const radius = boundingSphere.radius;
+        // Add grid
+        var grid = createPrinterGrid();
+        scene.add(grid);
 
-        geometry.center();
+        // Set up camera and controls
+        const center = new THREE.Vector3(110, 110, zOffset);
+        const radius = Math.max(size.x, size.y, size.z) / 2;
 
         const fov = camera.fov * (Math.PI / 180);
         let distance = radius / Math.sin(fov / 2);
         distance *= 1.5;
 
-        camera.position.set(distance, distance, distance);
+        // Calculate tilt angle in radians
+        const tiltAngle = THREE.Math.degToRad(30);
+
+        // Position camera with a 30-degree tilt around the X-axis
+        const cameraY = center.y - distance * Math.cos(tiltAngle);
+        const cameraZ = center.z + distance * Math.sin(tiltAngle);
+        camera.position.set(center.x, cameraY, cameraZ);
+
         camera.lookAt(center);
 
         controls.target.copy(center);
         controls.update();
 
-        const size = new THREE.Vector3();
-        geometry.computeBoundingBox();
-        geometry.boundingBox.getSize(size);
         const sizeText = `Size: ${size.x.toFixed(2)} mm x ${size.y.toFixed(2)} mm x ${size.z.toFixed(2)} mm`;
         sizeElement.innerText = sizeText;
     });
@@ -618,7 +635,13 @@ function parseGCode(text, scene, controls, camera) {
     var distance = maxDim / (2 * Math.tan(fov / 2));
     distance *= 1.5;
 
-    camera.position.set(center.x, center.y, distance);
+    // Calculate tilt angle in radians
+    const tiltAngle = THREE.Math.degToRad(30);
+
+    // Position camera with a 30-degree tilt around the X-axis
+    const cameraY = center.y - distance * Math.cos(tiltAngle);
+    const cameraZ = center.z + distance * Math.sin(tiltAngle);
+    camera.position.set(center.x, cameraY, cameraZ);
     camera.lookAt(center);
 
     controls.target.copy(center);
