@@ -1,4 +1,0 @@
-base_path: "/Users/komalzt/PycharmProjects/trinetra/data/3dPrint"
-gcode_path: "/Users/komalzt/PycharmProjects/trinetra/data/gcodes"
-log_level: "DEBUG"
-mode: "DEV"
