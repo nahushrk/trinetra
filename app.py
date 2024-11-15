@@ -31,7 +31,7 @@ def safe_join(base, *paths):
 def load_config(yaml_file=None):
     """Loads configuration from a YAML file."""
     if not yaml_file:
-        yaml_file = os.getenv("CONFIG_FILE", "config.yaml")  # Default config file name
+        yaml_file = os.getenv("CONFIG_FILE", "config_dev.yaml")  # Default config file name
 
     try:
         with open(yaml_file) as file:
@@ -247,8 +247,15 @@ def upload():
             temp_zip_path = os.path.join(STL_FILES_PATH, filename)
             file.save(temp_zip_path)
             try:
+                # Create a folder with the same name as the zip file (without the extension)
+                folder_name = os.path.splitext(filename)[0]
+                extract_to = os.path.join(STL_FILES_PATH, folder_name)
+                os.makedirs(extract_to, exist_ok=True)
+                print(extract_to)
+
+                # Extract the ZIP into the created folder
                 with zipfile.ZipFile(temp_zip_path, "r") as zip_ref:
-                    safe_extract(zip_ref, STL_FILES_PATH)
+                    safe_extract(zip_ref, extract_to)
             except Exception as e:
                 app.logger.error(f"Error extracting zip file: {e}")
                 return jsonify({"error": "Invalid zip file"}), 400
