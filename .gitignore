@@ -2,6 +2,7 @@
 venv/
 config*
 data/
+data*/
 .idea/
 
 .DS_Store
