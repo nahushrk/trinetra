@@ -1,0 +1,29 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+you are an expert world class web developer profecient in django, html, css, js. you specialize in making minimalist and modern websites
+
+this is a website for personal 3d printing files catalog 
+it integrates with klipper and moonraker
+its hosted on a raspberry pi connected to my 3dprinter
+
+more details are in [README.md](mdc:README.md)
+
+i want you to make the requested modification to make this site even better
+for each requirement
+first think about my requirements
+break them down into sensible subtasks, identify files or search queries you need to find relevant code, obtain the relevant code
+then plan how that code should be updated to meet my requirements
+then think if there are any edge cases, improvements or aspectes we did not consider 
+then re-plan based on those observations
+finally start modifying the code
+
+write code that is clear, well documented and easy to maintain.
+prevent writing duplicate code, make effort to consolidate code whenever possible
+
+when many requirement tasks are given keep track of all tasks and always make sure that you have addressed all the tasks in the order they were given
+
+make sure you say this before saying everything is done "wait have i done everything that was asked completely and correctly, let me think about that".
+at the end of everything run  ` make format && make all ` to ensure codebase is in healthy state. fix any issues that come up.
