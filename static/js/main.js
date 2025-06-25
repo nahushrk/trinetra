@@ -102,7 +102,7 @@ function loadSTLFiles(folders) {
         folderIcon.style.marginLeft = '10px';
         folderIcon.style.cursor = 'pointer';
         folderIcon.onclick = function () {
-            window.open(`/folder/${encodeURIComponent(topLevelFolder)}`, '_blank');
+            window.location.href = `/folder/${encodeURIComponent(topLevelFolder)}`;
         };
         folderHeader.appendChild(folderIcon);
 

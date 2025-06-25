@@ -1,28 +1,14 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>{{ folder_name }} - Trinetra</title>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <!-- Include Bootstrap CSS -->
-    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Include Bootstrap Icons -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
-    <!-- Include Font Awesome for Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css">
-    <!-- Include Three.js and OrbitControls -->
-    <script src="https://cdn.jsdelivr.net/npm/three@0.110/build/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.110/examples/js/controls/OrbitControls.js"></script>
-    <!-- Include STLLoader -->
-    <script src="https://cdn.jsdelivr.net/npm/three@0.110/examples/js/loaders/STLLoader.js"></script>
-    <!-- Include GCodeLoader -->
-    <script src="https://cdn.jsdelivr.net/npm/three@0.110/examples/js/loaders/GCodeLoader.js"></script>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <script src="https://cdn.jsdelivr.net/npm/three@0.110/examples/js/utils/BufferGeometryUtils.js"></script>
+{% extends "base.html" %}
 
-</head>
-<body>
+{% block title %}{{ folder_name }} - Trinetra{% endblock %}
 
+{% block extra_head %}
+<!-- Include GCodeLoader -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.110/examples/js/loaders/GCodeLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.110/examples/js/utils/BufferGeometryUtils.js"></script>
+{% endblock %}
+
+{% block content %}
 <div class="container mt-4">
     <!-- Home Icon -->
     <div class="row">
@@ -89,7 +75,9 @@
         </div>
     </div>
 </div>
+{% endblock %}
 
+{% block scripts %}
 <script>
     const stlFiles = {{ stl_files|tojson }};
     const imageFiles = {{ image_files|tojson }};
@@ -98,6 +86,4 @@
     const folderName = "{{ folder_name }}";
 </script>
 <script src="{{ url_for('static', filename='js/folder_view.js') }}"></script>
-
-</body>
-</html>
+{% endblock %}

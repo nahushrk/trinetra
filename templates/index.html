@@ -1,22 +1,14 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>Trinetra</title>
-    <link rel="icon" href="/static/images/trinetra.ico" type="image/x-icon">
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <!-- Include Bootstrap CSS -->
-    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Include Bootstrap Icons -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
-    <!-- Include Three.js and OrbitControls -->
-    <script src="https://cdn.jsdelivr.net/npm/three@0.110/build/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.110/examples/js/controls/OrbitControls.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.110/examples/js/loaders/STLLoader.js"></script>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-</head>
-<body>
+{% extends "base.html" %}
 
+{% block title %}Trinetra{% endblock %}
+
+{% block extra_head %}
+<!-- Include GCodeLoader -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.110/examples/js/loaders/GCodeLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.110/examples/js/utils/BufferGeometryUtils.js"></script>
+{% endblock %}
+
+{% block content %}
 <div class="container mt-4">
     <!-- Search Bar -->
     <div class="row justify-content-center">
@@ -48,15 +40,11 @@
 
     <div id="content" class="mt-4"></div>
 </div>
+{% endblock %}
 
-<!-- Include jQuery and Bootstrap JS for dropdown functionality -->
-<script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
-
+{% block scripts %}
 <script>
     const stlFiles = {{stl_files | tojson}};
 </script>
 <script src="{{ url_for('static', filename='js/main.js') }}"></script>
-
-</body>
-</html>
+{% endblock %}
