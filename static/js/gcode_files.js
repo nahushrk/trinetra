@@ -13,15 +13,11 @@ function init() {
     canvas = document.getElementById('c');
     const searchInput = document.getElementById('search-input');
     
-    searchInput.addEventListener('input', function() {
-        const query = this.value.toLowerCase();
-        const filteredFiles = gcodeFiles.filter(file => 
-            file.file_name.toLowerCase().includes(query) ||
-            file.folder_name.toLowerCase().includes(query)
-        );
-        
-        displayGCodeFiles(filteredFiles);
-        document.getElementById('metadata').textContent = `Showing ${filteredFiles.length} of ${gcodeFiles.length} files`;
+    // Search only on Enter key
+    searchInput.addEventListener('keypress', function(event) {
+        if (event.key === 'Enter') {
+            performSearch(this.value);
+        }
     });
 
     displayGCodeFiles(gcodeFiles);
@@ -35,6 +31,25 @@ function init() {
     
     // Update metadata
     document.getElementById('metadata').textContent = `Showing ${gcodeFiles.length} files`;
+}
+
+function performSearch(searchTerm) {
+    if (!searchTerm.trim()) {
+        displayGCodeFiles(gcodeFiles);
+        document.getElementById('metadata').textContent = `Showing ${gcodeFiles.length} files`;
+        return;
+    }
+
+    fetch(`/search_gcode?q=${encodeURIComponent(searchTerm)}`)
+        .then(response => response.json())
+        .then(data => {
+            displayGCodeFiles(data.gcode_files);
+            document.getElementById('metadata').textContent = `Found ${data.metadata.matches} matching files`;
+        })
+        .catch(error => {
+            console.error('Search error:', error);
+            document.getElementById('metadata').textContent = 'Search failed';
+        });
 }
 
 // Display G-code files in a 3-column responsive layout
@@ -56,8 +71,9 @@ function displayGCodeFiles(files) {
         const containerElement = document.createElement('div');
         containerElement.className = 'list-item col-md-4';
 
-        // Create description element with folder link
+        // Create description element with folder link and proper text wrapping
         const descriptionElement = document.createElement('div');
+        descriptionElement.className = 'file-name';
         descriptionElement.innerHTML = `
             <strong>${file.file_name}</strong>
             <br>

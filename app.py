@@ -290,40 +290,75 @@ def serve_gcode(base_path, filename):
 def upload():
     if "file" not in request.files:
         return jsonify({"error": "No file part"}), 400
+
     files = request.files.getlist("file")
+    if not files:
+        return jsonify({"error": "No files selected"}), 400
+
+    # Only accept zip files
+    for file in files:
+        if not file.filename.lower().endswith(".zip"):
+            return jsonify({"error": "Only ZIP files are allowed"}), 400
+
+    results = []
     for file in files:
         filename = secure_filename(file.filename)
         if not filename:
             continue
-        if not allowed_file(filename):
-            continue
-        if filename.endswith(".zip"):
-            temp_zip_path = os.path.join(STL_FILES_PATH, filename)
-            file.save(temp_zip_path)
-            try:
-                # Create a folder with the same name as the zip file (without the extension)
-                folder_name = os.path.splitext(filename)[0]
-                extract_to = os.path.join(STL_FILES_PATH, folder_name)
-                os.makedirs(extract_to, exist_ok=True)
-                print(extract_to)
 
-                # Extract the ZIP into the created folder
-                with zipfile.ZipFile(temp_zip_path, "r") as zip_ref:
-                    safe_extract(zip_ref, extract_to)
-            except Exception as e:
-                app.logger.error(f"Error extracting zip file: {e}")
-                return jsonify({"error": "Invalid zip file"}), 400
-            finally:
+        # Create a folder with the same name as the zip file (without the extension)
+        folder_name = os.path.splitext(filename)[0]
+        extract_to = os.path.join(STL_FILES_PATH, folder_name)
+
+        # Check if folder already exists
+        folder_exists = os.path.exists(extract_to)
+
+        # Save the zip file temporarily
+        temp_zip_path = os.path.join(STL_FILES_PATH, filename)
+        file.save(temp_zip_path)
+
+        try:
+            # Extract the ZIP into the created folder
+            with zipfile.ZipFile(temp_zip_path, "r") as zip_ref:
+                if folder_exists:
+                    # If folder exists, remove it first (overwrite mode)
+                    import shutil
+
+                    shutil.rmtree(extract_to)
+
+                os.makedirs(extract_to, exist_ok=True)
+                safe_extract(zip_ref, extract_to)
+
+            results.append(
+                {
+                    "filename": filename,
+                    "folder_name": folder_name,
+                    "status": "success",
+                    "folder_existed": folder_exists,
+                }
+            )
+
+        except Exception as e:
+            app.logger.error(f"Error extracting zip file {filename}: {e}")
+            results.append(
+                {
+                    "filename": filename,
+                    "folder_name": folder_name,
+                    "status": "error",
+                    "error": str(e),
+                }
+            )
+        finally:
+            # Clean up temporary zip file
+            if os.path.exists(temp_zip_path):
                 os.remove(temp_zip_path)
-        else:
-            file_path = os.path.join(STL_FILES_PATH, filename)
-            file.save(file_path)
-    return jsonify({"success": True}), 200
+
+    return jsonify({"success": True, "results": results}), 200
 
 
 def allowed_file(filename):
-    allowed_extensions = {".stl", ".gcode", ".zip", ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".pdf"}
-    return os.path.splitext(filename)[1].lower() in allowed_extensions
+    # Only allow zip files now
+    return filename.lower().endswith(".zip")
 
 
 def safe_extract(zip_file, path):
@@ -433,7 +468,10 @@ def copy_gcode_path(base_path, filename):
 def get_moonraker_stats(filename):
     """Get Moonraker print statistics for a G-code file."""
     try:
-        moonraker_url = config.get("moonraker_url", "http://klipper.local:7125")
+        moonraker_url = config.get("moonraker_url")
+        if not moonraker_url:
+            return jsonify({"success": False, "message": "Moonraker URL not configured"}), 503
+
         stats = moonraker.get_moonraker_stats(filename, moonraker_url)
 
         if stats:
@@ -447,33 +485,71 @@ def get_moonraker_stats(filename):
 
 @app.route("/search", methods=["GET"])
 def search_route():
-    query_text = request.args.get("q", "").lower()
-    query_tokens = search.tokenize(query_text)
+    query_text = request.args.get("q", "").strip()
+    search_limit = config.get("search_result_limit", 25)
+
     stl_folders = get_stl_files(STL_FILES_PATH)
-    filtered_folders = []
-    total_matches = 0
-    for folder in stl_folders:
-        folder_name_tokens = search.tokenize(folder["folder_name"])
-        if search.search_tokens(query_tokens, folder_name_tokens):
-            filtered_folders.append(folder)
-            total_matches += len(folder["files"])
-        else:
-            filtered_files = []
-            for file in folder["files"]:
-                file_name_tokens = search.tokenize(file["file_name"])
-                if search.search_tokens(query_tokens, file_name_tokens):
-                    filtered_files.append(file)
-            if filtered_files:
-                filtered_folders.append(
-                    {
-                        "folder_name": folder["folder_name"],
-                        "top_level_folder": folder["top_level_folder"],
-                        "files": filtered_files,
-                    }
-                )
-                total_matches += len(filtered_files)
+    filtered_folders = search.search_files_and_folders(query_text, stl_folders, search_limit)
+
+    total_matches = sum(len(folder["files"]) for folder in filtered_folders)
     metadata = {"matches": total_matches}
+
     return jsonify({"stl_files": filtered_folders, "metadata": metadata})
+
+
+@app.route("/search_gcode", methods=["GET"])
+def search_gcode_route():
+    query_text = request.args.get("q", "").strip()
+    search_limit = config.get("search_result_limit", 25)
+
+    # Get all G-code files
+    all_gcode_files = []
+    if GCODE_FILES_PATH and os.path.isdir(GCODE_FILES_PATH):
+        for root, dirs, files in os.walk(GCODE_FILES_PATH):
+            for file in files:
+                if file.lower().endswith(".gcode"):
+                    abs_path = os.path.join(root, file)
+                    rel_path = os.path.relpath(abs_path, GCODE_FILES_PATH)
+
+                    # Try to find the associated STL file to determine the folder
+                    stl_file_name = os.path.splitext(file)[0].lower()
+                    folder_name = "Unknown"
+
+                    # Search for matching STL file to determine folder
+                    for stl_root, stl_dirs, stl_files in os.walk(STL_FILES_PATH):
+                        for stl_file in stl_files:
+                            if stl_file.lower().endswith(".stl"):
+                                stl_name = os.path.splitext(stl_file)[0].lower()
+                                if search.search_tokens_all_match(
+                                    search.tokenize(stl_name), search.tokenize(stl_file_name)
+                                ):
+                                    stl_rel_path = os.path.relpath(
+                                        os.path.join(stl_root, stl_file), STL_FILES_PATH
+                                    )
+                                    folder_name = (
+                                        os.path.dirname(stl_rel_path)
+                                        if os.path.dirname(stl_rel_path)
+                                        else os.path.basename(stl_root)
+                                    )
+                                    break
+                        if folder_name != "Unknown":
+                            break
+
+                    metadata = extract_gcode_metadata_from_file(abs_path)
+                    all_gcode_files.append(
+                        {
+                            "file_name": file,
+                            "rel_path": rel_path,
+                            "folder_name": folder_name,
+                            "metadata": metadata,
+                            "base_path": "GCODE_BASE_PATH",
+                        }
+                    )
+
+    filtered_gcode_files = search.search_gcode_files(query_text, all_gcode_files, search_limit)
+    metadata = {"matches": len(filtered_gcode_files)}
+
+    return jsonify({"gcode_files": filtered_gcode_files, "metadata": metadata})
 
 
 if __name__ == "__main__":
