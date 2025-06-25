@@ -11,25 +11,20 @@ init();
 function init() {
     canvas = document.getElementById('c');
     const searchInput = document.getElementById('search-input');
-    const uploadFileButton = document.getElementById('upload-file');
-    const uploadDirectoryButton = document.getElementById('upload-directory');
+    const uploadButton = document.getElementById('upload-button');
     const fileInput = document.getElementById('file-input');
-    const directoryInput = document.getElementById('directory-input');
 
+    // Search only on Enter key
     searchInput.addEventListener('keypress', (event) => {
         if (event.key === 'Enter') {
             performSearch(searchInput.value);
         }
     });
 
-    uploadFileButton.addEventListener('click', (e) => {
+    // Upload button click
+    uploadButton.addEventListener('click', (e) => {
         e.preventDefault();
         fileInput.click();
-    });
-
-    uploadDirectoryButton.addEventListener('click', (e) => {
-        e.preventDefault();
-        directoryInput.click();
     });
 
     fileInput.addEventListener('change', (event) => {
@@ -39,41 +34,117 @@ function init() {
         }
     });
 
-    directoryInput.addEventListener('change', (event) => {
-        const files = event.target.files;
-        if (files.length > 0) {
-            uploadFiles(files);
+    // Upload modal close button
+    const uploadModalClose = document.getElementById('upload-modal-close');
+    uploadModalClose.addEventListener('click', () => {
+        hideUploadModal();
+    });
+
+    // Close modal when clicking outside
+    const uploadModal = document.getElementById('upload-modal');
+    uploadModal.addEventListener('click', (e) => {
+        if (e.target === uploadModal) {
+            hideUploadModal();
         }
     });
 
     loadSTLFiles(stlFiles);
 }
 
+function showUploadModal() {
+    const modal = document.getElementById('upload-modal');
+    const progressFill = document.getElementById('upload-progress-fill');
+    const progressText = document.getElementById('upload-progress-text');
+    const status = document.getElementById('upload-status');
+    
+    modal.style.display = 'block';
+    progressFill.style.width = '0%';
+    progressText.textContent = 'Preparing upload...';
+    status.textContent = 'Ready to upload';
+    status.className = 'upload-status info';
+}
+
+function hideUploadModal() {
+    const modal = document.getElementById('upload-modal');
+    modal.style.display = 'none';
+}
+
+function updateUploadProgress(percent, text, statusType = 'info', statusText = null) {
+    const progressFill = document.getElementById('upload-progress-fill');
+    const progressText = document.getElementById('upload-progress-text');
+    const status = document.getElementById('upload-status');
+    
+    progressFill.style.width = percent + '%';
+    progressText.textContent = text;
+    
+    if (statusText) {
+        status.textContent = statusText;
+        status.className = `upload-status ${statusType}`;
+    }
+}
+
 function uploadFiles(files) {
+    // Validate files are zip files
+    for (const file of files) {
+        if (!file.name.toLowerCase().endsWith('.zip')) {
+            alert('Only ZIP files are allowed.');
+            return;
+        }
+    }
+
+    showUploadModal();
+    
     const formData = new FormData();
     for (const file of files) {
-        const relativePath = file.webkitRelativePath || file.name;
-        formData.append('file', file, relativePath);
+        formData.append('file', file);
     }
+
+    updateUploadProgress(10, 'Uploading files...', 'info', 'Uploading files to server...');
 
     fetch('/upload', {
         method: 'POST',
         body: formData
-    }).then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                alert('Files uploaded successfully.');
-                // Optionally, refresh the page or update the displayed files
-            } else {
-                alert('File upload failed.');
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('An error occurred during file upload.');
-        });
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            updateUploadProgress(100, 'Upload complete!', 'success', 'Files uploaded successfully!');
+            
+            // Show results
+            let resultText = 'Upload Results:\n';
+            data.results.forEach(result => {
+                if (result.status === 'success') {
+                    resultText += `✓ ${result.filename} - ${result.folder_name}`;
+                    if (result.folder_existed) {
+                        resultText += ' (overwritten)';
+                    }
+                    resultText += '\n';
+                } else {
+                    resultText += `✗ ${result.filename} - Error: ${result.error}\n`;
+                }
+            });
+            
+            setTimeout(() => {
+                alert(resultText);
+                hideUploadModal();
+                // Refresh the page to show new files
+                window.location.reload();
+            }, 2000);
+        } else {
+            updateUploadProgress(0, 'Upload failed', 'error', data.error || 'Upload failed');
+            setTimeout(() => {
+                hideUploadModal();
+            }, 3000);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        updateUploadProgress(0, 'Upload failed', 'error', 'An error occurred during upload');
+        setTimeout(() => {
+            hideUploadModal();
+        }, 3000);
+    });
 }
-
 
 function loadSTLFiles(folders) {
     clearScenes();
