@@ -1,0 +1,298 @@
+{% extends "base.html" %}
+
+{% block title %}Statistics - Trinetra{% endblock %}
+
+{% block extra_head %}
+<style>
+    .stats-section {
+        background: #fff;
+        border: 1px solid #e1e4e8;
+        border-radius: 6px;
+        padding: 24px;
+        margin-bottom: 24px;
+    }
+    
+    .stats-section h2 {
+        margin-top: 0;
+        margin-bottom: 16px;
+        font-size: 20px;
+        font-weight: 600;
+        color: #24292e;
+    }
+    
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+    
+    .stat-card {
+        background: #f6f8fa;
+        border: 1px solid #e1e4e8;
+        border-radius: 6px;
+        padding: 16px;
+        text-align: center;
+    }
+    
+    .stat-number {
+        font-size: 32px;
+        font-weight: 700;
+        color: #24292e;
+        margin-bottom: 4px;
+    }
+    
+    .stat-label {
+        font-size: 14px;
+        color: #586069;
+        font-weight: 500;
+    }
+    
+    /* Activity Calendar Styles */
+    .activity-calendar {
+        margin-top: 16px;
+    }
+    
+    .calendar-header {
+        display: flex;
+        align-items: center;
+        margin-bottom: 16px;
+    }
+    
+    .calendar-title {
+        font-size: 16px;
+        font-weight: 600;
+        color: #24292e;
+        margin-right: 16px;
+    }
+    
+    .calendar-legend {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        color: #586069;
+    }
+    
+    .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+    
+    .legend-color {
+        width: 12px;
+        height: 12px;
+        border-radius: 2px;
+    }
+    
+    .calendar-container {
+        overflow-x: auto;
+    }
+    
+    .calendar-grid {
+        display: grid;
+        grid-template-columns: auto repeat(53, 1fr);
+        gap: 3px;
+        min-width: 800px;
+    }
+    
+    .calendar-day-labels {
+        display: contents;
+    }
+    
+    .day-label {
+        font-size: 12px;
+        color: #586069;
+        text-align: center;
+        padding: 4px 0;
+        font-weight: 500;
+    }
+    
+    .calendar-month-labels {
+        display: contents;
+    }
+    
+    .month-label {
+        font-size: 12px;
+        color: #586069;
+        text-align: center;
+        padding: 4px 0;
+        font-weight: 500;
+        grid-column: span 4;
+    }
+    
+    .calendar-day {
+        width: 12px;
+        height: 12px;
+        border-radius: 2px;
+        cursor: pointer;
+        position: relative;
+    }
+    
+    .calendar-day:hover::after {
+        content: attr(data-date);
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #24292e;
+        color: white;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        white-space: nowrap;
+        z-index: 1000;
+        margin-bottom: 4px;
+    }
+    
+    .calendar-day:hover::before {
+        content: '';
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        border: 4px solid transparent;
+        border-top-color: #24292e;
+        margin-bottom: -4px;
+        z-index: 1000;
+    }
+    
+    .day-level-0 { background-color: #ebedf0; }
+    .day-level-1 { background-color: #9be9a8; }
+    .day-level-2 { background-color: #40c463; }
+    .day-level-3 { background-color: #30a14e; }
+    .day-level-4 { background-color: #216e39; }
+    
+    .day-current {
+        border: 2px solid #24292e;
+    }
+    
+    @media (max-width: 768px) {
+        .stats-grid {
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        }
+        
+        .calendar-grid {
+            min-width: 600px;
+        }
+        
+        .calendar-day {
+            width: 10px;
+            height: 10px;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Page Header -->
+<div class="row justify-content-center">
+    <div class="col text-center">
+        <h1>Statistics</h1>
+        <p class="text-muted">Overview of your 3D printing catalog and activity</p>
+    </div>
+</div>
+
+<!-- File and Folder Statistics -->
+<div class="stats-section">
+    <h2><i class="fas fa-folder"></i> File and Folder Statistics</h2>
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-number" id="total-folders">{{ stats.total_folders }}</div>
+            <div class="stat-label">Total Folders</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number" id="total-stl-files">{{ stats.total_stl_files }}</div>
+            <div class="stat-label">Total STL Files</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number" id="total-gcode-files">{{ stats.total_gcode_files }}</div>
+            <div class="stat-label">Total G-code Files</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number" id="folders-with-gcode">{{ stats.folders_with_gcode }}</div>
+            <div class="stat-label">Folders with G-code</div>
+        </div>
+    </div>
+</div>
+
+<!-- Printing Statistics -->
+<div class="stats-section">
+    <h2><i class="fas fa-print"></i> Printing Statistics</h2>
+    <div class="stats-grid">
+        {% if stats.printing_stats.total_prints == 0 %}
+            <div class="col-12 text-center text-muted">No printing statistics available from Moonraker.</div>
+        {% else %}
+            <div class="stat-card">
+                <div class="stat-number" id="total-prints">{{ stats.printing_stats.total_prints }}</div>
+                <div class="stat-label">Total Prints</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="successful-prints">{{ stats.printing_stats.successful_prints }}</div>
+                <div class="stat-label">Successful Prints</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="canceled-prints">{{ stats.printing_stats.canceled_prints }}</div>
+                <div class="stat-label">Canceled Prints</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="avg-print-time">{{ stats.printing_stats.avg_print_time_hours|round(1) }}</div>
+                <div class="stat-label">Avg Print Time (hrs)</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="total-filament">{{ stats.printing_stats.total_filament_meters|round(1) }}</div>
+                <div class="stat-label">Total Filament (m)</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="print-days">{{ stats.printing_stats.print_days }}</div>
+                <div class="stat-label">Days with Prints</div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Activity Calendar -->
+<div class="stats-section">
+    <h2><i class="fas fa-calendar-alt"></i> Print Activity Calendar</h2>
+    <div class="activity-calendar">
+        <div class="calendar-header">
+            <div class="calendar-title">Print activity over the past year</div>
+            <div class="calendar-legend">
+                <div class="legend-item">
+                    <div class="legend-color day-level-0"></div>
+                    <span>No prints</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color day-level-1"></div>
+                    <span>1-2 prints</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color day-level-2"></div>
+                    <span>3-4 prints</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color day-level-3"></div>
+                    <span>5-6 prints</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color day-level-4"></div>
+                    <span>7+ prints</span>
+                </div>
+            </div>
+        </div>
+        <div class="calendar-container">
+            <div class="calendar-grid" id="activity-calendar">
+                <!-- Calendar content will be generated by JavaScript -->
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const activityData = {{ stats.activity_calendar|tojson }};
+</script>
+<script src="{{ url_for('static', filename='js/stats.js') }}"></script>
+{% endblock %} 

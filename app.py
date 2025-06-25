@@ -2,6 +2,7 @@ import io
 import logging
 import os
 import zipfile
+from datetime import datetime, timedelta
 
 import yaml
 from flask import (
@@ -550,6 +551,184 @@ def search_gcode_route():
     metadata = {"matches": len(filtered_gcode_files)}
 
     return jsonify({"gcode_files": filtered_gcode_files, "metadata": metadata})
+
+
+@app.route("/stats")
+def stats_view():
+    """Display comprehensive statistics about files, folders, and printing activity."""
+    try:
+        # Get file and folder statistics
+        stl_folders = get_stl_files(STL_FILES_PATH)
+        total_folders = len(stl_folders)
+        total_stl_files = sum(len(folder["files"]) for folder in stl_folders)
+
+        # Count G-code files
+        total_gcode_files = 0
+        folders_with_gcode = set()
+
+        if GCODE_FILES_PATH and os.path.isdir(GCODE_FILES_PATH):
+            for root, dirs, files in os.walk(GCODE_FILES_PATH):
+                for file in files:
+                    if file.lower().endswith(".gcode"):
+                        total_gcode_files += 1
+
+                        # Find associated STL folder
+                        stl_file_name = os.path.splitext(file)[0].lower()
+                        for folder in stl_folders:
+                            for stl_file in folder["files"]:
+                                stl_name = os.path.splitext(stl_file["file_name"])[0].lower()
+                                if search.search_tokens_all_match(
+                                    search.tokenize(stl_name), search.tokenize(stl_file_name)
+                                ):
+                                    folders_with_gcode.add(folder["folder_name"])
+                                    break
+
+        # Get Moonraker printing statistics
+        printing_stats = get_moonraker_printing_stats()
+
+        # Generate activity calendar data
+        activity_calendar = generate_activity_calendar()
+
+        stats = {
+            "total_folders": total_folders,
+            "total_stl_files": total_stl_files,
+            "total_gcode_files": total_gcode_files,
+            "folders_with_gcode": len(folders_with_gcode),
+            "printing_stats": printing_stats,
+            "activity_calendar": activity_calendar,
+        }
+
+        return render_template("stats.html", stats=stats)
+
+    except Exception as e:
+        app.logger.error(f"Error generating stats: {e}")
+        return "Error generating statistics", 500
+
+
+def get_moonraker_printing_stats():
+    """Get aggregated printing statistics from Moonraker API."""
+    try:
+        moonraker_url = config.get("moonraker_url")
+        if not moonraker_url:
+            return {
+                "total_prints": 0,
+                "successful_prints": 0,
+                "canceled_prints": 0,
+                "avg_print_time_hours": 0,
+                "total_filament_meters": 0,
+                "print_days": 0,
+            }
+
+        # Get all print history
+        history_data = moonraker.get_moonraker_history(moonraker_url)
+        if not history_data or "jobs" not in history_data:
+            return {
+                "total_prints": 0,
+                "successful_prints": 0,
+                "canceled_prints": 0,
+                "avg_print_time_hours": 0,
+                "total_filament_meters": 0,
+                "print_days": 0,
+            }
+
+        jobs = history_data["jobs"]
+        total_prints = len(jobs)
+        successful_prints = 0
+        canceled_prints = 0
+        total_print_time = 0
+        total_filament = 0
+        print_days = set()
+
+        for job in jobs:
+            # Count successful vs canceled
+            if job.get("status") == "completed":
+                successful_prints += 1
+            elif job.get("status") == "cancelled":
+                canceled_prints += 1
+
+            # Calculate print time
+            if job.get("print_duration"):
+                total_print_time += job["print_duration"]
+
+            # Calculate filament usage
+            if job.get("filament_used"):
+                total_filament += job["filament_used"]
+
+            # Track print days
+            if job.get("start_time"):
+                try:
+                    start_date = datetime.fromtimestamp(job["start_time"])
+                    print_days.add(start_date.strftime("%Y-%m-%d"))
+                except:
+                    pass
+
+        avg_print_time_hours = total_print_time / successful_prints if successful_prints > 0 else 0
+        total_filament_meters = (
+            total_filament / 1000 if total_filament > 0 else 0
+        )  # Convert mm to meters
+
+        return {
+            "total_prints": total_prints,
+            "successful_prints": successful_prints,
+            "canceled_prints": canceled_prints,
+            "avg_print_time_hours": avg_print_time_hours / 3600,  # Convert seconds to hours
+            "total_filament_meters": total_filament_meters,
+            "print_days": len(print_days),
+        }
+
+    except Exception as e:
+        app.logger.error(f"Error getting Moonraker printing stats: {e}")
+        return {
+            "total_prints": 0,
+            "successful_prints": 0,
+            "canceled_prints": 0,
+            "avg_print_time_hours": 0,
+            "total_filament_meters": 0,
+            "print_days": 0,
+        }
+
+
+def generate_activity_calendar():
+    """Generate activity calendar data for the past year."""
+    try:
+        moonraker_url = config.get("moonraker_url")
+        if not moonraker_url:
+            return {}
+
+        # Get all print history
+        history_data = moonraker.get_moonraker_history(moonraker_url)
+        if not history_data or "jobs" not in history_data:
+            return {}
+
+        # Initialize activity data for the past year
+        activity_data = {}
+        current_date = datetime.now()
+        start_date = current_date - timedelta(days=365)
+
+        # Initialize all dates with 0 prints
+        current = start_date
+        while current <= current_date:
+            activity_data[current.strftime("%Y-%m-%d")] = 0
+            current += timedelta(days=1)
+
+        # Count prints per day
+        for job in history_data["jobs"]:
+            if job.get("start_time"):
+                try:
+                    start_date = datetime.fromtimestamp(job["start_time"])
+                    date_str = start_date.strftime("%Y-%m-%d")
+
+                    # Only count if within the past year
+                    if date_str in activity_data:
+                        activity_data[date_str] += 1
+                except:
+                    pass
+
+        return activity_data
+
+    except Exception as e:
+        app.logger.error(f"Error generating activity calendar: {e}")
+        return {}
 
 
 if __name__ == "__main__":

@@ -184,10 +184,41 @@ class MoonrakerAPI:
         """
         return self._make_request("/printer/info")
 
+    def get_history(self, limit: int = 1000) -> Optional[Dict[str, Any]]:
+        """
+        Get all print history from Moonraker API.
 
-def get_moonraker_stats(
-    filename: str, moonraker_url: str = "http://klipper.local:7125"
-) -> Optional[Dict[str, Any]]:
+        Args:
+            limit: Maximum number of history entries to return
+
+        Returns:
+            Dictionary containing print history or None if failed
+        """
+        params = {"limit": limit}
+        response = self._make_request("/server/history/list", params=params)
+        if response and "result" in response:
+            return response["result"]
+        return None
+
+
+def get_moonraker_history(moonraker_url: str = None) -> Optional[Dict[str, Any]]:
+    """
+    Get all print history from Moonraker API.
+
+    Args:
+        moonraker_url: Moonraker API URL (if None, uses default from config)
+
+    Returns:
+        Dictionary containing print history or None if failed
+    """
+    if not moonraker_url:
+        moonraker_url = "http://klipper.local:7125"
+
+    api = MoonrakerAPI(moonraker_url)
+    return api.get_history()
+
+
+def get_moonraker_stats(filename: str, moonraker_url: str = None) -> Optional[Dict[str, Any]]:
     """
     Convenience function to get print statistics for a file
 
@@ -198,6 +229,9 @@ def get_moonraker_stats(
     Returns:
         Print statistics dictionary or None if not available
     """
+    if not moonraker_url:
+        moonraker_url = "http://klipper.local:7125"
+
     try:
         api = MoonrakerAPI(moonraker_url)
         return api.get_print_stats_for_file(filename)

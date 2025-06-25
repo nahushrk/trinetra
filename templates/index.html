@@ -9,56 +9,54 @@
 {% endblock %}
 
 {% block content %}
-<div class="container mt-4">
-    <!-- Search Bar -->
-    <div class="row justify-content-center">
-        <div class="col-md-10">
-            <div id="search-bar" class="input-group mb-3">
-                <input type="text" id="search-input" class="form-control" placeholder="Search STL files or folders...">
-            </div>
-            <!-- Upload Button -->
-            <div class="upload-container">
-                <button id="upload-button" class="btn btn-outline-secondary">
-                    <i class="bi bi-upload"></i> Upload ZIP File
-                </button>
-            </div>
-            <div id="metadata" class="text-center text-muted"></div>
+<!-- Search Bar -->
+<div class="row justify-content-center">
+    <div class="col-md-10">
+        <div id="search-bar" class="input-group mb-3">
+            <input type="text" id="search-input" class="form-control" placeholder="Search STL files or folders...">
         </div>
-    </div>
-
-    <!-- Hidden file input for uploads -->
-    <input type="file" id="file-input" style="display: none;" multiple accept=".zip">
-
-    <!-- Upload Progress Modal -->
-    <div id="upload-modal" class="upload-modal">
-        <div class="upload-modal-content">
-            <div class="upload-modal-header">
-                <h3 class="upload-modal-title">Uploading Files</h3>
-                <span class="upload-modal-close" id="upload-modal-close">&times;</span>
-            </div>
-            <div class="upload-progress">
-                <div class="upload-progress-bar">
-                    <div class="upload-progress-fill" id="upload-progress-fill"></div>
-                </div>
-                <div class="upload-progress-text" id="upload-progress-text">Preparing upload...</div>
-            </div>
-            <div id="upload-status" class="upload-status info">
-                Ready to upload
-            </div>
-            <div id="upload-conflict-dialog" class="upload-conflict-dialog">
-                <strong>Folder Conflict:</strong> A folder with this name already exists.
-                <div class="upload-conflict-buttons">
-                    <button class="upload-conflict-btn skip" id="upload-skip-btn">Skip</button>
-                    <button class="upload-conflict-btn overwrite" id="upload-overwrite-btn">Overwrite</button>
-                </div>
-            </div>
+        <!-- Upload Button -->
+        <div class="upload-container">
+            <button id="upload-button" class="btn btn-outline-secondary">
+                <i class="bi bi-upload"></i> Upload ZIP File
+            </button>
         </div>
+        <div id="metadata" class="text-center text-muted"></div>
     </div>
-
-    <canvas id="c" class="d-block mx-auto"></canvas>
-
-    <div id="content" class="mt-4"></div>
 </div>
+
+<!-- Hidden file input for uploads -->
+<input type="file" id="file-input" style="display: none;" multiple accept=".zip">
+
+<!-- Upload Progress Modal -->
+<div id="upload-modal" class="upload-modal">
+    <div class="upload-modal-content">
+        <div class="upload-modal-header">
+            <h3 class="upload-modal-title">Uploading Files</h3>
+            <span class="upload-modal-close" id="upload-modal-close">&times;</span>
+        </div>
+        <div class="upload-progress">
+            <div class="upload-progress-bar">
+                <div class="upload-progress-fill" id="upload-progress-fill"></div>
+            </div>
+            <div class="upload-progress-text" id="upload-progress-text">Preparing upload...</div>
+        </div>
+        <div id="upload-status" class="upload-status info">
+            Ready to upload
+        </div>
+        <div id="upload-conflict-dialog" class="upload-conflict-dialog">
+            <strong>Folder Conflict:</strong> A folder with this name already exists.
+            <div class="upload-conflict-buttons">
+                <button class="upload-conflict-btn skip" id="upload-skip-btn">Skip</button>
+                <button class="upload-conflict-btn overwrite" id="upload-overwrite-btn">Overwrite</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<canvas id="c" class="d-block mx-auto"></canvas>
+
+<div id="content" class="mt-4"></div>
 {% endblock %}
 
 {% block scripts %}
