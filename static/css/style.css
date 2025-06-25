@@ -295,6 +295,42 @@ button {
     margin-top: 10px;
 }
 
+/* Moonraker statistics styling */
+.moonraker-stats {
+    text-align: left;
+    font-size: 12px;
+    margin-top: 8px;
+    padding: 8px;
+    border-radius: 4px;
+    background-color: #f8f9fa;
+    border-left: 3px solid #6c757d;
+}
+
+.moonraker-stats.stats-loaded {
+    background-color: #d4edda;
+    border-left-color: #28a745;
+}
+
+.moonraker-stats.stats-none {
+    background-color: #fff3cd;
+    border-left-color: #ffc107;
+}
+
+.moonraker-stats.stats-error {
+    background-color: #f8d7da;
+    border-left-color: #dc3545;
+}
+
+.stats-header {
+    margin-bottom: 4px;
+    color: #495057;
+}
+
+.moonraker-stats div {
+    margin-bottom: 2px;
+    color: #6c757d;
+}
+
 /* Optional: Add border around G-code renderings */
 .gcode-item .rendering {
     border: 1px solid #ddd;

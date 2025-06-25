@@ -16,7 +16,7 @@ from flask import (
 from flask_compress import Compress
 from werkzeug.utils import secure_filename
 
-from trinetra import gcode_handler, search
+from trinetra import gcode_handler, search, moonraker
 
 
 def safe_join(base, *paths):
@@ -188,7 +188,7 @@ def index():
 def gcode_files_view():
     """Display all G-code files across all folders with links to their parent folders."""
     all_gcode_files = []
-    
+
     # Collect G-code files from the GCODE_FILES_PATH
     if GCODE_FILES_PATH and os.path.isdir(GCODE_FILES_PATH):
         for root, dirs, files in os.walk(GCODE_FILES_PATH):
@@ -196,11 +196,11 @@ def gcode_files_view():
                 if file.lower().endswith(".gcode"):
                     abs_path = os.path.join(root, file)
                     rel_path = os.path.relpath(abs_path, GCODE_FILES_PATH)
-                    
+
                     # Try to find the associated STL file to determine the folder
                     stl_file_name = os.path.splitext(file)[0].lower()
                     folder_name = "Unknown"
-                    
+
                     # Search for matching STL file to determine folder
                     for stl_root, stl_dirs, stl_files in os.walk(STL_FILES_PATH):
                         for stl_file in stl_files:
@@ -209,24 +209,32 @@ def gcode_files_view():
                                 if search.search_tokens_all_match(
                                     search.tokenize(stl_name), search.tokenize(stl_file_name)
                                 ):
-                                    stl_rel_path = os.path.relpath(os.path.join(stl_root, stl_file), STL_FILES_PATH)
-                                    folder_name = os.path.dirname(stl_rel_path) if os.path.dirname(stl_rel_path) else os.path.basename(stl_root)
+                                    stl_rel_path = os.path.relpath(
+                                        os.path.join(stl_root, stl_file), STL_FILES_PATH
+                                    )
+                                    folder_name = (
+                                        os.path.dirname(stl_rel_path)
+                                        if os.path.dirname(stl_rel_path)
+                                        else os.path.basename(stl_root)
+                                    )
                                     break
                         if folder_name != "Unknown":
                             break
-                    
+
                     metadata = extract_gcode_metadata_from_file(abs_path)
-                    all_gcode_files.append({
-                        "file_name": file,
-                        "rel_path": rel_path,
-                        "folder_name": folder_name,
-                        "metadata": metadata,
-                        "base_path": "GCODE_BASE_PATH"
-                    })
-    
+                    all_gcode_files.append(
+                        {
+                            "file_name": file,
+                            "rel_path": rel_path,
+                            "folder_name": folder_name,
+                            "metadata": metadata,
+                            "base_path": "GCODE_BASE_PATH",
+                        }
+                    )
+
     # Sort by folder name, then by file name
     all_gcode_files.sort(key=lambda x: (x["folder_name"], x["file_name"]))
-    
+
     return render_template("gcode_files.html", gcode_files=all_gcode_files)
 
 
@@ -419,6 +427,22 @@ def copy_gcode_path(base_path, filename):
     except Exception as e:
         app.logger.error(f"Error copying G-code path: {e}")
         return jsonify({"path": ""}), 404
+
+
+@app.route("/moonraker_stats/<path:filename>", methods=["GET"])
+def get_moonraker_stats(filename):
+    """Get Moonraker print statistics for a G-code file."""
+    try:
+        moonraker_url = config.get("moonraker_url", "http://klipper.local:7125")
+        stats = moonraker.get_moonraker_stats(filename, moonraker_url)
+
+        if stats:
+            return jsonify({"success": True, "stats": stats})
+        else:
+            return jsonify({"success": False, "message": "No print history found for this file"})
+    except Exception as e:
+        app.logger.error(f"Error getting Moonraker stats for {filename}: {e}")
+        return jsonify({"success": False, "message": "Failed to get print statistics"}), 500
 
 
 @app.route("/search", methods=["GET"])

@@ -97,13 +97,13 @@ function loadSTLFiles(folders) {
         folderHeader.appendChild(folderTitle);
 
         // Add folder icon
-        const folderIcon = document.createElement('i');
+        const folderIcon = document.createElement('a');
+        folderIcon.href = `/folder/${encodeURIComponent(topLevelFolder)}`;
         folderIcon.className = 'bi bi-folder2-open'; // Bootstrap Icon class
         folderIcon.style.marginLeft = '10px';
         folderIcon.style.cursor = 'pointer';
-        folderIcon.onclick = function () {
-            window.location.href = `/folder/${encodeURIComponent(topLevelFolder)}`;
-        };
+        folderIcon.style.textDecoration = 'none';
+        folderIcon.style.color = 'inherit';
         folderHeader.appendChild(folderIcon);
 
         folderContainer.appendChild(folderHeader);
