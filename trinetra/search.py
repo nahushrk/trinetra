@@ -83,7 +83,8 @@ def search_files_and_folders(
         if folder_name not in folder_scores:
             folder_scores[folder_name] = {"folder": folder.copy(), "score": 0, "matches": []}
 
-        folder_scores[folder_name]["score"] += score
+        # Use the highest score for the folder
+        folder_scores[folder_name]["score"] = max(folder_scores[folder_name]["score"], score)
         folder_scores[folder_name]["matches"].append((item, score))
 
     # Sort folders by total score and limit results
