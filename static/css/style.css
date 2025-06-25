@@ -71,6 +71,39 @@ body {
     padding: 0 1rem;
 }
 
+/* Common container for wider content across all pages */
+.content-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 1rem;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1500px) {
+    .content-container {
+        max-width: 1200px;
+    }
+}
+
+@media (max-width: 1200px) {
+    .content-container {
+        max-width: 1000px;
+    }
+}
+
+@media (max-width: 992px) {
+    .content-container {
+        max-width: 900px;
+    }
+}
+
+@media (max-width: 768px) {
+    .content-container {
+        max-width: 100%;
+        padding: 0 0.5rem;
+    }
+}
+
 /* Footer Styles */
 .footer {
     background-color: #f8f9fa;

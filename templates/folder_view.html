@@ -9,64 +9,62 @@
 {% endblock %}
 
 {% block content %}
-<div class="container mt-4">
-    <!-- Folder Name and Action Buttons -->
-    <div class="row justify-content-center align-items-center">
-        <div class="col text-center">
-            <h2>{{ folder_name }}</h2>
-        </div>
+<!-- Folder Name and Action Buttons -->
+<div class="row justify-content-center align-items-center">
+    <div class="col text-center">
+        <h2>{{ folder_name }}</h2>
     </div>
-    <!-- Action Buttons -->
-    <div class="row justify-content-center mb-3">
-        <div class="col text-center">
-            <button id="delete-folder-btn" class="btn btn-danger mr-2">
-                <i class="bi bi-trash"></i> Delete Folder
-            </button>
-            <button id="download-folder-btn" class="btn btn-primary">
-                <i class="bi bi-download"></i> Download Folder
-            </button>
-        </div>
+</div>
+<!-- Action Buttons -->
+<div class="row justify-content-center mb-3">
+    <div class="col text-center">
+        <button id="delete-folder-btn" class="btn btn-danger mr-2">
+            <i class="bi bi-trash"></i> Delete Folder
+        </button>
+        <button id="download-folder-btn" class="btn btn-primary">
+            <i class="bi bi-download"></i> Download Folder
+        </button>
     </div>
+</div>
 
-    <!-- STL Files Section -->
-    {% if stl_files %}
-    <div class="section">
-        <h3>STL Files</h3>
-        <canvas id="c" class="d-block mx-auto"></canvas>
-        <div id="stl-content" class="mt-4"></div>
-    </div>
-    {% endif %}
+<!-- STL Files Section -->
+{% if stl_files %}
+<div class="section">
+    <h3>STL Files</h3>
+    <canvas id="c" class="d-block mx-auto"></canvas>
+    <div id="stl-content" class="mt-4"></div>
+</div>
+{% endif %}
 
-    <!-- G-code Files Section -->
-    {% if gcode_files %}
-    <div class="section">
-        <h3>G-code Files</h3>
-        <div id="gcode-content" class="mt-4"></div>
-    </div>
-    {% endif %}
+<!-- G-code Files Section -->
+{% if gcode_files %}
+<div class="section">
+    <h3>G-code Files</h3>
+    <div id="gcode-content" class="mt-4"></div>
+</div>
+{% endif %}
 
-    <!-- Images Section -->
-    {% if image_files %}
-    <div class="section">
-        <h3>Images</h3>
-        <div id="image-content" class="mt-4"></div>
-    </div>
-    {% endif %}
+<!-- Images Section -->
+{% if image_files %}
+<div class="section">
+    <h3>Images</h3>
+    <div id="image-content" class="mt-4"></div>
+</div>
+{% endif %}
 
-    <!-- PDFs Section -->
-    {% if pdf_files %}
-    <div class="section">
-        <h3>PDFs</h3>
-        <div id="pdf-content" class="mt-4"></div>
-    </div>
-    {% endif %}
+<!-- PDFs Section -->
+{% if pdf_files %}
+<div class="section">
+    <h3>PDFs</h3>
+    <div id="pdf-content" class="mt-4"></div>
+</div>
+{% endif %}
 
-    <!-- Image Modal -->
-    <div id="image-modal" class="modal">
-        <span class="close">&times;</span>
-        <div id="modal-content-wrapper">
-            <img class="modal-content" id="modal-image">
-        </div>
+<!-- Image Modal -->
+<div id="image-modal" class="modal">
+    <span class="close">&times;</span>
+    <div id="modal-content-wrapper">
+        <img class="modal-content" id="modal-image">
     </div>
 </div>
 {% endblock %}
