@@ -586,8 +586,35 @@ def stats_view():
         # Get Moonraker printing statistics
         printing_stats = get_moonraker_printing_stats()
 
-        # Generate activity calendar data
-        activity_calendar = generate_activity_calendar()
+        # --- Activity Calendar Generation ---
+        from datetime import datetime, timedelta
+        import collections
+
+        moonraker_url = config.get("moonraker_url")
+        activity_calendar = collections.OrderedDict()
+        # Default: 0 prints for each day
+        today = datetime.now().date()
+        start_date = today - timedelta(days=364)
+        for i in range(365):
+            day = start_date + timedelta(days=i)
+            activity_calendar[day.strftime("%Y-%m-%d")] = 0
+        # Fill with Moonraker data
+        history_data = None
+        if moonraker_url:
+            from trinetra import moonraker
+
+            history_data = moonraker.get_moonraker_history(moonraker_url)
+        if history_data and "jobs" in history_data:
+            for job in history_data["jobs"]:
+                if job.get("start_time"):
+                    try:
+                        d = datetime.fromtimestamp(job["start_time"]).date()
+                        d_str = d.strftime("%Y-%m-%d")
+                        if d_str in activity_calendar:
+                            activity_calendar[d_str] += 1
+                    except Exception:
+                        pass
+        # --- End Activity Calendar Generation ---
 
         stats = {
             "total_folders": total_folders,
@@ -686,49 +713,6 @@ def get_moonraker_printing_stats():
             "total_filament_meters": 0,
             "print_days": 0,
         }
-
-
-def generate_activity_calendar():
-    """Generate activity calendar data for the past year."""
-    try:
-        moonraker_url = config.get("moonraker_url")
-        if not moonraker_url:
-            return {}
-
-        # Get all print history
-        history_data = moonraker.get_moonraker_history(moonraker_url)
-        if not history_data or "jobs" not in history_data:
-            return {}
-
-        # Initialize activity data for the past year
-        activity_data = {}
-        current_date = datetime.now()
-        start_date = current_date - timedelta(days=365)
-
-        # Initialize all dates with 0 prints
-        current = start_date
-        while current <= current_date:
-            activity_data[current.strftime("%Y-%m-%d")] = 0
-            current += timedelta(days=1)
-
-        # Count prints per day
-        for job in history_data["jobs"]:
-            if job.get("start_time"):
-                try:
-                    start_date = datetime.fromtimestamp(job["start_time"])
-                    date_str = start_date.strftime("%Y-%m-%d")
-
-                    # Only count if within the past year
-                    if date_str in activity_data:
-                        activity_data[date_str] += 1
-                except:
-                    pass
-
-        return activity_data
-
-    except Exception as e:
-        app.logger.error(f"Error generating activity calendar: {e}")
-        return {}
 
 
 if __name__ == "__main__":
