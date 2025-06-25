@@ -71,22 +71,16 @@ function displayGCodeFiles(files) {
         const containerElement = document.createElement('div');
         containerElement.className = 'list-item col-md-4';
 
-        // Create description element with folder link and proper text wrapping
-        const descriptionElement = document.createElement('div');
-        descriptionElement.className = 'file-name';
-        descriptionElement.innerHTML = `
-            <strong>${file.file_name}</strong>
-            <br>
-            <a href="/folder/${encodeURIComponent(file.folder_name)}" class="folder-link">
-                <i class="fas fa-folder"></i> ${file.folder_name}
-            </a>
-        `;
-        containerElement.appendChild(descriptionElement);
-
         // Use the unified renderer to create the G-code item
         const gcodeItem = createGCodeItem(file, containerElement, scene, rowContainer);
-        
         scenes.push(scene);
+
+        // Folder icon link (below the G-code view)
+        const folderLink = document.createElement('a');
+        folderLink.href = `/folder/${encodeURIComponent(file.folder_name)}`;
+        folderLink.className = 'folder-link d-block text-center mt-2';
+        folderLink.innerHTML = '<i class="fas fa-folder fa-2x"></i>';
+        containerElement.appendChild(folderLink);
 
         const observer = new IntersectionObserver((entries) => {
             entries.forEach(entry => {
