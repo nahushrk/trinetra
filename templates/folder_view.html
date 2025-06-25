@@ -10,12 +10,6 @@
 
 {% block content %}
 <div class="container mt-4">
-    <!-- Home Icon -->
-    <div class="row">
-        <div class="col">
-            <a href="{{ url_for('index') }}"><i class="fas fa-home fa-2x"></i></a>
-        </div>
-    </div>
     <!-- Folder Name and Action Buttons -->
     <div class="row justify-content-center align-items-center">
         <div class="col text-center">
@@ -85,5 +79,6 @@
     const gcodeFiles = {{ gcode_files|tojson }};
     const folderName = "{{ folder_name }}";
 </script>
+<script src="{{ url_for('static', filename='js/gcode_renderer.js') }}"></script>
 <script src="{{ url_for('static', filename='js/folder_view.js') }}"></script>
 {% endblock %}
