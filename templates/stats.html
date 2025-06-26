@@ -50,20 +50,16 @@
     
     /* Activity Calendar Styles */
     .activity-calendar {
-        margin-top: 16px;
-    }
+  display: flex;
+  justify-content: center;  /* horizontal centering */
+  align-items: center;      /* vertical centering if there’s extra height */
+  padding: 16px;            /* optional, for breathing room */
+}
     
     .calendar-header {
         display: flex;
         align-items: center;
         margin-bottom: 16px;
-    }
-    
-    .calendar-title {
-        font-size: 16px;
-        font-weight: 600;
-        color: #24292e;
-        margin-right: 16px;
     }
     
     .calendar-legend {
@@ -92,9 +88,10 @@
     
     .calendar-grid {
         display: grid;
-        grid-template-columns: auto repeat(53, 1fr);
+        grid-template-rows: repeat(7, 12px);  /* one row per weekday */
+        grid-auto-flow: column;               /* fill each week top→down */
+        grid-auto-columns: 12px;              /* each column is one day wide */
         gap: 3px;
-        min-width: 800px;
     }
     
     .calendar-day-labels {

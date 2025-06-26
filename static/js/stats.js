@@ -13,54 +13,47 @@ function buildActivityCalendar(activityData) {
     const calendar = document.getElementById('activity-calendar');
     if (!calendar) return;
     calendar.innerHTML = '';
-
-    // Prepare date mapping
-    const daysInWeek = 7;
-    const weeks = 52;
-    const totalSquares = daysInWeek * weeks;
-
-    // Find the start date (first key in activityData)
-    const dateKeys = Object.keys(activityData);
-    if (dateKeys.length === 0) return;
-    const startDate = new Date(dateKeys[0]);
-    const today = new Date();
-
-    // Find the weekday of the start date (0=Monday, 6=Sunday)
-    let startDay = startDate.getDay();
-    // Convert JS getDay (0=Sunday) to (0=Monday)
-    startDay = (startDay + 6) % 7;
-
-    // Build grid: columns=weeks, rows=days
-    let grid = document.createElement('div');
+  
+    const today     = new Date();
+    const todayStr  = today.toISOString().slice(0,10);
+  
+    // 1. Compute the raw 365-day window ending today:
+    const rawStart = new Date(today);
+    rawStart.setDate(rawStart.getDate() - 364);
+  
+    // 2. Back-pad to the Sunday on or before rawStart:
+    const pad = rawStart.getDay();                // 0=Sunday…6=Saturday
+    const startDate = new Date(rawStart);
+    startDate.setDate(rawStart.getDate() - pad);
+  
+    // 3. Build the grid
+    const grid = document.createElement('div');
     grid.className = 'calendar-grid';
-
-    // For each week (column)
-    let date = new Date(startDate);
-    let squareId = 1;
-    for (let col = 0; col < weeks; col++) {
-        for (let row = 0; row < daysInWeek; row++) {
-            // Calculate the date for this square
-            // The first column may start mid-week
-            let cellDate = new Date(startDate);
-            cellDate.setDate(startDate.getDate() + (col * daysInWeek + row) - startDay);
-            let dateStr = cellDate.toISOString().slice(0, 10);
-            let count = activityData[dateStr] || 0;
-            let level = getDayLevel(count);
-
-            let dayDiv = document.createElement('div');
-            dayDiv.className = 'calendar-day day-level-' + level;
-            dayDiv.id = squareId;
-            dayDiv.setAttribute('data-date', dateStr);
-            dayDiv.setAttribute('title', `${dateStr}: ${count} print${count === 1 ? '' : 's'}`);
-            if (dateStr === today.toISOString().slice(0, 10)) {
-                dayDiv.classList.add('day-current');
-            }
-            grid.appendChild(dayDiv);
-            squareId++;
-        }
+  
+    // 4. Loop day-by-day from startDate up through today
+    const cellDate = new Date(startDate);
+    while (cellDate <= today) {
+      const dateStr = cellDate.toISOString().slice(0,10);
+      const count   = activityData[dateStr] || 0;
+      const level   = getDayLevel(count);
+  
+      const dayDiv = document.createElement('div');
+      dayDiv.className = `calendar-day day-level-${level}`;
+      dayDiv.setAttribute('data-date', dateStr);
+      dayDiv.setAttribute(
+        'title',
+        `${dateStr}: ${count} print${count===1?'':'s'}`
+      );
+      if (dateStr === todayStr) {
+        dayDiv.classList.add('day-current');
+      }
+      grid.appendChild(dayDiv);
+  
+      cellDate.setDate(cellDate.getDate() + 1);
     }
+  
     calendar.appendChild(grid);
-}
+  }
 
 document.addEventListener('DOMContentLoaded', function() {
     if (typeof activityData !== 'undefined') {
