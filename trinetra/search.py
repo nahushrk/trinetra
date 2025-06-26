@@ -13,7 +13,7 @@ def tokenize(text: str) -> List[str]:
 
 
 def search_with_ranking(
-    query: str, choices: List[str], limit: int = 25, threshold: int = 60
+    query: str, choices: List[str], limit: int = 25, threshold: int = 75
 ) -> List[Tuple[str, int]]:
     """
     Search with fuzzy matching and ranking using thefuzz.
