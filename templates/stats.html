@@ -52,7 +52,7 @@
     .activity-calendar {
   display: flex;
   justify-content: center;  /* horizontal centering */
-  align-items: center;      /* vertical centering if there’s extra height */
+  align-items: center;      /* vertical centering if there's extra height */
   padding: 16px;            /* optional, for breathing room */
 }
     
@@ -128,7 +128,7 @@
     }
     
     .calendar-day:hover::after {
-        content: attr(data-date);
+        content: attr(title);
         position: absolute;
         bottom: 100%;
         left: 50%;
@@ -252,8 +252,10 @@
 <!-- Activity Calendar Section -->
 <div class="stats-section">
     <div class="calendar-header">
-        <span class="calendar-title"><i class="fas fa-calendar-alt"></i> Activity Calendar</span>
-        <span class="calendar-legend">
+        <h2 style="margin: 0; display: flex; align-items: center; font-size: 20px; font-weight: 600; color: #24292e;">
+            <i class="fas fa-calendar-alt" style="margin-right: 8px;"></i> Activity Calendar
+        </h2>
+        <span class="calendar-legend" style="margin-left: 24px;">
             <span class="legend-item"><span class="legend-color day-level-0"></span>0</span>
             <span class="legend-item"><span class="legend-color day-level-1"></span>1</span>
             <span class="legend-item"><span class="legend-color day-level-2"></span>2-4</span>
