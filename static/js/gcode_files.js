@@ -52,7 +52,7 @@ function performSearch(searchTerm) {
         });
 }
 
-// Display G-code files in a 3-column responsive layout
+// Display G-code files in a 3-column responsive layout, with action buttons (Download, Copy Path, Add to Queue)
 function displayGCodeFiles(files) {
     clearScenes();
     const content = document.getElementById('content');

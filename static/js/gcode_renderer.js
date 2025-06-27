@@ -291,6 +291,45 @@ function createGCodeItem(file, containerElement, scene, rowContainer) {
     };
     containerElement.appendChild(copyButton);
 
+    // Add to Queue button
+    const addToQueueButton = document.createElement('button');
+    addToQueueButton.innerText = 'Add to Queue';
+    addToQueueButton.onclick = function () {
+        addToQueueButton.disabled = true;
+        addToQueueButton.innerText = 'Adding...';
+        fetch('/api/add_to_queue', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                filenames: [relPath],
+                reset: false
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.result === 'ok' || data.result === 'success' || data.job_ids) {
+                addToQueueButton.innerText = 'Added!';
+                setTimeout(() => {
+                    addToQueueButton.innerText = 'Add to Queue';
+                    addToQueueButton.disabled = false;
+                }, 2000);
+            } else {
+                throw new Error(data.error || 'Unknown error');
+            }
+        })
+        .catch(error => {
+            addToQueueButton.innerText = 'Error!';
+            alert('Failed to add to queue: ' + error.message);
+            setTimeout(() => {
+                addToQueueButton.innerText = 'Add to Queue';
+                addToQueueButton.disabled = false;
+            }, 2000);
+        });
+    };
+    containerElement.appendChild(addToQueueButton);
+
     scene.userData.element = sceneElement;
     rowContainer.appendChild(containerElement);
 

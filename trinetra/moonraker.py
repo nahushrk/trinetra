@@ -5,9 +5,8 @@ Handles communication with Moonraker API to get print history and other informat
 
 import json
 import logging
-import subprocess
 import requests
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Union
 from urllib.parse import urljoin
 
 logger = logging.getLogger(__name__)
@@ -16,65 +15,22 @@ logger = logging.getLogger(__name__)
 class MoonrakerAPI:
     """Client for interacting with Moonraker API"""
 
-    def __init__(self, base_url: str = "http://klipper.local:7125"):
+    def __init__(self, base_url: str) -> None:
         """
         Initialize Moonraker API client
 
         Args:
-            base_url: Base URL for Moonraker API (default: http://klipper.local:7125)
+            base_url: Base URL for Moonraker API
         """
         self.base_url = base_url.rstrip("/")
         self.session = requests.Session()
         self.session.timeout = 10  # 10 second timeout
 
-    def _make_request_curl(
-        self, endpoint: str, params: Dict[str, Any] = None
-    ) -> Optional[Dict[str, Any]]:
-        """
-        Make a request to the Moonraker API using curl as fallback
-
-        Args:
-            endpoint: API endpoint (e.g., "/server/history/list")
-            params: Query parameters
-
-        Returns:
-            Response data as dictionary or None if request failed
-        """
-        url = urljoin(self.base_url, endpoint)
-
-        # Build curl command with proper query parameter handling
-        cmd = ["curl", "-s"]
-        if params:
-            # Build query string
-            query_parts = []
-            for key, value in params.items():
-                query_parts.append(f"{key}={value}")
-            url = f"{url}?{'&'.join(query_parts)}"
-
-        cmd.append(url)
-
-        try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
-            if result.returncode == 0:
-                return json.loads(result.stdout)
-            else:
-                logger.error(f"Curl request failed for {url}: {result.stderr}")
-                return None
-        except subprocess.TimeoutExpired:
-            logger.error(f"Curl request timeout for {url}")
-            return None
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse JSON response from curl {url}: {e}")
-            return None
-        except Exception as e:
-            logger.error(f"Unexpected error with curl request to {url}: {e}")
-            return None
-
     def _make_request(
         self, endpoint: str, method: str = "GET", **kwargs
     ) -> Optional[Dict[str, Any]]:
         """
-        Make a request to the Moonraker API
+        Make a request to the Moonraker API using requests library
 
         Args:
             endpoint: API endpoint (e.g., "/server/history/list")
@@ -92,9 +48,7 @@ class MoonrakerAPI:
             return response.json()
         except requests.exceptions.RequestException as e:
             logger.error(f"Moonraker API request failed for {url}: {e}")
-            # Fallback to curl for network issues
-            logger.info(f"Attempting curl fallback for {url}")
-            return self._make_request_curl(endpoint, kwargs.get("params"))
+            return None
         except ValueError as e:
             logger.error(f"Failed to parse JSON response from {url}: {e}")
             return None
@@ -200,8 +154,30 @@ class MoonrakerAPI:
             return response["result"]
         return None
 
+    def queue_job(self, filenames: List[str], reset: bool = False) -> bool:
+        """
+        Add jobs to the Moonraker print queue.
 
-def get_moonraker_history(moonraker_url: str = None) -> Optional[Dict[str, Any]]:
+        Args:
+            filenames: List of relative file paths to queue
+            reset: Whether to reset the queue (default False)
+
+        Returns:
+            True if successfully added to queue, False otherwise
+        """
+        payload = {"filenames": filenames, "reset": reset}
+        logger.debug(f"Moonraker queue_job payload: {payload}")
+        response = self._make_request("/server/job_queue/job", method="POST", json=payload)
+        logger.debug(f"Moonraker queue_job response: {response}")
+
+        # Check if the request was successful
+        if response is not None:
+            # Moonraker typically returns a response with result field on success
+            return "result" in response
+        return False
+
+
+def get_moonraker_history(moonraker_url: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """
     Get all print history from Moonraker API.
 
@@ -211,14 +187,13 @@ def get_moonraker_history(moonraker_url: str = None) -> Optional[Dict[str, Any]]
     Returns:
         Dictionary containing print history or None if failed
     """
-    if not moonraker_url:
-        moonraker_url = "http://klipper.local:7125"
-
     api = MoonrakerAPI(moonraker_url)
     return api.get_history()
 
 
-def get_moonraker_stats(filename: str, moonraker_url: str = None) -> Optional[Dict[str, Any]]:
+def get_moonraker_stats(
+    filename: str, moonraker_url: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
     """
     Convenience function to get print statistics for a file
 
@@ -229,12 +204,32 @@ def get_moonraker_stats(filename: str, moonraker_url: str = None) -> Optional[Di
     Returns:
         Print statistics dictionary or None if not available
     """
-    if not moonraker_url:
-        moonraker_url = "http://klipper.local:7125"
-
     try:
         api = MoonrakerAPI(moonraker_url)
         return api.get_print_stats_for_file(filename)
     except Exception as e:
         logger.error(f"Failed to get Moonraker stats for {filename}: {e}")
         return None
+
+
+def add_to_queue(
+    filenames: List[str], reset: bool = False, moonraker_url: Optional[str] = None
+) -> bool:
+    """
+    Add jobs to the Moonraker print queue.
+
+    Args:
+        filenames: List of relative file paths to queue
+        reset: Whether to reset the queue (default False)
+        moonraker_url: Moonraker API base URL
+
+    Returns:
+        True if successfully added to queue, False otherwise
+    """
+    try:
+        api = MoonrakerAPI(moonraker_url)
+        return api.queue_job(filenames, reset)
+    except Exception as e:
+        logger.error(f"Failed to add to Moonraker queue for {filenames}: {e}")
+        logger.error(f"Error: {e}")
+        return False

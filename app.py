@@ -18,6 +18,7 @@ from flask_compress import Compress
 from werkzeug.utils import secure_filename
 
 from trinetra import gcode_handler, search, moonraker
+from trinetra.moonraker import MoonrakerAPI, add_to_queue
 
 
 def safe_join(base, *paths):
@@ -713,6 +714,23 @@ def get_moonraker_printing_stats():
             "total_filament_meters": 0,
             "print_days": 0,
         }
+
+
+@app.route("/api/add_to_queue", methods=["POST"])
+def api_add_to_queue():
+    data = request.get_json(force=True)
+    filenames = data.get("filenames")
+    reset = data.get("reset", False)
+    if not isinstance(filenames, list) or not all(isinstance(f, str) for f in filenames):
+        app.logger.error(f"Invalid filenames payload: {filenames}")
+        return jsonify({"error": "Invalid filenames payload"}), 400
+    moonraker_url = config.get("moonraker_url", "http://localhost:7125")
+    app.logger.debug(f"Calling Moonraker add_to_queue with: filenames={filenames}, reset={reset}")
+    success = add_to_queue(filenames, reset, moonraker_url)
+    app.logger.debug(f"Moonraker add_to_queue result: {success}")
+    if not success:
+        return jsonify({"error": "Failed to add files to Moonraker queue"}), 502
+    return jsonify({"result": "ok"})
 
 
 if __name__ == "__main__":

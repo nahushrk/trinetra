@@ -76,7 +76,7 @@ class Test(TestCase):
         )
 
     def test_extract_gcode_metadata_2(self):
-        test_file = "/tests/gcodes/test.gcode"
+        test_file = "tests/gcodes/test.gcode"
         with open(test_file, encoding="utf-8", errors="ignore") as file:
             metadata = gcode_handler.extract_gcode_metadata(file)
             print(metadata)
