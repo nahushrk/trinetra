@@ -321,30 +321,36 @@ class TestMoonrakerFunctions(unittest.TestCase):
         self.assertIn("klippy_state", server_info["result"])
         self.assertIn("components", server_info["result"])
         self.assertIn("api_version", server_info["result"])
-        
+
         # Test printer info response
         printer_info = self.mock_server.get_response("/printer/info")
         self.assertIn("result", printer_info)
         self.assertIn("state", printer_info["result"])
         self.assertIn("hostname", printer_info["result"])
-        
+
         # Test history list response
         history_list = self.mock_server.get_response("/server/history/list")
         self.assertIn("result", history_list)
         self.assertIn("count", history_list["result"])
         self.assertIn("jobs", history_list["result"])
         self.assertIsInstance(history_list["result"]["jobs"], list)
-        
+
         # Test successful queue job response
-        queue_success = self.mock_server.get_response("/server/job_queue/job", method="POST", 
-                                                     json={"filenames": ["test.gcode"], "reset": False})
+        queue_success = self.mock_server.get_response(
+            "/server/job_queue/job",
+            method="POST",
+            json={"filenames": ["test.gcode"], "reset": False},
+        )
         self.assertIn("result", queue_success)
         self.assertIn("queued_jobs", queue_success["result"])
         self.assertIn("queue_state", queue_success["result"])
-        
+
         # Test failed queue job response
-        queue_error = self.mock_server.get_response("/server/job_queue/job", method="POST", 
-                                                   json={"filenames": ["nonexistent.gcode"], "reset": False})
+        queue_error = self.mock_server.get_response(
+            "/server/job_queue/job",
+            method="POST",
+            json={"filenames": ["nonexistent.gcode"], "reset": False},
+        )
         self.assertIn("error", queue_error)
         self.assertIn("code", queue_error["error"])
         self.assertIn("message", queue_error["error"])
