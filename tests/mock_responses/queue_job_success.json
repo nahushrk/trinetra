@@ -1,0 +1,13 @@
+{
+  "result": {
+    "queued_jobs": [
+      {
+        "filename": "test.gcode",
+        "job_id": "0000007F7C4AEE10",
+        "time_added": 1750988151.6682205,
+        "time_in_queue": 0.00010347366333007812
+      }
+    ],
+    "queue_state": "paused"
+  }
+} 

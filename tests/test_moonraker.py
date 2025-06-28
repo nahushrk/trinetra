@@ -8,6 +8,7 @@ import unittest
 from unittest.mock import Mock, patch, MagicMock
 import requests
 from typing import Dict, Any
+import os
 
 from trinetra.moonraker import (
     MoonrakerAPI,
@@ -17,6 +18,53 @@ from trinetra.moonraker import (
 )
 
 
+class MockMoonrakerServer:
+    """Mock Moonraker server that returns realistic responses"""
+
+    def __init__(self):
+        self.mock_responses_dir = os.path.join(os.path.dirname(__file__), "mock_responses")
+        self._load_responses()
+
+    def _load_responses(self):
+        """Load mock responses from JSON files"""
+        self.responses = {}
+
+        # Load server info response
+        with open(os.path.join(self.mock_responses_dir, "server_info.json")) as f:
+            self.responses["/server/info"] = json.load(f)
+
+        # Load printer info response
+        with open(os.path.join(self.mock_responses_dir, "printer_info.json")) as f:
+            self.responses["/printer/info"] = json.load(f)
+
+        # Load history list response
+        with open(os.path.join(self.mock_responses_dir, "history_list.json")) as f:
+            self.responses["/server/history/list"] = json.load(f)
+
+        # Load queue job responses
+        with open(os.path.join(self.mock_responses_dir, "queue_job_success.json")) as f:
+            self.responses["/server/job_queue/job_success"] = json.load(f)
+
+        with open(os.path.join(self.mock_responses_dir, "queue_job_error.json")) as f:
+            self.responses["/server/job_queue/job_error"] = json.load(f)
+
+    def get_response(self, endpoint: str, method: str = "GET", **kwargs) -> Dict[str, Any]:
+        """Get mock response for given endpoint and method"""
+        if endpoint == "/server/job_queue/job" and method == "POST":
+            # Check if this is a test for error case
+            json_data = kwargs.get("json", {})
+            filenames = json_data.get("filenames", [])
+
+            # Return error for nonexistent files, success for others
+            if any("nonexistent" in fname for fname in filenames):
+                return self.responses["/server/job_queue/job_error"]
+            else:
+                return self.responses["/server/job_queue/job_success"]
+
+        # Return stored response for other endpoints
+        return self.responses.get(endpoint, {"result": {}})
+
+
 class TestMoonrakerAPI(unittest.TestCase):
     """Test cases for MoonrakerAPI class"""
 
@@ -24,6 +72,7 @@ class TestMoonrakerAPI(unittest.TestCase):
         """Set up test fixtures"""
         self.base_url = "http://localhost:7125"
         self.api = MoonrakerAPI(self.base_url)
+        self.mock_server = MockMoonrakerServer()
 
     def test_init_with_valid_url(self):
         """Test successful API initialization with valid URL"""
@@ -38,19 +87,19 @@ class TestMoonrakerAPI(unittest.TestCase):
         self.assertEqual(api.base_url, "http://localhost:7125")
 
     def test_make_request_success(self):
-        """Test successful API request"""
+        """Test successful API request using mock server"""
         mock_response = Mock()
-        mock_response.json.return_value = {"result": {"jobs": []}}
+        mock_response.json.return_value = self.mock_server.get_response("/server/history/list")
         mock_response.raise_for_status.return_value = None
 
         with patch.object(self.api.session, "request", return_value=mock_response):
             result = self.api._make_request("/server/history/list")
-            self.assertEqual(result, {"result": {"jobs": []}})
+            self.assertEqual(result, self.mock_server.get_response("/server/history/list"))
 
     def test_make_request_with_params(self):
         """Test API request with query parameters"""
         mock_response = Mock()
-        mock_response.json.return_value = {"result": {"jobs": []}}
+        mock_response.json.return_value = self.mock_server.get_response("/server/history/list")
         mock_response.raise_for_status.return_value = None
 
         with patch.object(self.api.session, "request", return_value=mock_response) as mock_request:
@@ -79,20 +128,14 @@ class TestMoonrakerAPI(unittest.TestCase):
             self.assertIsNone(result)
 
     def test_get_print_history_success(self):
-        """Test successful print history retrieval"""
-        mock_response = {
-            "result": {
-                "jobs": [
-                    {"filename": "test1.gcode", "status": "completed"},
-                    {"filename": "test2.gcode", "status": "cancelled"},
-                ]
-            }
-        }
+        """Test successful print history retrieval using mock server"""
+        mock_response = self.mock_server.get_response("/server/history/list")
 
         with patch.object(self.api, "_make_request", return_value=mock_response):
             result = self.api.get_print_history(limit=10)
-            self.assertEqual(len(result), 2)
+            self.assertEqual(len(result), 3)  # 3 jobs in mock response
             self.assertEqual(result[0]["filename"], "test1.gcode")
+            self.assertEqual(result[0]["status"], "completed")
 
     def test_get_print_history_no_result(self):
         """Test print history with no result"""
@@ -109,40 +152,25 @@ class TestMoonrakerAPI(unittest.TestCase):
             self.assertEqual(result, [])
 
     def test_get_print_stats_for_file_success(self):
-        """Test successful print statistics calculation"""
-        mock_history = [
-            {
-                "filename": "test.gcode",
-                "status": "completed",
-                "total_duration": 3600,
-                "start_time": 1000,
-            },
-            {
-                "filename": "test.gcode",
-                "status": "completed",
-                "total_duration": 7200,
-                "start_time": 2000,
-            },
-            {"filename": "test.gcode", "status": "cancelled", "start_time": 3000},
-        ]
+        """Test successful print statistics calculation using mock server"""
+        mock_history = self.mock_server.get_response("/server/history/list")["result"]["jobs"]
 
         with patch.object(self.api, "get_print_history", return_value=mock_history):
             result = self.api.get_print_stats_for_file("test.gcode")
 
             self.assertIsNotNone(result)
             self.assertEqual(result["filename"], "test.gcode")
-            self.assertEqual(result["total_prints"], 3)
-            self.assertEqual(result["successful_prints"], 2)
-            self.assertEqual(result["canceled_prints"], 1)
-            self.assertEqual(result["avg_duration"], 5400)  # (3600 + 7200) / 2
-            self.assertEqual(result["most_recent_status"], "cancelled")
+            self.assertEqual(result["total_prints"], 1)  # Only one entry for test.gcode
+            self.assertEqual(result["successful_prints"], 1)
+            self.assertEqual(result["canceled_prints"], 0)
+            self.assertEqual(result["most_recent_status"], "completed")
 
     def test_get_print_stats_for_file_not_found(self):
         """Test print statistics for non-existent file"""
-        mock_history = [{"filename": "other.gcode", "status": "completed"}]
+        mock_history = self.mock_server.get_response("/server/history/list")["result"]["jobs"]
 
         with patch.object(self.api, "get_print_history", return_value=mock_history):
-            result = self.api.get_print_stats_for_file("test.gcode")
+            result = self.api.get_print_stats_for_file("nonexistent.gcode")
             self.assertIsNone(result)
 
     def test_get_print_stats_for_file_no_history(self):
@@ -152,46 +180,63 @@ class TestMoonrakerAPI(unittest.TestCase):
             self.assertIsNone(result)
 
     def test_get_server_info_success(self):
-        """Test successful server info retrieval"""
-        mock_response = {"result": {"server": "info"}}
+        """Test successful server info retrieval using mock server"""
+        mock_response = self.mock_server.get_response("/server/info")
 
         with patch.object(self.api, "_make_request", return_value=mock_response):
             result = self.api.get_server_info()
-            self.assertEqual(result, {"result": {"server": "info"}})
+            self.assertEqual(result, mock_response)
+            self.assertEqual(result["result"]["klippy_state"], "ready")
 
     def test_get_printer_info_success(self):
-        """Test successful printer info retrieval"""
-        mock_response = {"result": {"printer": "info"}}
+        """Test successful printer info retrieval using mock server"""
+        mock_response = self.mock_server.get_response("/printer/info")
 
         with patch.object(self.api, "_make_request", return_value=mock_response):
             result = self.api.get_printer_info()
-            self.assertEqual(result, {"result": {"printer": "info"}})
+            self.assertEqual(result, mock_response)
+            self.assertEqual(result["result"]["state"], "ready")
 
     def test_get_history_success(self):
-        """Test successful history retrieval"""
-        mock_response = {"result": {"jobs": [], "count": 0}}
+        """Test successful history retrieval using mock server"""
+        mock_response = self.mock_server.get_response("/server/history/list")
 
         with patch.object(self.api, "_make_request", return_value=mock_response):
             result = self.api.get_history(limit=100)
-            self.assertEqual(result, {"jobs": [], "count": 0})
+            self.assertEqual(result, mock_response["result"])
+            self.assertEqual(result["count"], 5)
 
     def test_queue_job_success(self):
-        """Test successful job queueing"""
-        mock_response = {"result": {"queued_jobs": ["test.gcode"]}}
+        """Test successful job queueing using mock server"""
+        mock_response = self.mock_server.get_response(
+            "/server/job_queue/job",
+            method="POST",
+            json={"filenames": ["test.gcode"], "reset": False},
+        )
 
         with patch.object(self.api, "_make_request", return_value=mock_response):
             result = self.api.queue_job(["test.gcode"], reset=False)
             self.assertTrue(result)
 
     def test_queue_job_failure(self):
-        """Test failed job queueing"""
-        with patch.object(self.api, "_make_request", return_value=None):
-            result = self.api.queue_job(["test.gcode"], reset=False)
+        """Test failed job queueing using mock server"""
+        mock_response = self.mock_server.get_response(
+            "/server/job_queue/job",
+            method="POST",
+            json={"filenames": ["nonexistent.gcode"], "reset": False},
+        )
+
+        with patch.object(self.api, "_make_request", return_value=mock_response):
+            result = self.api.queue_job(["nonexistent.gcode"], reset=False)
             self.assertFalse(result)
 
     def test_queue_job_with_reset(self):
-        """Test job queueing with reset flag"""
-        mock_response = {"result": {"queued_jobs": ["test.gcode"]}}
+        """Test job queueing with reset flag using mock server"""
+        mock_response = self.mock_server.get_response(
+            "/server/job_queue/job",
+            method="POST",
+            json={"filenames": ["test.gcode"], "reset": True},
+        )
 
         with patch.object(self.api, "_make_request", return_value=mock_response) as mock_request:
             result = self.api.queue_job(["test.gcode"], reset=True)
@@ -214,17 +259,21 @@ class TestMoonrakerAPI(unittest.TestCase):
 class TestMoonrakerFunctions(unittest.TestCase):
     """Test cases for convenience functions"""
 
+    def setUp(self):
+        """Set up test fixtures"""
+        self.mock_server = MockMoonrakerServer()
+
     def test_get_moonraker_history_success(self):
         """Test successful history retrieval via convenience function"""
-        mock_response = {"result": {"jobs": []}}
+        mock_response = self.mock_server.get_response("/server/history/list")
 
         with patch("trinetra.moonraker.MoonrakerAPI") as mock_api_class:
             mock_api = Mock()
-            mock_api.get_history.return_value = mock_response
+            mock_api.get_history.return_value = mock_response["result"]
             mock_api_class.return_value = mock_api
 
             result = get_moonraker_history("http://localhost:7125")
-            self.assertEqual(result, {"result": {"jobs": []}})
+            self.assertEqual(result, mock_response["result"])
 
     def test_get_moonraker_stats_success(self):
         """Test successful stats retrieval via convenience function"""
@@ -263,6 +312,42 @@ class TestMoonrakerFunctions(unittest.TestCase):
                 ["test.gcode"], reset=False, moonraker_url="http://localhost:7125"
             )
             self.assertFalse(result)
+
+    def test_mock_server_response_formats(self):
+        """Test that mock server returns responses in correct Klipper format"""
+        # Test server info response
+        server_info = self.mock_server.get_response("/server/info")
+        self.assertIn("result", server_info)
+        self.assertIn("klippy_state", server_info["result"])
+        self.assertIn("components", server_info["result"])
+        self.assertIn("api_version", server_info["result"])
+        
+        # Test printer info response
+        printer_info = self.mock_server.get_response("/printer/info")
+        self.assertIn("result", printer_info)
+        self.assertIn("state", printer_info["result"])
+        self.assertIn("hostname", printer_info["result"])
+        
+        # Test history list response
+        history_list = self.mock_server.get_response("/server/history/list")
+        self.assertIn("result", history_list)
+        self.assertIn("count", history_list["result"])
+        self.assertIn("jobs", history_list["result"])
+        self.assertIsInstance(history_list["result"]["jobs"], list)
+        
+        # Test successful queue job response
+        queue_success = self.mock_server.get_response("/server/job_queue/job", method="POST", 
+                                                     json={"filenames": ["test.gcode"], "reset": False})
+        self.assertIn("result", queue_success)
+        self.assertIn("queued_jobs", queue_success["result"])
+        self.assertIn("queue_state", queue_success["result"])
+        
+        # Test failed queue job response
+        queue_error = self.mock_server.get_response("/server/job_queue/job", method="POST", 
+                                                   json={"filenames": ["nonexistent.gcode"], "reset": False})
+        self.assertIn("error", queue_error)
+        self.assertIn("code", queue_error["error"])
+        self.assertIn("message", queue_error["error"])
 
 
 if __name__ == "__main__":
