@@ -69,7 +69,7 @@ function displayGCodeFiles(files) {
     files.forEach(file => {
         const scene = new THREE.Scene();
         const containerElement = document.createElement('div');
-        containerElement.className = 'list-item col-md-4';
+        containerElement.className = 'gcode-item col-md-4';
 
         // Use the unified renderer to create the G-code item
         const gcodeItem = createGCodeItem(file, containerElement, scene, rowContainer);

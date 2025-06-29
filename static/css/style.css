@@ -203,20 +203,7 @@ body {
 }
 
 /* Text wrapping for long file names and dimensions */
-.list-item > div:nth-child(2),
-.list-item > div:nth-child(3) {
-    color: #888;
-    font-family: sans-serif;
-    font-size: large;
-    width: 100%;
-    text-align: center;
-    margin-top: 0.5em;
-    word-wrap: break-word;
-    overflow-wrap: break-word;
-    hyphens: auto;
-    max-width: 100%;
-    padding: 0 5px;
-}
+/* Removed the problematic rule that was forcing center alignment on File Information */
 
 button {
     margin-top: 5px;
@@ -361,12 +348,43 @@ button {
 .moonraker-stats div {
     margin-bottom: 2px;
     color: #6c757d;
+    font-size: 12px;
+    margin-left: 0;
 }
 
-/* Optional: Add border around G-code renderings */
-.gcode-item .rendering {
-    border: 1px solid #ddd;
-    border-radius: 5px;
+/* GCODE metadata styling - similar to Moonraker stats */
+.gcode-metadata {
+    text-align: left !important;
+    font-size: 12px;
+    margin-top: 8px;
+    padding: 8px;
+    border-radius: 4px;
+    background-color: #e3f2fd;
+    border-left: 3px solid #2196f3;
+}
+
+.gcode-metadata.metadata-loaded {
+    background-color: #e3f2fd;
+    border-left-color: #2196f3;
+}
+
+.gcode-metadata.metadata-none {
+    background-color: #fff3e0;
+    border-left-color: #ff9800;
+}
+
+.metadata-header {
+    margin-bottom: 4px;
+    color: #495057;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.gcode-metadata div {
+    margin-bottom: 2px;
+    color: #6c757d;
+    font-size: 12px;
+    margin-left: 0;
 }
 
 /* Folder Links */

@@ -254,15 +254,22 @@ function createGCodeItem(file, containerElement, scene, rowContainer) {
     descriptionElement.style.color = '#888'; // Match the CSS styling
     containerElement.appendChild(descriptionElement);
 
-    // Display metadata
-    const metadataElement = document.createElement('div');
-    metadataElement.className = 'metadata';
-    let metadataContent = '';
-    for (const [key, value] of Object.entries(metadata)) {
-        metadataContent += `<strong>${key}:</strong> ${value}<br>`;
+    // Display GCODE metadata in a contained section
+    const gcodeMetadataElement = document.createElement('div');
+    gcodeMetadataElement.className = 'gcode-metadata';
+    
+    if (Object.keys(metadata).length > 0) {
+        gcodeMetadataElement.className = 'gcode-metadata metadata-loaded';
+        let metadataContent = '<div class="metadata-header"><strong>File Information:</strong></div>';
+        for (const [key, value] of Object.entries(metadata)) {
+            metadataContent += `<div>${key}: ${value}</div>`;
+        }
+        gcodeMetadataElement.innerHTML = metadataContent;
+    } else {
+        gcodeMetadataElement.className = 'gcode-metadata metadata-none';
+        gcodeMetadataElement.innerHTML = '<em>No metadata available</em>';
     }
-    metadataElement.innerHTML = metadataContent;
-    containerElement.appendChild(metadataElement);
+    containerElement.appendChild(gcodeMetadataElement);
 
     // Add Moonraker statistics section
     const statsElement = document.createElement('div');
