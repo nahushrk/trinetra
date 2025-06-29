@@ -249,6 +249,7 @@ function createGCodeItem(file, containerElement, scene, rowContainer) {
     containerElement.appendChild(sceneElement);
 
     const descriptionElement = document.createElement('div');
+    descriptionElement.className = 'file-name';
     descriptionElement.innerText = gcodeFile;
     descriptionElement.style.fontSize = '0.875rem'; // Make file name smaller
     descriptionElement.style.color = '#888'; // Match the CSS styling
@@ -460,6 +461,7 @@ function createSTLItem(file, containerElement, scene, rowContainer) {
     containerElement.appendChild(sceneElement);
 
     const descriptionElement = document.createElement('div');
+    descriptionElement.className = 'file-name';
     descriptionElement.innerText = stlFile;
     descriptionElement.style.fontSize = '0.875rem'; // Make file name smaller
     descriptionElement.style.color = '#888'; // Match the CSS styling
