@@ -410,6 +410,39 @@ button {
     margin-bottom: 10px;
 }
 
+/* STL file name wrapping - same as GCODE files */
+.list-item .file-name {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    hyphens: auto;
+    max-width: 100%;
+    padding: 0 5px;
+    text-align: center;
+    margin-bottom: 10px;
+}
+
+/* Image file name wrapping */
+.other-item .file-name {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    hyphens: auto;
+    max-width: 100%;
+    padding: 0 5px;
+    text-align: center;
+    margin-bottom: 10px;
+}
+
+/* PDF file name wrapping */
+.pdf-item .file-name {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    hyphens: auto;
+    max-width: 100%;
+    padding: 0 5px;
+    text-align: center;
+    margin-bottom: 10px;
+}
+
 /* Upload Progress Modal */
 .upload-modal {
     display: none;

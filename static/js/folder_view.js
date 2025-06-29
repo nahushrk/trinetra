@@ -163,6 +163,7 @@ function loadImages(files) {
         containerElement.className = 'other-item col-md-4';
 
         const descriptionElement = document.createElement('div');
+        descriptionElement.className = 'file-name';
         descriptionElement.innerText = fileName;
         descriptionElement.style.fontSize = '0.875rem'; // Match shared styling
         descriptionElement.style.color = '#888'; // Match shared styling
@@ -218,6 +219,7 @@ function loadPDFs(files) {
         containerElement.className = 'pdf-item';
 
         const descriptionElement = document.createElement('div');
+        descriptionElement.className = 'file-name';
         descriptionElement.innerText = fileName;
         descriptionElement.style.fontSize = '0.875rem'; // Match shared styling
         descriptionElement.style.color = '#888'; // Match shared styling
