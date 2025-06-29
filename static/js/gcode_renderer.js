@@ -271,64 +271,8 @@ function createGCodeItem(file, containerElement, scene, rowContainer) {
     // Load Moonraker statistics
     loadMoonrakerStats(gcodeFile, statsElement);
 
-    const downloadButton = document.createElement('button');
-    downloadButton.innerText = 'Download G-code';
-    downloadButton.onclick = function () {
-        window.location.href = `/gcode/${encodeURIComponent(basePath)}/${encodeURIComponent(relPath)}`;
-    };
-    containerElement.appendChild(downloadButton);
-
-    const copyButton = document.createElement('button');
-    copyButton.innerText = 'Copy Path';
-    copyButton.onclick = function () {
-        fetch(`/copy_gcode_path/${encodeURIComponent(basePath)}/${encodeURIComponent(relPath)}`)
-            .then(response => response.json())
-            .then(data => {
-                navigator.clipboard.writeText(data.path)
-                    .then(() => alert(`Copied path: ${data.path}`))
-                    .catch(err => console.error('Failed to copy path: ', err));
-            });
-    };
-    containerElement.appendChild(copyButton);
-
-    // Add to Queue button
-    const addToQueueButton = document.createElement('button');
-    addToQueueButton.innerText = 'Add to Queue';
-    addToQueueButton.onclick = function () {
-        addToQueueButton.disabled = true;
-        addToQueueButton.innerText = 'Adding...';
-        fetch('/api/add_to_queue', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                filenames: [relPath],
-                reset: false
-            })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.result === 'ok' || data.result === 'success' || data.job_ids) {
-                addToQueueButton.innerText = 'Added!';
-                setTimeout(() => {
-                    addToQueueButton.innerText = 'Add to Queue';
-                    addToQueueButton.disabled = false;
-                }, 2000);
-            } else {
-                throw new Error(data.error || 'Unknown error');
-            }
-        })
-        .catch(error => {
-            addToQueueButton.innerText = 'Error!';
-            alert('Failed to add to queue: ' + error.message);
-            setTimeout(() => {
-                addToQueueButton.innerText = 'Add to Queue';
-                addToQueueButton.disabled = false;
-            }, 2000);
-        });
-    };
-    containerElement.appendChild(addToQueueButton);
+    // Create buttons using shared function
+    createFileActionButtons(containerElement, file, ['download', 'copy', 'queue']);
 
     scene.userData.element = sceneElement;
     rowContainer.appendChild(containerElement);
@@ -390,4 +334,109 @@ function loadMoonrakerStats(filename, statsElement) {
             statsElement.innerHTML = '<em>Failed to load print statistics</em>';
             statsElement.className = 'moonraker-stats stats-error';
         });
+}
+
+// Shared button creation function
+function createFileActionButtons(containerElement, fileData, buttonTypes = ['download', 'copy', 'queue']) {
+    const buttonContainer = document.createElement('div');
+    buttonContainer.className = 'file-action-buttons';
+    containerElement.appendChild(buttonContainer);
+
+    // Download button
+    if (buttonTypes.includes('download')) {
+        const downloadButton = document.createElement('button');
+        const isGcode = fileData.file_name && fileData.file_name.toLowerCase().endsWith('.gcode');
+        downloadButton.className = `file-action-btn ${isGcode ? 'download-gcode' : 'download-stl'}`;
+        downloadButton.innerHTML = `<i class="fas fa-download"></i> Download ${isGcode ? 'G-code' : 'STL'}`;
+        downloadButton.onclick = function () {
+            if (isGcode) {
+                window.location.href = `/gcode/${encodeURIComponent(fileData.basePath || fileData.path)}/${encodeURIComponent(fileData.relPath)}`;
+            } else {
+                window.location.href = `/stl/${encodeURIComponent(fileData.relPath)}`;
+            }
+        };
+        buttonContainer.appendChild(downloadButton);
+    }
+
+    // Copy Path button
+    if (buttonTypes.includes('copy')) {
+        const copyButton = document.createElement('button');
+        copyButton.className = 'file-action-btn copy-path';
+        copyButton.innerHTML = '<i class="fas fa-copy"></i> Copy Path';
+        copyButton.onclick = function () {
+            const endpoint = fileData.file_name && fileData.file_name.toLowerCase().endsWith('.gcode') 
+                ? `/copy_gcode_path/${encodeURIComponent(fileData.basePath || fileData.path)}/${encodeURIComponent(fileData.relPath)}`
+                : `/copy_path/${encodeURIComponent(fileData.relPath)}`;
+            
+            fetch(endpoint)
+                .then(response => response.json())
+                .then(data => {
+                    navigator.clipboard.writeText(data.path)
+                        .then(() => {
+                            // Show success feedback
+                            const originalText = copyButton.innerHTML;
+                            copyButton.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                            copyButton.classList.add('success');
+                            setTimeout(() => {
+                                copyButton.innerHTML = originalText;
+                                copyButton.classList.remove('success');
+                            }, 2000);
+                        })
+                        .catch(err => console.error('Failed to copy path: ', err));
+                });
+        };
+        buttonContainer.appendChild(copyButton);
+    }
+
+    // Add to Queue button (only for GCODE files)
+    if (buttonTypes.includes('queue') && fileData.file_name && fileData.file_name.toLowerCase().endsWith('.gcode')) {
+        const addToQueueButton = document.createElement('button');
+        addToQueueButton.className = 'file-action-btn add-to-queue';
+        addToQueueButton.innerHTML = '<i class="fas fa-plus"></i> Add to Queue';
+        addToQueueButton.onclick = function () {
+            addToQueueButton.disabled = true;
+            addToQueueButton.classList.add('loading');
+            addToQueueButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
+            
+            fetch('/api/add_to_queue', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    filenames: [fileData.relPath],
+                    reset: false
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.result === 'ok' || data.result === 'success' || data.job_ids) {
+                    addToQueueButton.classList.remove('loading');
+                    addToQueueButton.classList.add('success');
+                    addToQueueButton.innerHTML = '<i class="fas fa-check"></i> Added!';
+                    setTimeout(() => {
+                        addToQueueButton.innerHTML = '<i class="fas fa-plus"></i> Add to Queue';
+                        addToQueueButton.classList.remove('success');
+                        addToQueueButton.disabled = false;
+                    }, 2000);
+                } else {
+                    throw new Error(data.error || 'Unknown error');
+                }
+            })
+            .catch(error => {
+                addToQueueButton.classList.remove('loading');
+                addToQueueButton.classList.add('error');
+                addToQueueButton.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error!';
+                alert('Failed to add to queue: ' + error.message);
+                setTimeout(() => {
+                    addToQueueButton.innerHTML = '<i class="fas fa-plus"></i> Add to Queue';
+                    addToQueueButton.classList.remove('error');
+                    addToQueueButton.disabled = false;
+                }, 2000);
+            });
+        };
+        buttonContainer.appendChild(addToQueueButton);
+    }
+
+    return buttonContainer;
 } 

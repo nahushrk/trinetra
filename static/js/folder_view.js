@@ -138,25 +138,8 @@ function loadSTLFiles(files) {
         const sizeElement = document.createElement('div');
         containerElement.appendChild(sizeElement);
 
-        const downloadButton = document.createElement('button');
-        downloadButton.innerText = 'Download STL';
-        downloadButton.onclick = function () {
-            window.location.href = `/stl/${encodeURIComponent(relPath)}`;
-        };
-        containerElement.appendChild(downloadButton);
-
-        const copyButton = document.createElement('button');
-        copyButton.innerText = 'Copy Path';
-        copyButton.onclick = function () {
-            fetch(`/copy_path/${encodeURIComponent(relPath)}`)
-                .then(response => response.json())
-                .then(data => {
-                    navigator.clipboard.writeText(data.path)
-                        .then(() => alert(`Copied path: ${data.path}`))
-                        .catch(err => console.error('Failed to copy path: ', err));
-                });
-        };
-        containerElement.appendChild(copyButton);
+        // Create buttons using shared function
+        createFileActionButtons(containerElement, file, ['download', 'copy']);
 
         scene.userData.element = sceneElement;
         rowContainer.appendChild(containerElement);

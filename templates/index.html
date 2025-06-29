@@ -63,5 +63,6 @@
 <script>
     const stlFiles = {{stl_files | tojson}};
 </script>
+<script src="{{ url_for('static', filename='js/gcode_renderer.js') }}"></script>
 <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 {% endblock %}
