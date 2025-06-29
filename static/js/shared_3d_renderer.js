@@ -250,6 +250,8 @@ function createGCodeItem(file, containerElement, scene, rowContainer) {
 
     const descriptionElement = document.createElement('div');
     descriptionElement.innerText = gcodeFile;
+    descriptionElement.style.fontSize = '0.875rem'; // Make file name smaller
+    descriptionElement.style.color = '#888'; // Match the CSS styling
     containerElement.appendChild(descriptionElement);
 
     // Display metadata
@@ -452,6 +454,8 @@ function createSTLItem(file, containerElement, scene, rowContainer) {
 
     const descriptionElement = document.createElement('div');
     descriptionElement.innerText = stlFile;
+    descriptionElement.style.fontSize = '0.875rem'; // Make file name smaller
+    descriptionElement.style.color = '#888'; // Match the CSS styling
     containerElement.appendChild(descriptionElement);
 
     const sizeElement = document.createElement('div');
@@ -525,10 +529,88 @@ function loadSTLFile(stlFile, scene, controls, sizeElement, camera) {
         controls.target.copy(center);
         controls.update();
 
-        const sizeText = `Size: ${size.x.toFixed(2)} mm x ${size.y.toFixed(2)} mm x ${size.z.toFixed(2)} mm`;
+        const sizeText = `(${size.x.toFixed(2)} x ${size.y.toFixed(2)} x ${size.z.toFixed(2)}) mm`;
         sizeElement.innerText = sizeText;
+        sizeElement.style.fontSize = '0.875rem'; // Match file name size
+        sizeElement.style.color = '#888'; // Match file name color
+        sizeElement.style.fontFamily = 'sans-serif'; // Match file name font
+        sizeElement.style.textAlign = 'center'; // Match file name alignment
+        sizeElement.style.marginTop = '0.5em'; // Match file name margin
+        sizeElement.style.wordWrap = 'break-word'; // Match file name word wrap
+        sizeElement.style.overflowWrap = 'break-word'; // Match file name overflow wrap
+        sizeElement.style.hyphens = 'auto'; // Match file name hyphens
+        sizeElement.style.maxWidth = '100%'; // Match file name max width
+        sizeElement.style.padding = '0 5px'; // Match file name padding
     });
 }
 
+// Shared animation and utility functions
+function clearScenes() {
+    const content = document.getElementById('content');
+    if (content) {
+        while (content.firstChild) {
+            content.removeChild(content.firstChild);
+        }
+    }
+    scenes = [];
+}
+
+function updateSize() {
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+
+    if (canvas && canvas.width !== width || canvas.height !== height) {
+        renderer.setSize(width, height, false);
+    }
+}
+
+function animate() {
+    if (!renderer) return;
+    updateSize();
+
+    renderer.setClearColor(0xffffff);
+    renderer.setScissorTest(false);
+    renderer.clear();
+
+    renderer.setClearColor(0xe0e0e0);
+    renderer.setScissorTest(true);
+
+    scenes.forEach(function (scene) {
+        const element = scene.userData.element;
+        const rect = element.getBoundingClientRect();
+
+        if (rect.bottom < 0 || rect.top > renderer.domElement.clientHeight ||
+            rect.right < 0 || rect.left > renderer.domElement.clientWidth) {
+            return;
+        }
+
+        const width = rect.right - rect.left;
+        const height = rect.bottom - rect.top;
+        const left = rect.left;
+        const bottom = renderer.domElement.clientHeight - rect.bottom;
+
+        renderer.setViewport(left, bottom, width, height);
+        renderer.setScissor(left, bottom, width, height);
+
+        const camera = scene.userData.camera;
+
+        camera.aspect = width / height;
+        camera.updateProjectionMatrix();
+
+        scene.userData.controls.update();
+
+        renderer.render(scene, camera);
+    });
+}
+
+// Make functions globally available
+window.createPrinterGrid = createPrinterGrid;
 window.createSTLItem = createSTLItem;
-window.loadSTLFile = loadSTLFile; 
+window.createGCodeItem = createGCodeItem;
+window.createFileActionButtons = createFileActionButtons;
+window.loadSTLFile = loadSTLFile;
+window.loadGCodeFile = loadGCodeFile;
+window.loadMoonrakerStats = loadMoonrakerStats;
+window.clearScenes = clearScenes;
+window.updateSize = updateSize;
+window.animate = animate; 

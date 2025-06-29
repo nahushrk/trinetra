@@ -199,6 +199,7 @@ function loadSTLFiles(folders) {
             const observer = new IntersectionObserver((entries) => {
                 entries.forEach(entry => {
                     if (entry.isIntersecting) {
+                        // Using shared loadSTLFile function from shared_3d_renderer.js
                         loadSTLFile(relPath, scene, stlItem.controls, containerElement.querySelector('div:nth-child(3)'), stlItem.camera);
                         observer.unobserve(containerElement);
                     }
@@ -219,55 +220,6 @@ function loadSTLFiles(folders) {
     renderer.setAnimationLoop(animate);
 }
 
-function loadSTLFile(stlFile, scene, controls, sizeElement, camera) {
-    const loader = new THREE.STLLoader();
-    loader.load(`/stl/${encodeURIComponent(stlFile)}`, function (geometry) {
-        const material = new THREE.MeshNormalMaterial({flatShading: true});
-        const mesh = new THREE.Mesh(geometry, material);
-
-        // Center the geometry and compute its bounding box
-        geometry.center();
-        geometry.computeBoundingBox();
-        const bbox = geometry.boundingBox;
-        const size = bbox.getSize(new THREE.Vector3());
-
-        // Calculate the offset to place the bottom of the object at Z=0
-        const zOffset = size.z / 2;
-
-        // Position the mesh at (110, 110) in the XY plane and adjust Z position
-        mesh.position.set(110, 110, zOffset);
-        scene.add(mesh);
-
-        // Add grid
-        var grid = createPrinterGrid();
-        scene.add(grid);
-
-        // Set up camera and controls
-        const center = new THREE.Vector3(110, 110, zOffset);
-        const radius = Math.max(size.x, size.y, size.z) / 2;
-
-        const fov = camera.fov * (Math.PI / 180);
-        let distance = radius / Math.sin(fov / 2);
-        distance *= 1.5;
-
-        // Calculate tilt angle in radians
-        const tiltAngle = THREE.Math.degToRad(30);
-
-        // Position camera with a 30-degree tilt around the X-axis
-        const cameraY = center.y - distance * Math.cos(tiltAngle);
-        const cameraZ = center.z + distance * Math.sin(tiltAngle);
-        camera.position.set(center.x, cameraY, cameraZ);
-
-        camera.lookAt(center);
-
-        controls.target.copy(center);
-        controls.update();
-
-        const sizeText = `Size: ${size.x.toFixed(2)} mm x ${size.y.toFixed(2)} mm x ${size.z.toFixed(2)} mm`;
-        sizeElement.innerText = sizeText;
-    });
-}
-
 function performSearch(searchTerm) {
     fetch(`/search?q=${encodeURIComponent(searchTerm)}`)
         .then(response => response.json())
@@ -283,109 +235,5 @@ function updateMetadata(matches) {
     metadataDiv.style.color = 'grey';
 }
 
-function clearScenes() {
-    const content = document.getElementById('content');
-    while (content.firstChild) {
-        content.removeChild(content.firstChild);
-    }
-    scenes = [];
-}
-
-function updateSize() {
-    const width = window.innerWidth;
-    const height = window.innerHeight;
-
-    if (canvas.width !== width || canvas.height !== height) {
-        renderer.setSize(width, height, false);
-    }
-}
-
-function animate() {
-    updateSize();
-
-    renderer.setClearColor(0xffffff);
-    renderer.setScissorTest(false);
-    renderer.clear();
-
-    renderer.setClearColor(0xe0e0e0);
-    renderer.setScissorTest(true);
-
-    scenes.forEach(function (scene) {
-        const element = scene.userData.element;
-        const rect = element.getBoundingClientRect();
-
-        if (rect.bottom < 0 || rect.top > renderer.domElement.clientHeight ||
-            rect.right < 0 || rect.left > renderer.domElement.clientWidth) {
-            return;
-        }
-
-        const width = rect.right - rect.left;
-        const height = rect.bottom - rect.top;
-        const left = rect.left;
-        const bottom = renderer.domElement.clientHeight - rect.bottom;
-
-        renderer.setViewport(left, bottom, width, height);
-        renderer.setScissor(left, bottom, width, height);
-
-        const camera = scene.userData.camera;
-
-        camera.aspect = width / height;
-        camera.updateProjectionMatrix();
-
-        scene.userData.controls.update();
-
-        renderer.render(scene, camera);
-    });
-}
-
-function createPrinterGrid() {
-    var geometry = new THREE.Geometry();
-
-    var vertices = [
-        // Bottom face
-        new THREE.Vector3(0, 0, 0),
-        new THREE.Vector3(220, 0, 0),
-
-        new THREE.Vector3(220, 0, 0),
-        new THREE.Vector3(220, 220, 0),
-
-        new THREE.Vector3(220, 220, 0),
-        new THREE.Vector3(0, 220, 0),
-
-        new THREE.Vector3(0, 220, 0),
-        new THREE.Vector3(0, 0, 0),
-
-        // Top face
-        new THREE.Vector3(0, 0, 270),
-        new THREE.Vector3(220, 0, 270),
-
-        new THREE.Vector3(220, 0, 270),
-        new THREE.Vector3(220, 220, 270),
-
-        new THREE.Vector3(220, 220, 270),
-        new THREE.Vector3(0, 220, 270),
-
-        new THREE.Vector3(0, 220, 270),
-        new THREE.Vector3(0, 0, 270),
-
-        // Vertical edges
-        new THREE.Vector3(0, 0, 0),
-        new THREE.Vector3(0, 0, 270),
-
-        new THREE.Vector3(220, 0, 0),
-        new THREE.Vector3(220, 0, 270),
-
-        new THREE.Vector3(220, 220, 0),
-        new THREE.Vector3(220, 220, 270),
-
-        new THREE.Vector3(0, 220, 0),
-        new THREE.Vector3(0, 220, 270),
-    ];
-
-    geometry.vertices.push(...vertices);
-
-    var material = new THREE.LineBasicMaterial({color: 0x000000});
-    var wireframe = new THREE.LineSegments(geometry, material);
-
-    return wireframe;
-}
+// Using shared functions from shared_3d_renderer.js
+// clearScenes, updateSize, and animate are now globally available
