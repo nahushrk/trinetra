@@ -97,7 +97,4 @@ function displayGCodeFiles(files) {
     content.appendChild(rowContainer);
 }
 
-// Using shared functions from shared_3d_renderer.js
-// clearScenes, updateSize, and animate are now globally available
-
 window.addEventListener('resize', updateSize); 

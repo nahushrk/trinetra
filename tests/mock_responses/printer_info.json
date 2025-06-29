@@ -2,10 +2,10 @@
   "result": {
     "state": "ready",
     "state_message": "Printer is ready",
-    "hostname": "klipper",
+    "hostname": "test-klipper",
     "klipper_path": "/home/pi/klipper",
     "python_path": "/home/pi/klippy-env/bin/python",
-    "process_id": 106720,
+    "process_id": 12345,
     "user_id": 1000,
     "group_id": 1000,
     "log_file": "/home/pi/printer_data/logs/klippy.log",

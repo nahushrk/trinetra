@@ -234,6 +234,3 @@ function updateMetadata(matches) {
     metadataDiv.innerText = `Number of matches: ${matches}`;
     metadataDiv.style.color = 'grey';
 }
-
-// Using shared functions from shared_3d_renderer.js
-// clearScenes, updateSize, and animate are now globally available

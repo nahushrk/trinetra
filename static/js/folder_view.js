@@ -265,6 +265,3 @@ function loadGCodeFiles(files) {
 
     content.appendChild(rowContainer);
 }
-
-// Using shared functions from shared_3d_renderer.js
-// updateSize and animate are now globally available 

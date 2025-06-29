@@ -10,6 +10,11 @@ import requests
 from typing import Dict, Any
 import os
 
+# Setup logging for tests
+from trinetra.logger import get_logger
+
+logger = get_logger(__name__)
+
 from trinetra.moonraker import (
     MoonrakerAPI,
     get_moonraker_history,

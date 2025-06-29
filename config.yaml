@@ -1,6 +1,6 @@
 base_path: "/home/pi/trinetra-data/3dfiles/"
 gcode_path: "/home/pi/printer_data/gcodes/"
 moonraker_url: "http://klipper.local:7125"
-log_level: "ERROR"
+log_level: "WARNING"
 mode: "PROD"
 search_result_limit: 25

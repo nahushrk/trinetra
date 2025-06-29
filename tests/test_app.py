@@ -19,6 +19,12 @@ from werkzeug.datastructures import FileStorage
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Setup logging for tests
+from trinetra.logger import get_logger
+
+logger = get_logger(__name__)
+
 from app import create_app
 
 

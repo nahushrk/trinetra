@@ -20,6 +20,12 @@ from werkzeug.utils import secure_filename
 from trinetra import gcode_handler, search, moonraker
 from trinetra.moonraker import MoonrakerAPI, add_to_queue
 
+# Import logging configuration from trinetra package
+from trinetra.logger import get_logger
+
+# Get logger for this module
+logger = get_logger(__name__)
+
 
 def safe_join(base, *paths):
     """Safely join one or more path components to a base path to prevent directory traversal."""
@@ -40,7 +46,7 @@ def load_config(yaml_file=None):
             config = yaml.safe_load(file)
             return config or {}
     except Exception as e:
-        logging.error(f"Error loading configuration file: {e}")
+        logger.error(f"Error loading configuration file: {e}")
         return {}
 
 
@@ -745,7 +751,7 @@ def create_app(config_file=None, config_overrides=None):
 
 if __name__ == "__main__":
     app = create_app()
-    print(
+    logger.info(
         f"STL files: {app.config['STL_FILES_PATH']}, GCODE files: {app.config['GCODE_FILES_PATH']}"
     )
 

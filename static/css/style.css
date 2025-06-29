@@ -203,7 +203,6 @@ body {
 }
 
 /* Text wrapping for long file names and dimensions */
-/* Removed the problematic rule that was forcing center alignment on File Information */
 
 button {
     margin-top: 5px;

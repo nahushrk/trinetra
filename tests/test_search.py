@@ -5,6 +5,12 @@ Covers all functions and edge cases for fuzzy search functionality
 
 import unittest
 from unittest.mock import patch, MagicMock
+
+# Setup logging for tests
+from trinetra.logger import get_logger
+
+logger = get_logger(__name__)
+
 from trinetra import search
 
 

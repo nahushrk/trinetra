@@ -2,6 +2,11 @@ import configparser
 import json
 import re
 
+from trinetra.logger import get_logger
+
+# Get logger for this module
+logger = get_logger(__name__)
+
 
 def yaml_config_to_dict(yaml_text):
     config = configparser.ConfigParser()
@@ -121,8 +126,8 @@ def extract_gcode_metadata(file):
             cura_config_dict = json.loads(cura_config_data)
             metadata_from_cura = extract_gcode_metadata_from_cura_config(cura_config_dict)
         except json.JSONDecodeError as e:
-            print(f"JSON decode error: {e}")
-            print(f"Cura config data: {cura_config_data[:200]}...")
+            logger.error(f"JSON decode error: {e}")
+            logger.debug(f"Cura config data: {cura_config_data[:200]}...")
 
     metadata = {**metadata_from_header, **metadata_from_cura}
 

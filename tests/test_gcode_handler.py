@@ -1,8 +1,13 @@
+import unittest
 from unittest import TestCase
 from unittest.mock import patch, mock_open, MagicMock
 import json
 
 from trinetra import gcode_handler
+from trinetra.logger import get_logger
+
+# Get logger for tests
+logger = get_logger(__name__)
 
 
 class Test(TestCase):
@@ -58,7 +63,7 @@ class Test(TestCase):
         ;SETTING_3  = 65.0\\n\\n"]}
         """
         metadata = gcode_handler.extract_gcode_metadata(gcode_snippet)
-        print(metadata)
+        logger.debug(f"Extracted metadata: {metadata}")
         self.assertEqual(
             metadata,
             {
@@ -81,7 +86,7 @@ class Test(TestCase):
         test_file = "tests/gcodes/test.gcode"
         with open(test_file, encoding="utf-8", errors="ignore") as file:
             metadata = gcode_handler.extract_gcode_metadata(file)
-            print(metadata)
+            logger.debug(f"Extracted metadata from file: {metadata}")
             self.assertEqual(
                 metadata,
                 {
@@ -149,7 +154,7 @@ class Test(TestCase):
 
         # Extract metadata from G-code header
         metadata = gcode_handler.extract_gcode_metadata_from_header(gcode_lines)
-        print(metadata)
+        logger.debug(f"Extracted metadata from header: {metadata}")
 
     def test_yaml_config_to_dict(self):
         """Test yaml_config_to_dict function"""

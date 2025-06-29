@@ -4,12 +4,13 @@ Handles communication with Moonraker API to get print history and other informat
 """
 
 import json
-import logging
 import requests
 from typing import Dict, List, Optional, Any, Union
 from urllib.parse import urljoin
 
-logger = logging.getLogger(__name__)
+from trinetra.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class MoonrakerAPI:
