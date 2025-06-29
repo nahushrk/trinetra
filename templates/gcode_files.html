@@ -43,6 +43,6 @@
 <script>
     const gcodeFiles = {{ gcode_files|tojson }};
 </script>
-<script src="{{ url_for('static', filename='js/gcode_renderer.js') }}"></script>
+<script src="{{ url_for('static', filename='js/shared_3d_renderer.js') }}"></script>
 <script src="{{ url_for('static', filename='js/gcode_files.js') }}"></script>
 {% endblock %} 

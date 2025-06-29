@@ -439,4 +439,96 @@ function createFileActionButtons(containerElement, fileData, buttonTypes = ['dow
     }
 
     return buttonContainer;
-} 
+}
+
+// Shared STL rendering functions
+function createSTLItem(file, containerElement, scene, rowContainer) {
+    const stlFile = file.file_name;
+    const relPath = file.rel_path;
+
+    const sceneElement = document.createElement('div');
+    sceneElement.className = 'rendering';
+    containerElement.appendChild(sceneElement);
+
+    const descriptionElement = document.createElement('div');
+    descriptionElement.innerText = stlFile;
+    containerElement.appendChild(descriptionElement);
+
+    const sizeElement = document.createElement('div');
+    containerElement.appendChild(sizeElement);
+
+    // Create buttons using shared function
+    createFileActionButtons(containerElement, file, ['download', 'copy']);
+
+    scene.userData.element = sceneElement;
+    rowContainer.appendChild(containerElement);
+
+    const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 1000);
+    scene.userData.camera = camera;
+
+    const controls = new THREE.OrbitControls(camera, sceneElement);
+    controls.minDistance = 0.1;
+    controls.maxDistance = 1000;
+    controls.enablePan = true;
+    controls.enableZoom = true;
+    scene.userData.controls = controls;
+
+    scene.add(new THREE.HemisphereLight(0xaaaaaa, 0x444444, 1.5));
+    const light = new THREE.DirectionalLight(0xffffff, 1);
+    light.position.set(1, 1, 1).normalize();
+    scene.add(light);
+
+    return { scene, controls, camera, relPath };
+}
+
+function loadSTLFile(stlFile, scene, controls, sizeElement, camera) {
+    const loader = new THREE.STLLoader();
+    loader.load(`/stl/${encodeURIComponent(stlFile)}`, function (geometry) {
+        const material = new THREE.MeshNormalMaterial({flatShading: true});
+        const mesh = new THREE.Mesh(geometry, material);
+
+        // Center the geometry and compute its bounding box
+        geometry.center();
+        geometry.computeBoundingBox();
+        const bbox = geometry.boundingBox;
+        const size = bbox.getSize(new THREE.Vector3());
+
+        // Calculate the offset to place the bottom of the object at Z=0
+        const zOffset = size.z / 2;
+
+        // Position the mesh at (110, 110) in the XY plane and adjust Z position
+        mesh.position.set(110, 110, zOffset);
+        scene.add(mesh);
+
+        // Add grid
+        var grid = createPrinterGrid();
+        scene.add(grid);
+
+        // Set up camera and controls
+        const center = new THREE.Vector3(110, 110, zOffset);
+        const radius = Math.max(size.x, size.y, size.z) / 2;
+
+        const fov = camera.fov * (Math.PI / 180);
+        let distance = radius / Math.sin(fov / 2);
+        distance *= 1.5;
+
+        // Calculate tilt angle in radians
+        const tiltAngle = THREE.Math.degToRad(30);
+
+        // Position camera with a 30-degree tilt around the X-axis
+        const cameraY = center.y - distance * Math.cos(tiltAngle);
+        const cameraZ = center.z + distance * Math.sin(tiltAngle);
+        camera.position.set(center.x, cameraY, cameraZ);
+
+        camera.lookAt(center);
+
+        controls.target.copy(center);
+        controls.update();
+
+        const sizeText = `Size: ${size.x.toFixed(2)} mm x ${size.y.toFixed(2)} mm x ${size.z.toFixed(2)} mm`;
+        sizeElement.innerText = sizeText;
+    });
+}
+
+window.createSTLItem = createSTLItem;
+window.loadSTLFile = loadSTLFile; 

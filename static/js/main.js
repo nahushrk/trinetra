@@ -192,41 +192,14 @@ function loadSTLFiles(folders) {
             const containerElement = document.createElement('div');
             containerElement.className = 'list-item col-md-4';
 
-            const sceneElement = document.createElement('div');
-            sceneElement.className = 'rendering';
-            containerElement.appendChild(sceneElement);
-
-            const descriptionElement = document.createElement('div');
-            descriptionElement.innerText = stlFile;
-            containerElement.appendChild(descriptionElement);
-
-            const sizeElement = document.createElement('div');
-            containerElement.appendChild(sizeElement);
-
-            // Create buttons using shared function
-            createFileActionButtons(containerElement, file, ['download', 'copy']);
-
-            scene.userData.element = sceneElement;
-            rowContainer.appendChild(containerElement);
-
-            const camera = scene.userData.camera = new THREE.PerspectiveCamera(50, 1, 0.1, 1000);
-            const controls = scene.userData.controls = new THREE.OrbitControls(camera, sceneElement);
-            controls.minDistance = 0.1;
-            controls.maxDistance = 1000;
-            controls.enablePan = true;
-            controls.enableZoom = true;
-
-            scene.add(new THREE.HemisphereLight(0xaaaaaa, 0x444444, 1.5));
-            const light = new THREE.DirectionalLight(0xffffff, 1);
-            light.position.set(1, 1, 1).normalize();
-            scene.add(light);
-
+            // Use shared STL item creation
+            const stlItem = createSTLItem(file, containerElement, scene, rowContainer);
             scenes.push(scene);
 
             const observer = new IntersectionObserver((entries) => {
                 entries.forEach(entry => {
                     if (entry.isIntersecting) {
-                        loadSTLFile(relPath, scene, controls, sizeElement, camera);
+                        loadSTLFile(relPath, scene, stlItem.controls, containerElement.querySelector('div:nth-child(3)'), stlItem.camera);
                         observer.unobserve(containerElement);
                     }
                 });
