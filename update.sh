@@ -21,7 +21,7 @@ fi
 
 APP_DIR=~/trinetra
 VENV_DIR="$APP_DIR/venv"
-REQUIREMENTS_FILE="$APP_DIR/requirements.txt"
+PYPROJECT_FILE="$APP_DIR/pyproject.toml"
 REPO_URL=$(git config --get remote.origin.url)
 
 if [ "$(pwd)" != "$APP_DIR" ]; then
@@ -34,8 +34,8 @@ if [ ! -d "$VENV_DIR" ]; then
     exit 1
 fi
 
-if [ ! -f "$REQUIREMENTS_FILE" ]; then
-    echo "Error: requirements.txt not found!"
+if [ ! -f "$PYPROJECT_FILE" ]; then
+    echo "Error: pyproject.toml not found!"
     exit 1
 fi
 
@@ -95,7 +95,7 @@ fi
 source "$VENV_DIR/bin/activate"
 echo "Installing Python requirements..."
 pip install --upgrade pip
-pip install -r "$REQUIREMENTS_FILE"
+pip install .
 deactivate
 
 echo "Update complete. Now on $TARGET_TYPE $TARGET_REF."

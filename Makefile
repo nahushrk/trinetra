@@ -1,6 +1,10 @@
-.PHONY: format test
+.PHONY: format test dev-setup
 
 STYLE_DIRS := $(pwd)
+
+dev-setup:
+	@echo "============================== Setting up development environment ====================="
+	pip install .[dev]
 
 format:
 	@echo "============================== Ruff formatting ====================="
