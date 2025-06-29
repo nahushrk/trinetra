@@ -753,3 +753,6 @@ if __name__ == "__main__":
         app.run(host="0.0.0.0", port=app.config.get("PORT", 8969), debug=False)
     else:
         app.run()
+
+# Create global app instance for gunicorn
+app = create_app()

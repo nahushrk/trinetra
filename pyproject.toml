@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "trinetra"
-version = "1.0.0"
-description = "Personal 3D printing files catalog with Klipper and Moonraker integration"
+version = "1.1.1"
+description = "Local 3D printing files catalog for Klipper"
 authors = [
-    {name = "Trinetra Developer", email = "me@nahushrk.com"}
+    {name = "Nahush Kulkarni", email = "me@nahushrk.com"}
 ]
 readme = "README.md"
 requires-python = ">=3.10"
