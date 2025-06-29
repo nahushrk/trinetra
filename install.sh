@@ -38,12 +38,12 @@ fi
 
 source "$VENV_DIR/bin/activate"
 
-if [ -f "requirements.txt" ]; then
+if [ -f "pyproject.toml" ]; then
     echo "Installing required Python packages..."
     pip install --upgrade pip
-    pip install -r requirements.txt
+    pip install .
 else
-    echo "Error: requirements.txt not found!"
+    echo "Error: pyproject.toml not found!"
     deactivate
     exit 1
 fi

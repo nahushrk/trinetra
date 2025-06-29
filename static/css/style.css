@@ -203,20 +203,6 @@ body {
 }
 
 /* Text wrapping for long file names and dimensions */
-.list-item > div:nth-child(2),
-.list-item > div:nth-child(3) {
-    color: #888;
-    font-family: sans-serif;
-    font-size: large;
-    width: 100%;
-    text-align: center;
-    margin-top: 0.5em;
-    word-wrap: break-word;
-    overflow-wrap: break-word;
-    hyphens: auto;
-    max-width: 100%;
-    padding: 0 5px;
-}
 
 button {
     margin-top: 5px;
@@ -361,12 +347,43 @@ button {
 .moonraker-stats div {
     margin-bottom: 2px;
     color: #6c757d;
+    font-size: 12px;
+    margin-left: 0;
 }
 
-/* Optional: Add border around G-code renderings */
-.gcode-item .rendering {
-    border: 1px solid #ddd;
-    border-radius: 5px;
+/* GCODE metadata styling - similar to Moonraker stats */
+.gcode-metadata {
+    text-align: left !important;
+    font-size: 12px;
+    margin-top: 8px;
+    padding: 8px;
+    border-radius: 4px;
+    background-color: #e3f2fd;
+    border-left: 3px solid #2196f3;
+}
+
+.gcode-metadata.metadata-loaded {
+    background-color: #e3f2fd;
+    border-left-color: #2196f3;
+}
+
+.gcode-metadata.metadata-none {
+    background-color: #fff3e0;
+    border-left-color: #ff9800;
+}
+
+.metadata-header {
+    margin-bottom: 4px;
+    color: #495057;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.gcode-metadata div {
+    margin-bottom: 2px;
+    color: #6c757d;
+    font-size: 12px;
+    margin-left: 0;
 }
 
 /* Folder Links */
@@ -383,6 +400,39 @@ button {
 
 /* G-code file name wrapping */
 .gcode-item .file-name {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    hyphens: auto;
+    max-width: 100%;
+    padding: 0 5px;
+    text-align: center;
+    margin-bottom: 10px;
+}
+
+/* STL file name wrapping - same as GCODE files */
+.list-item .file-name {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    hyphens: auto;
+    max-width: 100%;
+    padding: 0 5px;
+    text-align: center;
+    margin-bottom: 10px;
+}
+
+/* Image file name wrapping */
+.other-item .file-name {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    hyphens: auto;
+    max-width: 100%;
+    padding: 0 5px;
+    text-align: center;
+    margin-bottom: 10px;
+}
+
+/* PDF file name wrapping */
+.pdf-item .file-name {
     word-wrap: break-word;
     overflow-wrap: break-word;
     hyphens: auto;
@@ -528,5 +578,207 @@ button {
 
 .upload-conflict-btn:hover {
     opacity: 0.8;
+}
+
+/* Modern Button Styles for File Actions */
+.file-action-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 1rem;
+    justify-content: center;
+}
+
+.file-action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-decoration: none;
+    border: 1px solid transparent;
+    border-radius: 0.375rem;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    background-color: transparent;
+    color: #6c757d;
+    min-width: 120px;
+    justify-content: center;
+    outline: none;
+}
+
+.file-action-btn:hover {
+    text-decoration: none;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.file-action-btn:focus {
+    outline: none;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+.file-action-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.file-action-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+/* Download STL Button */
+.file-action-btn.download-stl {
+    background-color: #007bff;
+    border-color: #007bff;
+    color: white;
+}
+
+.file-action-btn.download-stl:hover {
+    background-color: #0056b3;
+    border-color: #0056b3;
+    color: white;
+}
+
+.file-action-btn.download-stl:focus {
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+/* Download GCODE Button */
+.file-action-btn.download-gcode {
+    background-color: #007bff;
+    border-color: #007bff;
+    color: white;
+}
+
+.file-action-btn.download-gcode:hover {
+    background-color: #0056b3;
+    border-color: #0056b3;
+    color: white;
+}
+
+.file-action-btn.download-gcode:focus {
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+/* Copy Path Button */
+.file-action-btn.copy-path {
+    background-color: #6c757d;
+    border-color: #6c757d;
+    color: white;
+}
+
+.file-action-btn.copy-path:hover {
+    background-color: #545b62;
+    border-color: #4e555b;
+    color: white;
+}
+
+.file-action-btn.copy-path:focus {
+    box-shadow: 0 0 0 0.2rem rgba(108, 117, 125, 0.25);
+}
+
+/* Add to Queue Button */
+.file-action-btn.add-to-queue {
+    background-color: #fd7e14;
+    border-color: #fd7e14;
+    color: white;
+}
+
+.file-action-btn.add-to-queue:hover {
+    background-color: #e8690b;
+    border-color: #e8690b;
+    color: white;
+}
+
+.file-action-btn.add-to-queue:focus {
+    box-shadow: 0 0 0 0.2rem rgba(253, 126, 20, 0.25);
+}
+
+/* Success state for Add to Queue */
+.file-action-btn.add-to-queue.success {
+    background-color: #28a745;
+    border-color: #28a745;
+}
+
+.file-action-btn.add-to-queue.success:hover {
+    background-color: #218838;
+    border-color: #1e7e34;
+}
+
+.file-action-btn.add-to-queue.success:focus {
+    box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25);
+}
+
+/* Error state for Add to Queue */
+.file-action-btn.add-to-queue.error {
+    background-color: #dc3545;
+    border-color: #dc3545;
+}
+
+.file-action-btn.add-to-queue.error:hover {
+    background-color: #c82333;
+    border-color: #bd2130;
+}
+
+.file-action-btn.add-to-queue.error:focus {
+    box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
+}
+
+/* Success state for Copy Path */
+.file-action-btn.copy-path.success {
+    background-color: #28a745;
+    border-color: #28a745;
+}
+
+.file-action-btn.copy-path.success:hover {
+    background-color: #218838;
+    border-color: #1e7e34;
+}
+
+.file-action-btn.copy-path.success:focus {
+    box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25);
+}
+
+/* Loading state */
+.file-action-btn.loading {
+    position: relative;
+    color: transparent;
+}
+
+.file-action-btn.loading::after {
+    content: '';
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    top: 50%;
+    left: 50%;
+    margin-left: -8px;
+    margin-top: -8px;
+    border: 2px solid transparent;
+    border-top: 2px solid currentColor;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Responsive adjustments for buttons */
+@media (max-width: 768px) {
+    .file-action-buttons {
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    .file-action-btn {
+        width: 100%;
+        max-width: 200px;
+    }
 }
 

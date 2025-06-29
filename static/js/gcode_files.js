@@ -52,7 +52,7 @@ function performSearch(searchTerm) {
         });
 }
 
-// Display G-code files in a 3-column responsive layout
+// Display G-code files in a 3-column responsive layout, with action buttons (Download, Copy Path, Add to Queue)
 function displayGCodeFiles(files) {
     clearScenes();
     const content = document.getElementById('content');
@@ -69,7 +69,7 @@ function displayGCodeFiles(files) {
     files.forEach(file => {
         const scene = new THREE.Scene();
         const containerElement = document.createElement('div');
-        containerElement.className = 'list-item col-md-4';
+        containerElement.className = 'gcode-item col-md-4';
 
         // Use the unified renderer to create the G-code item
         const gcodeItem = createGCodeItem(file, containerElement, scene, rowContainer);
@@ -95,62 +95,6 @@ function displayGCodeFiles(files) {
     });
 
     content.appendChild(rowContainer);
-}
-
-function clearScenes() {
-    const content = document.getElementById('content');
-    while (content.firstChild) {
-        content.removeChild(content.firstChild);
-    }
-    scenes = [];
-}
-
-function updateSize() {
-    const width = window.innerWidth;
-    const height = window.innerHeight;
-
-    if (canvas.width !== width || canvas.height !== height) {
-        renderer.setSize(width, height, false);
-    }
-}
-
-function animate() {
-    if (!renderer) return;
-    updateSize();
-
-    renderer.setClearColor(0xffffff);
-    renderer.setScissorTest(false);
-    renderer.clear();
-
-    renderer.setClearColor(0xe0e0e0);
-    renderer.setScissorTest(true);
-
-    scenes.forEach(function (scene) {
-        const element = scene.userData.element;
-        const rect = element.getBoundingClientRect();
-
-        if (rect.bottom < 0 || rect.top > renderer.domElement.clientHeight ||
-            rect.right < 0 || rect.left > renderer.domElement.clientWidth) {
-            return;
-        }
-
-        const width = rect.right - rect.left;
-        const height = rect.bottom - rect.top;
-        const left = rect.left;
-        const bottom = renderer.domElement.clientHeight - rect.bottom;
-
-        renderer.setViewport(left, bottom, width, height);
-        renderer.setScissor(left, bottom, width, height);
-
-        const camera = scene.userData.camera;
-
-        camera.aspect = width / height;
-        camera.updateProjectionMatrix();
-
-        scene.userData.controls.update();
-
-        renderer.render(scene, camera);
-    });
 }
 
 window.addEventListener('resize', updateSize); 

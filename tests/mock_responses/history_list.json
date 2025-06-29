@@ -1,0 +1,140 @@
+{
+  "result": {
+    "count": 5,
+    "jobs": [
+      {
+        "job_id": "000035",
+        "user": "_TRUSTED_USER_",
+        "filename": "test1.gcode",
+        "status": "completed",
+        "start_time": 1640995200.0,
+        "end_time": 1640997370.0,
+        "print_duration": 2176.4153041840036,
+        "total_duration": 2251.00268463901,
+        "filament_used": 3259.81537,
+        "metadata": {
+          "size": 1153647,
+          "modified": 1640995200.0,
+          "uuid": "test-uuid-1-78b6-4e9a-b284-e365599d7ade",
+          "slicer": "Cura",
+          "slicer_version": "5.5.0",
+          "gcode_start_byte": 14,
+          "gcode_end_byte": 1152145,
+          "layer_count": 15,
+          "object_height": 4.6,
+          "estimated_time": 2530.0,
+          "layer_height": 0.3,
+          "first_layer_height": 0.2,
+          "first_layer_extr_temp": 235.0,
+          "first_layer_bed_temp": 70.0,
+          "filament_total": 3234.62,
+          "thumbnails": [
+            {
+              "width": 32,
+              "height": 32,
+              "size": 1330,
+              "relative_path": ".thumbs/test1-32x32.png"
+            },
+            {
+              "width": 300,
+              "height": 300,
+              "size": 30864,
+              "relative_path": ".thumbs/test1-300x300.png"
+            }
+          ]
+        },
+        "auxiliary_data": [],
+        "exists": true
+      },
+      {
+        "job_id": "000034",
+        "user": "_TRUSTED_USER_",
+        "filename": "test2.gcode",
+        "status": "cancelled",
+        "start_time": 1640995200.0,
+        "end_time": 1640995300.0,
+        "print_duration": 63.41988494399993,
+        "total_duration": 102.30068029099493,
+        "filament_used": 110.88629,
+        "metadata": {
+          "size": 1153647,
+          "modified": 1640995200.0,
+          "uuid": "test-uuid-2-78b6-4e9a-b284-e365599d7ade",
+          "slicer": "Cura",
+          "slicer_version": "5.5.0",
+          "gcode_start_byte": 14,
+          "gcode_end_byte": 1152145,
+          "layer_count": 15,
+          "object_height": 4.6,
+          "estimated_time": 2530.0,
+          "layer_height": 0.3,
+          "first_layer_height": 0.2,
+          "first_layer_extr_temp": 235.0,
+          "first_layer_bed_temp": 70.0,
+          "filament_total": 3234.62,
+          "thumbnails": [
+            {
+              "width": 32,
+              "height": 32,
+              "size": 1330,
+              "relative_path": ".thumbs/test2-32x32.png"
+            },
+            {
+              "width": 300,
+              "height": 300,
+              "size": 30864,
+              "relative_path": ".thumbs/test2-300x300.png"
+            }
+          ]
+        },
+        "auxiliary_data": [],
+        "exists": true
+      },
+      {
+        "job_id": "000033",
+        "user": "_TRUSTED_USER_",
+        "filename": "test.gcode",
+        "status": "completed",
+        "start_time": 1640995200.0,
+        "end_time": 1641007400.0,
+        "print_duration": 12215.668362885015,
+        "total_duration": 12338.887227848987,
+        "filament_used": 22261.52771,
+        "metadata": {
+          "size": 1647546,
+          "modified": 1640995200.0,
+          "uuid": "test-uuid-3-de09-47e7-b5ce-6a7746f49a5d",
+          "file_processors": [],
+          "slicer": "Cura",
+          "slicer_version": "5.10.0",
+          "gcode_start_byte": 24378,
+          "gcode_end_byte": 1646079,
+          "layer_count": 184,
+          "object_height": 55.3,
+          "estimated_time": 13276.0,
+          "layer_height": 0.3,
+          "first_layer_height": 0.2,
+          "first_layer_extr_temp": 230.0,
+          "first_layer_bed_temp": 70.0,
+          "filament_total": 22236.3,
+          "thumbnails": [
+            {
+              "width": 32,
+              "height": 32,
+              "size": 1349,
+              "relative_path": ".thumbs/test-32x32.png"
+            },
+            {
+              "width": 300,
+              "height": 300,
+              "size": 17182,
+              "relative_path": ".thumbs/test-300x300.png"
+            }
+          ]
+        },
+        "auxiliary_data": [],
+        "exists": true
+      }
+    ]
+  }
+} 

@@ -1,0 +1,16 @@
+{
+  "result": {
+    "state": "ready",
+    "state_message": "Printer is ready",
+    "hostname": "test-klipper",
+    "klipper_path": "/home/pi/klipper",
+    "python_path": "/home/pi/klippy-env/bin/python",
+    "process_id": 12345,
+    "user_id": 1000,
+    "group_id": 1000,
+    "log_file": "/home/pi/printer_data/logs/klippy.log",
+    "config_file": "/home/pi/printer_data/config/printer.cfg",
+    "software_version": "v0.13.0-154-g9346ad191",
+    "cpu_info": "4 core ARM"
+  }
+} 
