@@ -6,6 +6,11 @@ import re
 from typing import List, Tuple, Dict, Any
 from thefuzz import process
 
+from trinetra.logger import get_logger
+
+# Get logger for this module
+logger = get_logger(__name__)
+
 
 def tokenize(text: str) -> List[str]:
     """Tokenize text into words, removing special characters."""
@@ -28,7 +33,12 @@ def search_with_ranking(
         List of tuples (choice, score) sorted by score descending
     """
     if not query.strip() or not choices:
+        logger.debug(f"Empty query or choices, returning empty results")
         return []
+
+    logger.debug(
+        f"Searching for '{query}' in {len(choices)} choices with limit={limit}, threshold={threshold}"
+    )
 
     # Use thefuzz process.extract for fuzzy matching
     results = process.extract(query.lower(), choices, limit=limit)
@@ -37,6 +47,7 @@ def search_with_ranking(
     filtered_results = [(choice, score) for choice, score in results if score >= threshold]
     filtered_results.sort(key=lambda x: x[1], reverse=True)
 
+    logger.debug(f"Found {len(filtered_results)} results above threshold {threshold}")
     return filtered_results
 
 
@@ -55,7 +66,10 @@ def search_files_and_folders(
         List of folder dictionaries with matching files, ranked by relevance
     """
     if not query.strip():
+        logger.debug("Empty query, returning all folders")
         return stl_folders
+
+    logger.debug(f"Searching files and folders for '{query}' in {len(stl_folders)} folders")
 
     # Collect all searchable strings (folder names and file names)
     searchable_items = []
@@ -70,6 +84,8 @@ def search_files_and_folders(
             file_name = file_info["file_name"]
             searchable_items.append(file_name)
             folder_mapping[file_name] = folder
+
+    logger.debug(f"Created searchable index with {len(searchable_items)} items")
 
     # Perform fuzzy search
     search_results = search_with_ranking(query, searchable_items, limit=limit)
@@ -89,6 +105,8 @@ def search_files_and_folders(
 
     # Sort folders by total score and limit results
     sorted_folders = sorted(folder_scores.values(), key=lambda x: x["score"], reverse=True)[:limit]
+
+    logger.debug(f"Returning {len(sorted_folders)} matching folders")
 
     # Return folders with their files
     result_folders = []
@@ -132,7 +150,10 @@ def search_gcode_files(
         List of matching G-code file dictionaries, ranked by relevance
     """
     if not query.strip():
+        logger.debug("Empty query, returning all G-code files")
         return gcode_files
+
+    logger.debug(f"Searching G-code files for '{query}' in {len(gcode_files)} files")
 
     # Extract file names for search
     file_names = [file_info["file_name"] for file_info in gcode_files]
@@ -149,6 +170,7 @@ def search_gcode_files(
                 result_files.append(file_info)
                 break
 
+    logger.debug(f"Found {len(result_files)} matching G-code files")
     return result_files
 
 

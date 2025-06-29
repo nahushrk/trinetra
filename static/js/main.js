@@ -192,58 +192,15 @@ function loadSTLFiles(folders) {
             const containerElement = document.createElement('div');
             containerElement.className = 'list-item col-md-4';
 
-            const sceneElement = document.createElement('div');
-            sceneElement.className = 'rendering';
-            containerElement.appendChild(sceneElement);
-
-            const descriptionElement = document.createElement('div');
-            descriptionElement.innerText = stlFile;
-            containerElement.appendChild(descriptionElement);
-
-            const sizeElement = document.createElement('div');
-            containerElement.appendChild(sizeElement);
-
-            const downloadButton = document.createElement('button');
-            downloadButton.innerText = 'Download STL';
-            downloadButton.onclick = function () {
-                window.location.href = `/stl/${encodeURIComponent(relPath)}`;
-            };
-            containerElement.appendChild(downloadButton);
-
-            const copyButton = document.createElement('button');
-            copyButton.innerText = 'Copy Path';
-            copyButton.onclick = function () {
-                fetch(`/copy_path/${encodeURIComponent(relPath)}`)
-                    .then(response => response.json())
-                    .then(data => {
-                        navigator.clipboard.writeText(data.path)
-                            .then(() => alert(`Copied path: ${data.path}`))
-                            .catch(err => console.error('Failed to copy path: ', err));
-                    });
-            };
-            containerElement.appendChild(copyButton);
-
-            scene.userData.element = sceneElement;
-            rowContainer.appendChild(containerElement);
-
-            const camera = scene.userData.camera = new THREE.PerspectiveCamera(50, 1, 0.1, 1000);
-            const controls = scene.userData.controls = new THREE.OrbitControls(camera, sceneElement);
-            controls.minDistance = 0.1;
-            controls.maxDistance = 1000;
-            controls.enablePan = true;
-            controls.enableZoom = true;
-
-            scene.add(new THREE.HemisphereLight(0xaaaaaa, 0x444444, 1.5));
-            const light = new THREE.DirectionalLight(0xffffff, 1);
-            light.position.set(1, 1, 1).normalize();
-            scene.add(light);
-
+            // Use shared STL item creation
+            const stlItem = createSTLItem(file, containerElement, scene, rowContainer);
             scenes.push(scene);
 
             const observer = new IntersectionObserver((entries) => {
                 entries.forEach(entry => {
                     if (entry.isIntersecting) {
-                        loadSTLFile(relPath, scene, controls, sizeElement, camera);
+                        // Using shared loadSTLFile function from shared_3d_renderer.js
+                        loadSTLFile(relPath, scene, stlItem.controls, containerElement.querySelector('div:nth-child(3)'), stlItem.camera);
                         observer.unobserve(containerElement);
                     }
                 });
@@ -263,55 +220,6 @@ function loadSTLFiles(folders) {
     renderer.setAnimationLoop(animate);
 }
 
-function loadSTLFile(stlFile, scene, controls, sizeElement, camera) {
-    const loader = new THREE.STLLoader();
-    loader.load(`/stl/${encodeURIComponent(stlFile)}`, function (geometry) {
-        const material = new THREE.MeshNormalMaterial({flatShading: true});
-        const mesh = new THREE.Mesh(geometry, material);
-
-        // Center the geometry and compute its bounding box
-        geometry.center();
-        geometry.computeBoundingBox();
-        const bbox = geometry.boundingBox;
-        const size = bbox.getSize(new THREE.Vector3());
-
-        // Calculate the offset to place the bottom of the object at Z=0
-        const zOffset = size.z / 2;
-
-        // Position the mesh at (110, 110) in the XY plane and adjust Z position
-        mesh.position.set(110, 110, zOffset);
-        scene.add(mesh);
-
-        // Add grid
-        var grid = createPrinterGrid();
-        scene.add(grid);
-
-        // Set up camera and controls
-        const center = new THREE.Vector3(110, 110, zOffset);
-        const radius = Math.max(size.x, size.y, size.z) / 2;
-
-        const fov = camera.fov * (Math.PI / 180);
-        let distance = radius / Math.sin(fov / 2);
-        distance *= 1.5;
-
-        // Calculate tilt angle in radians
-        const tiltAngle = THREE.Math.degToRad(30);
-
-        // Position camera with a 30-degree tilt around the X-axis
-        const cameraY = center.y - distance * Math.cos(tiltAngle);
-        const cameraZ = center.z + distance * Math.sin(tiltAngle);
-        camera.position.set(center.x, cameraY, cameraZ);
-
-        camera.lookAt(center);
-
-        controls.target.copy(center);
-        controls.update();
-
-        const sizeText = `Size: ${size.x.toFixed(2)} mm x ${size.y.toFixed(2)} mm x ${size.z.toFixed(2)} mm`;
-        sizeElement.innerText = sizeText;
-    });
-}
-
 function performSearch(searchTerm) {
     fetch(`/search?q=${encodeURIComponent(searchTerm)}`)
         .then(response => response.json())
@@ -325,111 +233,4 @@ function updateMetadata(matches) {
     const metadataDiv = document.getElementById('metadata');
     metadataDiv.innerText = `Number of matches: ${matches}`;
     metadataDiv.style.color = 'grey';
-}
-
-function clearScenes() {
-    const content = document.getElementById('content');
-    while (content.firstChild) {
-        content.removeChild(content.firstChild);
-    }
-    scenes = [];
-}
-
-function updateSize() {
-    const width = window.innerWidth;
-    const height = window.innerHeight;
-
-    if (canvas.width !== width || canvas.height !== height) {
-        renderer.setSize(width, height, false);
-    }
-}
-
-function animate() {
-    updateSize();
-
-    renderer.setClearColor(0xffffff);
-    renderer.setScissorTest(false);
-    renderer.clear();
-
-    renderer.setClearColor(0xe0e0e0);
-    renderer.setScissorTest(true);
-
-    scenes.forEach(function (scene) {
-        const element = scene.userData.element;
-        const rect = element.getBoundingClientRect();
-
-        if (rect.bottom < 0 || rect.top > renderer.domElement.clientHeight ||
-            rect.right < 0 || rect.left > renderer.domElement.clientWidth) {
-            return;
-        }
-
-        const width = rect.right - rect.left;
-        const height = rect.bottom - rect.top;
-        const left = rect.left;
-        const bottom = renderer.domElement.clientHeight - rect.bottom;
-
-        renderer.setViewport(left, bottom, width, height);
-        renderer.setScissor(left, bottom, width, height);
-
-        const camera = scene.userData.camera;
-
-        camera.aspect = width / height;
-        camera.updateProjectionMatrix();
-
-        scene.userData.controls.update();
-
-        renderer.render(scene, camera);
-    });
-}
-
-function createPrinterGrid() {
-    var geometry = new THREE.Geometry();
-
-    var vertices = [
-        // Bottom face
-        new THREE.Vector3(0, 0, 0),
-        new THREE.Vector3(220, 0, 0),
-
-        new THREE.Vector3(220, 0, 0),
-        new THREE.Vector3(220, 220, 0),
-
-        new THREE.Vector3(220, 220, 0),
-        new THREE.Vector3(0, 220, 0),
-
-        new THREE.Vector3(0, 220, 0),
-        new THREE.Vector3(0, 0, 0),
-
-        // Top face
-        new THREE.Vector3(0, 0, 270),
-        new THREE.Vector3(220, 0, 270),
-
-        new THREE.Vector3(220, 0, 270),
-        new THREE.Vector3(220, 220, 270),
-
-        new THREE.Vector3(220, 220, 270),
-        new THREE.Vector3(0, 220, 270),
-
-        new THREE.Vector3(0, 220, 270),
-        new THREE.Vector3(0, 0, 270),
-
-        // Vertical edges
-        new THREE.Vector3(0, 0, 0),
-        new THREE.Vector3(0, 0, 270),
-
-        new THREE.Vector3(220, 0, 0),
-        new THREE.Vector3(220, 0, 270),
-
-        new THREE.Vector3(220, 220, 0),
-        new THREE.Vector3(220, 220, 270),
-
-        new THREE.Vector3(0, 220, 0),
-        new THREE.Vector3(0, 220, 270),
-    ];
-
-    geometry.vertices.push(...vertices);
-
-    var material = new THREE.LineBasicMaterial({color: 0x000000});
-    var wireframe = new THREE.LineSegments(geometry, material);
-
-    return wireframe;
 }

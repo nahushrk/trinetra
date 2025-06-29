@@ -1,6 +1,13 @@
+import unittest
 from unittest import TestCase
+from unittest.mock import patch, mock_open, MagicMock
+import json
 
 from trinetra import gcode_handler
+from trinetra.logger import get_logger
+
+# Get logger for tests
+logger = get_logger(__name__)
 
 
 class Test(TestCase):
@@ -56,7 +63,7 @@ class Test(TestCase):
         ;SETTING_3  = 65.0\\n\\n"]}
         """
         metadata = gcode_handler.extract_gcode_metadata(gcode_snippet)
-        print(metadata)
+        logger.debug(f"Extracted metadata: {metadata}")
         self.assertEqual(
             metadata,
             {
@@ -76,10 +83,10 @@ class Test(TestCase):
         )
 
     def test_extract_gcode_metadata_2(self):
-        test_file = "/tests/gcodes/test.gcode"
+        test_file = "tests/gcodes/test.gcode"
         with open(test_file, encoding="utf-8", errors="ignore") as file:
             metadata = gcode_handler.extract_gcode_metadata(file)
-            print(metadata)
+            logger.debug(f"Extracted metadata from file: {metadata}")
             self.assertEqual(
                 metadata,
                 {
@@ -147,4 +154,157 @@ class Test(TestCase):
 
         # Extract metadata from G-code header
         metadata = gcode_handler.extract_gcode_metadata_from_header(gcode_lines)
-        print(metadata)
+        logger.debug(f"Extracted metadata from header: {metadata}")
+
+    def test_yaml_config_to_dict(self):
+        """Test yaml_config_to_dict function"""
+        yaml_text = """
+[general]
+version = 4
+name = test_config
+
+[values]
+layer_height = 0.2
+support_enable = True
+        """
+        result = gcode_handler.yaml_config_to_dict(yaml_text)
+        expected = {
+            "general": {"version": "4", "name": "test_config"},
+            "values": {"layer_height": "0.2", "support_enable": "True"},
+        }
+        self.assertEqual(result, expected)
+
+    def test_yaml_config_to_dict_empty(self):
+        """Test yaml_config_to_dict with empty config"""
+        result = gcode_handler.yaml_config_to_dict("")
+        self.assertEqual(result, {})
+
+    def test_seconds_to_readable_duration_hours(self):
+        """Test seconds_to_readable_duration with hours"""
+        result = gcode_handler.seconds_to_readable_duration(7325)  # 2h 2m 5s
+        self.assertEqual(result, "2h:2m:5s")
+
+    def test_seconds_to_readable_duration_minutes_only(self):
+        """Test seconds_to_readable_duration with minutes only"""
+        result = gcode_handler.seconds_to_readable_duration(125)  # 2m 5s
+        self.assertEqual(result, "2m:5s")
+
+    def test_seconds_to_readable_duration_zero(self):
+        """Test seconds_to_readable_duration with zero seconds"""
+        result = gcode_handler.seconds_to_readable_duration(0)
+        self.assertEqual(result, "0m:0s")
+
+    def test_extract_gcode_metadata_from_cura_config_missing_keys(self):
+        """Test extract_gcode_metadata_from_cura_config with missing keys"""
+        cura_config_dict = {
+            "global_quality": "[general]\\nversion = 4\\n\\n[values]\\nlayer_height = 0.2\\n\\n",
+            "extruder_quality": ["[general]\\nversion = 4\\n\\n[values]\\n\\n"],
+        }
+        metadata = gcode_handler.extract_gcode_metadata_from_cura_config(cura_config_dict)
+        self.assertEqual(metadata, {"layer_height": "0.2"})
+
+    def test_extract_gcode_metadata_from_cura_config_missing_sections(self):
+        """Test extract_gcode_metadata_from_cura_config with missing sections"""
+        cura_config_dict = {
+            "global_quality": "[general]\\nversion = 4\\n\\n",
+            "extruder_quality": ["[general]\\nversion = 4\\n\\n"],
+        }
+        metadata = gcode_handler.extract_gcode_metadata_from_cura_config(cura_config_dict)
+        self.assertEqual(metadata, {})
+
+    def test_extract_gcode_metadata_from_header_no_matches(self):
+        """Test extract_gcode_metadata_from_header with no matching keys"""
+        gcode_lines = """
+        ;FLAVOR:Marlin
+        ;Some other comment
+        G28 ;Home
+        """
+        metadata = gcode_handler.extract_gcode_metadata_from_header(gcode_lines)
+        self.assertEqual(metadata, {})
+
+    def test_extract_gcode_metadata_from_header_time_formatting(self):
+        """Test extract_gcode_metadata_from_header with TIME formatting"""
+        gcode_lines = """
+        ;TIME:14355
+        G28 ;Home
+        """
+        metadata = gcode_handler.extract_gcode_metadata_from_header(gcode_lines)
+        self.assertEqual(metadata["TIME"], ":14355")
+
+    def test_extract_gcode_metadata_from_header_time_already_formatted(self):
+        """Test extract_gcode_metadata_from_header with TIME already formatted"""
+        gcode_lines = """
+        ;TIME:14355
+        G28 ;Home
+        """
+        metadata = gcode_handler.extract_gcode_metadata_from_header(gcode_lines)
+        self.assertEqual(metadata["TIME"], ":14355")
+
+    def test_extract_gcode_metadata_string_input(self):
+        """Test extract_gcode_metadata with string input"""
+        gcode_content = """
+        ;FLAVOR:Marlin
+        M117 Time Left 3h59m15s
+        ;TIME:14355
+        G28 ;Home
+        """
+        metadata = gcode_handler.extract_gcode_metadata(gcode_content)
+        expected = {"M117 Time Left": "3h59m15s", "TIME": ":14355"}
+        self.assertEqual(metadata, expected)
+
+    def test_extract_gcode_metadata_file_input(self):
+        """Test extract_gcode_metadata with file input"""
+        gcode_content = """
+        ;FLAVOR:Marlin
+        M117 Time Left 3h59m15s
+        ;TIME:14355
+        G28 ;Home
+        """
+        mock_file = MagicMock()
+        mock_file.read.return_value = gcode_content
+
+        metadata = gcode_handler.extract_gcode_metadata(mock_file)
+        expected = {"M117 Time Left": "3h59m15s", "TIME": ":14355"}
+        self.assertEqual(metadata, expected)
+        mock_file.read.assert_called_once()
+        mock_file.seek.assert_called_once_with(0)
+
+    def test_extract_gcode_metadata_with_cura_config(self):
+        """Test extract_gcode_metadata with Cura config section"""
+        gcode_content = """
+        ;FLAVOR:Marlin
+        M117 Time Left 3h59m15s
+        ;TIME:14355
+        G28 ;Home
+        ;End of Gcode
+        ;SETTING_3 {"global_quality": "[general]\\nversion = 4\\n\\n[values]\\nlayer_height = 0.2\\n\\n", "extruder_quality": ["[general]\\nversion = 4\\n\\n[values]\\n\\n"]}
+        """
+        metadata = gcode_handler.extract_gcode_metadata(gcode_content)
+        expected = {"M117 Time Left": "3h59m15s", "TIME": ":14355", "layer_height": "0.2"}
+        self.assertEqual(metadata, expected)
+
+    def test_extract_gcode_metadata_invalid_json(self):
+        """Test extract_gcode_metadata with invalid JSON in Cura config"""
+        gcode_content = """
+        ;FLAVOR:Marlin
+        M117 Time Left 3h59m15s
+        ;TIME:14355
+        G28 ;Home
+        ;End of Gcode
+        ;SETTING_3 {"invalid": json}
+        """
+        metadata = gcode_handler.extract_gcode_metadata(gcode_content)
+        expected = {"M117 Time Left": "3h59m15s", "TIME": ":14355"}
+        self.assertEqual(metadata, expected)
+
+    def test_extract_gcode_metadata_no_cura_config(self):
+        """Test extract_gcode_metadata without Cura config section"""
+        gcode_content = """
+        ;FLAVOR:Marlin
+        M117 Time Left 3h59m15s
+        ;TIME:14355
+        G28 ;Home
+        """
+        metadata = gcode_handler.extract_gcode_metadata(gcode_content)
+        expected = {"M117 Time Left": "3h59m15s", "TIME": ":14355"}
+        self.assertEqual(metadata, expected)

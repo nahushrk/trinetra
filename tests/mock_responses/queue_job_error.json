@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": 400,
+    "message": "G-Code File nonexistent.gcode does not exist",
+    "traceback": "Traceback (most recent call last):\n\n  File \"/home/pi/moonraker/moonraker/components/application.py\", line 700, in _process_http_request\n    result = await self.api_defintion.request(\n  ^\n\n  File \"/home/pi/moonraker/moonraker/components/job_queue.py\", line 277, in _handle_job_request\n    await self.queue_job(files, reset=reset, user=user)\n\n  File \"/home/pi/moonraker/moonraker/components/job_queue.py\", line 182, in queue_job\n    self._check_job_file(fname)\n\n  File \"/home/pi/moonraker/moonraker/components/job_queue.py\", line 247, in _check_job_file\n    raise self.server.error(\n\nmoonraker.utils.exceptions.ServerError: G-Code File nonexistent.gcode does not exist\n\n\nThe above exception was the direct cause of the following exception:\n\n\nTraceback (most recent call last):\n\n  File \"/home/pi/moonraker-env/lib/python3.11/site-packages/tornado/web.py\", line 1790, in _execute\n    result = await result\n             ^\n\n  File \"/home/pi/moonraker/moonraker/components/application.py\", line 686, in post\n    await self._process_http_request(RequestType.POST)\n\n  File \"/home/pi/moonraker/moonraker/components/application.py\", line 706, in _process_http_request\n    raise tornado.web.HTTPError(\n\ntornado.web.HTTPError: HTTP 400: G-Code File nonexistent.gcode does not exist\n"
+  }
+} 
