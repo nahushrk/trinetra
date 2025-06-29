@@ -7,18 +7,14 @@ name = "trinetra"
 version = "1.0.0"
 description = "Personal 3D printing files catalog with Klipper and Moonraker integration"
 authors = [
-    {name = "Trinetra Developer", email = "developer@trinetra.com"}
+    {name = "Trinetra Developer", email = "me@nahushrk.com"}
 ]
 readme = "README.md"
 requires-python = ">=3.10"
 classifiers = [
-    "Development Status :: 4 - Beta",
     "Intended Audience :: End Users/Desktop",
     "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.10"
 ]
 dependencies = [
     "Flask==3.0.3",
