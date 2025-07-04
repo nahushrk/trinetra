@@ -299,47 +299,68 @@ def create_app(config_file=None, config_overrides=None):
 
     @app.route("/upload", methods=["POST"])
     def upload():
+        conflict_action = request.form.get("conflict_action", "check")
         if "file" not in request.files:
             return jsonify({"error": "No file part"}), 400
-
         files = request.files.getlist("file")
         if not files:
             return jsonify({"error": "No files selected"}), 400
-
         # Only accept zip files
         for file in files:
             if not file.filename.lower().endswith(".zip"):
                 return jsonify({"error": "Only ZIP files are allowed"}), 400
-
+        # Step 1: Check for conflicts if conflict_action is missing or 'check'
+        if conflict_action == "check":
+            conflicts = []
+            for file in files:
+                filename = secure_filename(file.filename)
+                if not filename:
+                    continue
+                folder_name = os.path.splitext(filename)[0]
+                extract_to = os.path.join(app.config["STL_FILES_PATH"], folder_name)
+                if os.path.exists(extract_to):
+                    conflicts.append(folder_name)
+            if conflicts:
+                return jsonify({"ask_user": True, "conflicts": conflicts}), 200
+            # If no conflicts, proceed as normal (fall through)
+        # Step 2: Actually process files (skip/overwrite)
         results = []
         for file in files:
             filename = secure_filename(file.filename)
             if not filename:
                 continue
-
-            # Create a folder with the same name as the zip file (without the extension)
             folder_name = os.path.splitext(filename)[0]
             extract_to = os.path.join(app.config["STL_FILES_PATH"], folder_name)
-
-            # Check if folder already exists
             folder_exists = os.path.exists(extract_to)
-
+            # If skipping, skip files whose folders exist
+            if conflict_action == "skip" and folder_exists:
+                results.append(
+                    {
+                        "filename": filename,
+                        "folder_name": folder_name,
+                        "status": "skipped",
+                        "folder_existed": True,
+                        "error": "Folder already exists, skipped as per user choice.",
+                    }
+                )
+                continue
             # Save the zip file temporarily
             temp_zip_path = os.path.join(app.config["STL_FILES_PATH"], filename)
             file.save(temp_zip_path)
-
             try:
-                # Extract the ZIP into the created folder
                 with zipfile.ZipFile(temp_zip_path, "r") as zip_ref:
                     if folder_exists:
-                        # If folder exists, remove it first (overwrite mode)
                         import shutil
 
                         shutil.rmtree(extract_to)
-
                     os.makedirs(extract_to, exist_ok=True)
                     safe_extract(zip_ref, extract_to)
+                    # Remove __MACOSX folder if present
+                    macosx_path = os.path.join(extract_to, "__MACOSX")
+                    if os.path.exists(macosx_path):
+                        import shutil
 
+                        shutil.rmtree(macosx_path, ignore_errors=True)
                 results.append(
                     {
                         "filename": filename,
@@ -348,7 +369,6 @@ def create_app(config_file=None, config_overrides=None):
                         "folder_existed": folder_exists,
                     }
                 )
-
             except Exception as e:
                 app.logger.error(f"Error extracting zip file {filename}: {e}")
                 results.append(
@@ -360,10 +380,8 @@ def create_app(config_file=None, config_overrides=None):
                     }
                 )
             finally:
-                # Clean up temporary zip file
                 if os.path.exists(temp_zip_path):
                     os.remove(temp_zip_path)
-
         return jsonify({"success": True, "results": results}), 200
 
     def allowed_file(filename):
