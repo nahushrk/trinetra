@@ -518,11 +518,30 @@ button {
     color: #666;
 }
 
+.upload-timer {
+    text-align: center;
+    font-size: 18px;
+    font-weight: 600;
+    color: #007bff;
+    margin-top: 10px;
+    font-family: 'Courier New', monospace;
+    background-color: #f8f9fa;
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px solid #e9ecef;
+    display: inline-block;
+    min-width: 80px;
+}
+
 .upload-status {
     margin-top: 15px;
     padding: 10px;
     border-radius: 4px;
     font-size: 14px;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    max-height: 100px;
+    overflow-y: auto;
 }
 
 .upload-status.success {

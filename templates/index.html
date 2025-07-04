@@ -40,14 +40,19 @@
                 <div class="upload-progress-fill" id="upload-progress-fill"></div>
             </div>
             <div class="upload-progress-text" id="upload-progress-text">Preparing upload...</div>
+            <div style="text-align: center;">
+                <div class="upload-timer" id="upload-timer">00:00</div>
+            </div>
         </div>
         <div id="upload-status" class="upload-status info">
             Ready to upload
         </div>
-        <div id="upload-conflict-dialog" class="upload-conflict-dialog">
-            <strong>Folder Conflict:</strong> A folder with this name already exists.
+        <div id="upload-conflict-dialog" class="upload-conflict-dialog" style="display: none;">
+            <strong>Folder Conflict:</strong> One or more folders with the same name already exist.<br>
+            What would you like to do?
             <div class="upload-conflict-buttons">
-                <button class="upload-conflict-btn skip" id="upload-skip-btn">Skip</button>
+                <button class="upload-conflict-btn stop" id="upload-stop-btn">Stop All</button>
+                <button class="upload-conflict-btn skip" id="upload-skip-btn">Skip Existing</button>
                 <button class="upload-conflict-btn overwrite" id="upload-overwrite-btn">Overwrite</button>
             </div>
         </div>
