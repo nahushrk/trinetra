@@ -67,18 +67,16 @@ class Test(TestCase):
         self.assertEqual(
             metadata,
             {
-                "M117 Time Left": "3h59m15s",
-                "TIME": ":14355",
-                "Filament used": ": 10.1343m",
-                "M140": "S70",
-                "M104": "S220",
-                "layer_height": "0.2",
-                "infill_sparse_density": "25.0",
-                "support_enable": "True",
-                "retraction_hop": "0.2",
-                "support_structure": "tree",
-                "support_type": "everywhere",
-                "adhesion_type": "brim",
+                "Time": "3h 59m 15s",
+                "Layer Height": "0.2",
+                "Infill Sparse Density": "25.0",
+                "Support Enable": "True",
+                "Retraction Hop": "0.2",
+                "Support Structure": "tree",
+                "Support Type": "everywhere",
+                "Adhesion Type": "brim",
+                "Bed Temperature": "S70",
+                "Extruder Temperature": "S220",
             },
         )
 
@@ -90,18 +88,16 @@ class Test(TestCase):
             self.assertEqual(
                 metadata,
                 {
-                    "M117 Time Left": "3h59m15s",
-                    "TIME": ":14355",
-                    "Filament used": ": 10.1343m",
-                    "M140": "S70",
-                    "M104": "S220",
-                    "retraction_hop": "0.2",
-                    "support_enable": "True",
-                    "support_type": "everywhere",
-                    "infill_sparse_density": "25.0",
-                    "adhesion_type": "brim",
-                    "layer_height": "0.2",
-                    "support_structure": "tree",
+                    "Time": "3h 59m 15s",
+                    "Retraction Hop": "0.2",
+                    "Support Enable": "True",
+                    "Support Type": "everywhere",
+                    "Infill Sparse Density": "25.0",
+                    "Adhesion Type": "brim",
+                    "Layer Height": "0.2",
+                    "Support Structure": "tree",
+                    "Bed Temperature": "S70",
+                    "Extruder Temperature": "S220",
                 },
             )
 
@@ -182,17 +178,17 @@ support_enable = True
     def test_seconds_to_readable_duration_hours(self):
         """Test seconds_to_readable_duration with hours"""
         result = gcode_handler.seconds_to_readable_duration(7325)  # 2h 2m 5s
-        self.assertEqual(result, "2h:2m:5s")
+        self.assertEqual(result, "2h 2m 5s")
 
     def test_seconds_to_readable_duration_minutes_only(self):
         """Test seconds_to_readable_duration with minutes only"""
         result = gcode_handler.seconds_to_readable_duration(125)  # 2m 5s
-        self.assertEqual(result, "2m:5s")
+        self.assertEqual(result, "2m 5s")
 
     def test_seconds_to_readable_duration_zero(self):
         """Test seconds_to_readable_duration with zero seconds"""
-        result = gcode_handler.seconds_to_readable_duration(0)
-        self.assertEqual(result, "0m:0s")
+        result = gcode_handler.seconds_to_readable_duration(0)  # 0m 0s
+        self.assertEqual(result, "0m 0s")
 
     def test_extract_gcode_metadata_from_cura_config_missing_keys(self):
         """Test extract_gcode_metadata_from_cura_config with missing keys"""
@@ -223,33 +219,22 @@ support_enable = True
         self.assertEqual(metadata, {})
 
     def test_extract_gcode_metadata_from_header_time_formatting(self):
-        """Test extract_gcode_metadata_from_header with TIME formatting"""
-        gcode_lines = """
-        ;TIME:14355
-        G28 ;Home
-        """
-        metadata = gcode_handler.extract_gcode_metadata_from_header(gcode_lines)
-        self.assertEqual(metadata["TIME"], ":14355")
+        """Test time formatting from header"""
+        gcode_content = ";FLAVOR:Marlin\n;TIME:14355\nG28 ;Home"
+        metadata = gcode_handler.extract_gcode_metadata_from_header(gcode_content)
+        self.assertEqual(metadata["Time"], "3h 59m 15s")
 
     def test_extract_gcode_metadata_from_header_time_already_formatted(self):
-        """Test extract_gcode_metadata_from_header with TIME already formatted"""
-        gcode_lines = """
-        ;TIME:14355
-        G28 ;Home
-        """
-        metadata = gcode_handler.extract_gcode_metadata_from_header(gcode_lines)
-        self.assertEqual(metadata["TIME"], ":14355")
+        """Test time formatting when already in readable format"""
+        gcode_content = ";FLAVOR:Marlin\n;TIME:14355\nG28 ;Home"
+        metadata = gcode_handler.extract_gcode_metadata_from_header(gcode_content)
+        self.assertEqual(metadata["Time"], "3h 59m 15s")
 
     def test_extract_gcode_metadata_string_input(self):
         """Test extract_gcode_metadata with string input"""
-        gcode_content = """
-        ;FLAVOR:Marlin
-        M117 Time Left 3h59m15s
-        ;TIME:14355
-        G28 ;Home
-        """
+        gcode_content = ";FLAVOR:Marlin\n;TIME:14355\nG28 ;Home"
         metadata = gcode_handler.extract_gcode_metadata(gcode_content)
-        expected = {"M117 Time Left": "3h59m15s", "TIME": ":14355"}
+        expected = {"Time": "3h 59m 15s"}
         self.assertEqual(metadata, expected)
 
     def test_extract_gcode_metadata_file_input(self):
@@ -264,7 +249,7 @@ support_enable = True
         mock_file.read.return_value = gcode_content
 
         metadata = gcode_handler.extract_gcode_metadata(mock_file)
-        expected = {"M117 Time Left": "3h59m15s", "TIME": ":14355"}
+        expected = {"Time": "3h 59m 15s"}
         self.assertEqual(metadata, expected)
         mock_file.read.assert_called_once()
         mock_file.seek.assert_called_once_with(0)
@@ -280,31 +265,21 @@ support_enable = True
         ;SETTING_3 {"global_quality": "[general]\\nversion = 4\\n\\n[values]\\nlayer_height = 0.2\\n\\n", "extruder_quality": ["[general]\\nversion = 4\\n\\n[values]\\n\\n"]}
         """
         metadata = gcode_handler.extract_gcode_metadata(gcode_content)
-        expected = {"M117 Time Left": "3h59m15s", "TIME": ":14355", "layer_height": "0.2"}
+        expected = {"Time": "3h 59m 15s", "Layer Height": "0.2"}
         self.assertEqual(metadata, expected)
 
     def test_extract_gcode_metadata_invalid_json(self):
         """Test extract_gcode_metadata with invalid JSON in Cura config"""
-        gcode_content = """
-        ;FLAVOR:Marlin
-        M117 Time Left 3h59m15s
-        ;TIME:14355
-        G28 ;Home
-        ;End of Gcode
-        ;SETTING_3 {"invalid": json}
-        """
+        gcode_content = (
+            ";FLAVOR:Marlin\n;TIME:14355\nG28 ;Home\n;End of Gcode\n;SETTING_3 {invalid json}"
+        )
         metadata = gcode_handler.extract_gcode_metadata(gcode_content)
-        expected = {"M117 Time Left": "3h59m15s", "TIME": ":14355"}
+        expected = {"Time": "3h 59m 15s"}
         self.assertEqual(metadata, expected)
 
     def test_extract_gcode_metadata_no_cura_config(self):
         """Test extract_gcode_metadata without Cura config section"""
-        gcode_content = """
-        ;FLAVOR:Marlin
-        M117 Time Left 3h59m15s
-        ;TIME:14355
-        G28 ;Home
-        """
+        gcode_content = ";FLAVOR:Marlin\n;TIME:14355\nG28 ;Home"
         metadata = gcode_handler.extract_gcode_metadata(gcode_content)
-        expected = {"M117 Time Left": "3h59m15s", "TIME": ":14355"}
+        expected = {"Time": "3h 59m 15s"}
         self.assertEqual(metadata, expected)

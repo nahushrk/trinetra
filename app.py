@@ -188,8 +188,17 @@ def create_app(config_file=None, config_overrides=None):
         app.logger.debug(f"STL files: {stl_files}")
         app.logger.debug(f"Image files: {image_files}")
         app.logger.debug(f"PDF files: {pdf_files}")
-        app.logger.debug(f"G-code files: {gcode_files}")
-        return stl_files, image_files, pdf_files, gcode_files
+        app.logger.debug(f"G-code files before deduplication: {gcode_files}")
+        # Deduplicate gcode_files by (file_name, rel_path)
+        seen = set()
+        deduped_gcode_files = []
+        for gfile in gcode_files:
+            key = (gfile["file_name"], gfile["rel_path"])
+            if key not in seen:
+                deduped_gcode_files.append(gfile)
+                seen.add(key)
+        app.logger.debug(f"G-code files after deduplication: {deduped_gcode_files}")
+        return stl_files, image_files, pdf_files, deduped_gcode_files
 
     # --- All routes below, using app.config for paths ---
     @app.route("/")
