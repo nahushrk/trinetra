@@ -22,10 +22,10 @@ def seconds_to_readable_duration(seconds: int):
     # Determine the format
     if hours > 0:
         # If there are hours, display in h:m:s format
-        return f"{hours}h:{minutes}m:{remaining_seconds}s"
+        return f"{hours}h {minutes}m {remaining_seconds}s"
     else:
         # Otherwise, display in m:s format
-        return f"{minutes}m:{remaining_seconds}s"
+        return f"{minutes}m {remaining_seconds}s"
 
 
 def extract_gcode_metadata_from_cura_config(cura_config_dict):
@@ -58,32 +58,59 @@ def extract_gcode_metadata_from_cura_config(cura_config_dict):
 
 
 def extract_gcode_metadata_from_header(file_content):
-    extract_keys = {"M140", "M104", "TIME", "Filament used", "M117 Time Left"}
+    # Only extract M140, M104, and TIME (not M117 Time Left)
+    extract_keys = {"M140", "M104"}
     metadata = {}
     file_lines = file_content.splitlines()
 
+    # Track which keys have already been extracted to ensure first occurrence only
+    extracted_keys = set()
+
+    # Find first occurrence of ;TIME:<seconds> and extract M140/M104
+    time_value = None
     for line in file_lines:
         line = line.strip()
-        if "G28 ;Home" in line:
+        if line.startswith(";TIME:") and time_value is None:
+            try:
+                seconds = int(line.split(":", 1)[1])
+                time_value = seconds_to_readable_duration(seconds)
+            except Exception:
+                pass
+        elif "G28 ;Home" in line:
             break
-        for key in extract_keys:
-            if key in line:
-                if key == "M117 Time Left":
-                    metadata[key] = line.split("M117 Time Left", 1)[-1].strip()
-                else:
+        else:
+            # Extract M140 and M104 (only first occurrence)
+            for key in extract_keys:
+                if key in line and key not in extracted_keys:
                     metadata[key] = line.split(key, 1)[-1].strip()
+                    extracted_keys.add(key)
 
-    # Format metadata for readability - but keep original keys for consistency
-    if "TIME" in metadata:
-        time_value = metadata["TIME"]
-        # Keep the original format as expected by tests
-        if not time_value.startswith(":"):
-            metadata["TIME"] = ":" + time_value
-
-    # Keep original M104 and M140 keys as expected by tests
-    # Don't transform them to Extruder_Temp and Bed_Temp
+    if time_value is not None:
+        metadata["Time"] = time_value
 
     return metadata
+
+
+def format_metadata_keys_for_display(metadata):
+    """Format metadata keys for HTML display with proper capitalization."""
+    formatted_metadata = {}
+
+    for key, value in metadata.items():
+        # Handle special cases first
+        if key == "M140":
+            formatted_key = "Bed Temperature"
+        elif key == "M104":
+            formatted_key = "Extruder Temperature"
+        elif key == "Time":
+            formatted_key = "Time"
+        else:
+            # Convert snake_case to Title Case
+            # Replace underscores with spaces and capitalize each word
+            formatted_key = key.replace("_", " ").title()
+
+        formatted_metadata[formatted_key] = value
+
+    return formatted_metadata
 
 
 def extract_gcode_metadata(file):
@@ -131,4 +158,5 @@ def extract_gcode_metadata(file):
 
     metadata = {**metadata_from_header, **metadata_from_cura}
 
-    return metadata
+    # Format keys for HTML display
+    return format_metadata_keys_for_display(metadata)

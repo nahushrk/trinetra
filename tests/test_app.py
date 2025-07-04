@@ -426,8 +426,8 @@ class TestAppRoutes:
             f.write(";FLAVOR:Marlin\nM117 Time Left 3h59m15s\n;TIME:14355\nG28 ;Home\n")
 
         result = self.app.extract_gcode_metadata_from_file(gcode_file)
-        assert "M117 Time Left" in result
-        assert "TIME" in result
+        assert "Time" in result
+        assert result["Time"] == "3h 59m 15s"
 
     def test_get_folder_contents_function(self):
         """Test get_folder_contents function"""
