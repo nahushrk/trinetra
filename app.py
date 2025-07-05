@@ -76,24 +76,62 @@ def create_app(config_file=None, config_overrides=None):
 
     def get_stl_files(base_path):
         stl_files = []
-        for root, dirs, files in os.walk(base_path):
-            folder_files = []
-            for file in files:
-                if file.lower().endswith(".stl"):
-                    abs_path = os.path.join(root, file)
-                    rel_path = os.path.relpath(abs_path, base_path)
-                    folder_files.append({"file_name": file, "rel_path": rel_path})
-            if folder_files:
-                folder_name = os.path.relpath(root, base_path)
-                top_level_folder = folder_name.split(os.sep)[0]
-                stl_files.append(
-                    {
-                        "folder_name": folder_name,
-                        "top_level_folder": top_level_folder,
-                        "files": folder_files,
-                    }
-                )
+        # Only consider top-level folders
+        for entry in os.scandir(base_path):
+            if entry.is_dir():
+                folder_name = entry.name
+                folder_path = entry.path
+                folder_files = []
+                # Recursively collect all .stl files in this folder
+                for root, dirs, files in os.walk(folder_path):
+                    for file in files:
+                        if file.lower().endswith(".stl"):
+                            abs_path = os.path.join(root, file)
+                            rel_path = os.path.relpath(abs_path, base_path)
+                            folder_files.append({"file_name": file, "rel_path": rel_path})
+                if folder_files:
+                    stl_files.append(
+                        {
+                            "folder_name": folder_name,
+                            "top_level_folder": folder_name,
+                            "files": folder_files,
+                        }
+                    )
         return stl_files
+
+    def fix_duplicated_folders(base_path):
+        """Fix existing folders that have duplicated structure like folder/folder/"""
+        fixed_count = 0
+        for root, dirs, files in os.walk(base_path):
+            # Check if this is a duplicated folder structure
+            rel_path = os.path.relpath(root, base_path)
+            path_parts = rel_path.split(os.sep)
+
+            # If we have a path like "folder/folder", fix it
+            if len(path_parts) >= 2 and path_parts[0] == path_parts[1]:
+                # This is a duplicated folder structure
+                parent_folder = os.path.join(base_path, path_parts[0])
+                duplicated_folder = root
+
+                # Check if the parent folder is empty or only contains the duplicated folder
+                parent_contents = os.listdir(parent_folder)
+                if len(parent_contents) == 1 and os.path.isdir(duplicated_folder):
+                    # Move all contents from duplicated_folder to parent_folder
+                    for item in os.listdir(duplicated_folder):
+                        source_path = os.path.join(duplicated_folder, item)
+                        dest_path = os.path.join(parent_folder, item)
+                        import shutil
+
+                        shutil.move(source_path, dest_path)
+
+                    # Remove the empty duplicated folder
+                    import shutil
+
+                    shutil.rmtree(duplicated_folder)
+                    fixed_count += 1
+                    app.logger.info(f"Fixed duplicated folder structure: {rel_path}")
+
+        return fixed_count
 
     def extract_gcode_metadata_from_file(file_path):
         metadata = {}
@@ -203,6 +241,11 @@ def create_app(config_file=None, config_overrides=None):
     # --- All routes below, using app.config for paths ---
     @app.route("/")
     def index():
+        # Fix any existing duplicated folder structures
+        fixed_count = fix_duplicated_folders(app.config["STL_FILES_PATH"])
+        if fixed_count > 0:
+            app.logger.info(f"Fixed {fixed_count} duplicated folder structures")
+
         stl_files = get_stl_files(app.config["STL_FILES_PATH"])
         return render_template("index.html", stl_files=stl_files)
 
@@ -363,7 +406,48 @@ def create_app(config_file=None, config_overrides=None):
 
                         shutil.rmtree(extract_to)
                     os.makedirs(extract_to, exist_ok=True)
-                    safe_extract(zip_ref, extract_to)
+
+                    # Extract to a temporary location first to handle folder duplication
+                    import tempfile
+
+                    with tempfile.TemporaryDirectory() as temp_dir:
+                        safe_extract(zip_ref, temp_dir)
+
+                        # Check if the extracted content has a folder with the same name as the zip
+                        temp_contents = os.listdir(temp_dir)
+                        if (
+                            len(temp_contents) == 1
+                            and os.path.isdir(os.path.join(temp_dir, temp_contents[0]))
+                            and temp_contents[0] == folder_name
+                        ):
+                            # The zip contains a folder with the same name as the zip file
+                            # Move contents from temp_dir/folder_name to extract_to
+                            source_folder = os.path.join(temp_dir, folder_name)
+                            for item in os.listdir(source_folder):
+                                source_path = os.path.join(source_folder, item)
+                                dest_path = os.path.join(extract_to, item)
+                                if os.path.isdir(source_path):
+                                    import shutil
+
+                                    shutil.move(source_path, dest_path)
+                                else:
+                                    import shutil
+
+                                    shutil.move(source_path, dest_path)
+                        else:
+                            # Normal case: move all contents from temp_dir to extract_to
+                            for item in os.listdir(temp_dir):
+                                source_path = os.path.join(temp_dir, item)
+                                dest_path = os.path.join(extract_to, item)
+                                if os.path.isdir(source_path):
+                                    import shutil
+
+                                    shutil.move(source_path, dest_path)
+                                else:
+                                    import shutil
+
+                                    shutil.move(source_path, dest_path)
+
                     # Remove __MACOSX folder if present
                     macosx_path = os.path.join(extract_to, "__MACOSX")
                     if os.path.exists(macosx_path):
