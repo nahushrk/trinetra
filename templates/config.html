@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block title %}Configuration - Trinetra{% endblock %}
+
+{% block content %}
+<!-- Page Header -->
+<div class="row justify-content-center">
+    <div class="col text-center">
+        <h1>Configuration Management</h1>
+        <p class="text-muted">Manage application settings and configuration options</p>
+    </div>
+</div>
+
+<div class="container mt-4">
+    <div id="config-section">
+        <form id="config-form">
+            <table class="table table-bordered table-striped mt-3">
+                <thead>
+                    <tr>
+                        <th>Option</th>
+                        <th>Value</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="config-table-body">
+                    <!-- Populated by JS -->
+                </tbody>
+            </table>
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+            <span id="save-status" class="ml-3"></span>
+        </form>
+    </div>
+</div>
+<script src="/static/js/config.js"></script>
+{% endblock %} 

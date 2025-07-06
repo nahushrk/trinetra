@@ -14,8 +14,8 @@ from io import BytesIO
 import pytest
 from flask import Flask
 from werkzeug.datastructures import FileStorage
+from trinetra.config import ConfigManager
 
-# Import the app after setting up test environment
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -25,6 +25,7 @@ from trinetra.logger import get_logger
 
 logger = get_logger(__name__)
 
+# Import create_app function, not the app instance
 from app import create_app
 
 
@@ -39,7 +40,9 @@ class TestAppRoutes:
         self.gcode_path = os.path.join(self.temp_dir, "gcode_files")
         os.makedirs(self.stl_path, exist_ok=True)
         os.makedirs(self.gcode_path, exist_ok=True)
-        self.config = {
+
+        # Create base config for testing (this will be used as the base config in ConfigManager)
+        self.base_config = {
             "base_path": self.stl_path,
             "gcode_path": self.gcode_path,
             "log_level": "INFO",
@@ -47,7 +50,9 @@ class TestAppRoutes:
             "moonraker_url": "http://localhost:7125",
             "mode": "DEV",
         }
-        self.app = create_app(config_overrides=self.config)
+
+        # Create app with ConfigManager using base config and empty override
+        self.app = create_app(config_manager=ConfigManager.from_dict(self.base_config, {}))
         self.client = self.app.test_client()
 
     def teardown_method(self):
@@ -353,20 +358,90 @@ class TestAppRoutes:
         with pytest.raises(Exception, match="Attempted Path Traversal"):
             self.app.safe_join("/base", "../outside/file.txt")
 
-    def test_load_config_function(self):
-        """Test load_config function"""
-        mock_config = {"base_path": "/test/path", "log_level": "INFO"}
+    def test_config_manager_integration(self):
+        """Test that ConfigManager is properly integrated into the app"""
+        # Verify that the app has a config manager
+        assert hasattr(self.app, "config")
+        assert "CONFIG_MANAGER" in self.app.config
 
-        with patch("builtins.open", mock_open(read_data="base_path: /test/path\nlog_level: INFO")):
-            with patch("yaml.safe_load", return_value=mock_config):
-                result = self.app.load_config("test.yaml")
-                assert result == mock_config
+        config_manager = self.app.config["CONFIG_MANAGER"]
+        assert config_manager is not None
 
-    def test_load_config_function_error(self):
-        """Test load_config function with error"""
-        with patch("builtins.open", side_effect=FileNotFoundError()):
-            result = self.app.load_config("nonexistent.yaml")
-            assert result == {}
+        # Verify that the config manager has the expected base config
+        base_config = config_manager.get_base_config()
+        assert base_config["base_path"] == self.stl_path
+        assert base_config["gcode_path"] == self.gcode_path
+        assert base_config["log_level"] == "INFO"
+        assert base_config["search_result_limit"] == 25
+        assert base_config["moonraker_url"] == "http://localhost:7125"
+        assert base_config["mode"] == "DEV"
+
+        # Verify that override is empty (as expected for testing)
+        override_config = config_manager.get_override_config()
+        assert override_config == {}
+
+        # Verify that merged config matches base config (no overrides)
+        merged_config = config_manager.get_config()
+        assert merged_config.base_path == self.stl_path
+        assert merged_config.gcode_path == self.gcode_path
+        assert merged_config.log_level == "INFO"
+        assert merged_config.search_result_limit == 25
+        assert merged_config.moonraker_url == "http://localhost:7125"
+        assert merged_config.mode == "DEV"
+
+    def test_api_get_config(self):
+        """Test GET /api/config endpoint"""
+        response = self.client.get("/api/config")
+        assert response.status_code == 200
+
+        data = json.loads(response.data)
+        assert "base" in data
+        assert "override" in data
+        assert "merged" in data
+
+        # Verify base config
+        assert data["base"]["base_path"] == self.stl_path
+        assert data["base"]["gcode_path"] == self.gcode_path
+        assert data["base"]["log_level"] == "INFO"
+
+        # Verify override is empty
+        assert data["override"] == {}
+
+        # Verify merged config
+        assert data["merged"]["base_path"] == self.stl_path
+        assert data["merged"]["gcode_path"] == self.gcode_path
+        assert data["merged"]["log_level"] == "INFO"
+
+    def test_api_update_config(self):
+        """Test POST /api/config endpoint"""
+        # Test updating config
+        update_data = {"log_level": "DEBUG", "search_result_limit": 50}
+
+        response = self.client.post("/api/config", json=update_data)
+        assert response.status_code == 200
+
+        data = json.loads(response.data)
+        assert data["success"] is True
+
+        # Verify override was updated
+        assert data["override"]["log_level"] == "DEBUG"
+        assert data["override"]["search_result_limit"] == 50
+
+        # Verify merged config reflects changes
+        assert data["merged"]["log_level"] == "DEBUG"
+        assert data["merged"]["search_result_limit"] == 50
+
+        # Verify base config unchanged
+        assert data["merged"]["base_path"] == self.stl_path
+        assert data["merged"]["gcode_path"] == self.gcode_path
+
+    def test_api_update_config_invalid_data(self):
+        """Test POST /api/config with invalid data"""
+        response = self.client.post("/api/config", json="not_a_dict")
+        assert response.status_code == 400
+
+        data = json.loads(response.data)
+        assert "error" in data
 
     def test_allowed_file_function(self):
         """Test allowed_file function"""

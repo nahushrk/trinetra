@@ -12,10 +12,5 @@ CONFIG_FILE=$2
 
 echo "Loading from config: "$CONFIG_FILE
 
-# Run Gunicorn using the specified Python runtime and config file
-$PYTHON_RUNTIME -m gunicorn \
-  -w 1 --threads 2 \
-  -b 0.0.0.0:8969 app:app \
-  --log-level info \
-  --env CONFIG_FILE=$CONFIG_FILE \
-  --log-file gunicorn.log
+# Run the server using run.py with the specified config file
+$PYTHON_RUNTIME run.py --config $CONFIG_FILE

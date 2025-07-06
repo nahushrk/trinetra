@@ -19,6 +19,7 @@ from werkzeug.utils import secure_filename
 
 from trinetra import gcode_handler, search, moonraker
 from trinetra.moonraker import MoonrakerAPI, add_to_queue
+from trinetra.config import ConfigManager
 
 # Import logging configuration from trinetra package
 from trinetra.logger import get_logger
@@ -36,24 +37,21 @@ def safe_join(base, *paths):
     return final_path
 
 
-def load_config(yaml_file=None):
-    """Loads configuration from a YAML file."""
-    if not yaml_file:
-        yaml_file = os.getenv("CONFIG_FILE", "config_dev.yaml")  # Default config file name
+def create_app(config_file=None, config_overrides=None, config_manager=None):
+    # Initialize config manager from config file or use provided one
+    if config_manager:
+        _config_manager = config_manager
+    elif config_file:
+        _config_manager = ConfigManager(config_file)
+    else:
+        raise ValueError("Either config_manager or config_file must be provided")
 
-    try:
-        with open(yaml_file) as file:
-            config = yaml.safe_load(file)
-            return config or {}
-    except Exception as e:
-        logger.error(f"Error loading configuration file: {e}")
-        return {}
-
-
-def create_app(config_file=None, config_overrides=None):
-    config = load_config(config_file)
+    # Apply overrides on top if provided
     if config_overrides:
-        config.update(config_overrides)
+        _config_manager.update_override(config_overrides)
+
+    # Get the merged config
+    config = _config_manager.get_config().to_dict()
 
     app = Flask(__name__)
     Compress(app)
@@ -67,12 +65,14 @@ def create_app(config_file=None, config_overrides=None):
     app.logger.info(f"Config: {config}")
 
     # Set up paths
-    stl_files_path = os.path.expanduser(config.get("base_path", "./stl_files"))
-    gcode_files_path = os.path.expanduser(config.get("gcode_path", "./gcode_files"))
+    # This should break if base_path or gcode_path is not set
+    stl_files_path = os.path.expanduser(config.get("base_path"))
+    gcode_files_path = os.path.expanduser(config.get("gcode_path"))
     os.makedirs(stl_files_path, exist_ok=True)
     os.makedirs(gcode_files_path, exist_ok=True)
     app.config["STL_FILES_PATH"] = stl_files_path
     app.config["GCODE_FILES_PATH"] = gcode_files_path
+    app.config["CONFIG_MANAGER"] = _config_manager
 
     def get_stl_files(base_path):
         stl_files = []
@@ -847,6 +847,38 @@ def create_app(config_file=None, config_overrides=None):
             return jsonify({"error": "Failed to add files to Moonraker queue"}), 502
         return jsonify({"result": "ok"})
 
+    @app.route("/config")
+    def config_view():
+        return render_template("config.html")
+
+    @app.route("/api/config", methods=["GET"])
+    def api_get_config():
+        """Return both base and override config for UI display."""
+        config_manager = app.config["CONFIG_MANAGER"]
+        return jsonify(
+            {
+                "base": config_manager.get_base_config(),
+                "override": config_manager.get_override_config(),
+                "merged": config_manager.get_config().to_dict(),
+            }
+        )
+
+    @app.route("/api/config", methods=["POST"])
+    def api_update_config():
+        """Update override config with provided values."""
+        config_manager = app.config["CONFIG_MANAGER"]
+        data = request.json or {}
+        if not isinstance(data, dict):
+            return jsonify({"error": "Invalid data format"}), 400
+        config_manager.update_override(data)
+        return jsonify(
+            {
+                "success": True,
+                "override": config_manager.get_override_config(),
+                "merged": config_manager.get_config().to_dict(),
+            }
+        )
+
     # Attach helpers for testing
     app.get_stl_files = get_stl_files
     app.extract_gcode_metadata_from_file = extract_gcode_metadata_from_file
@@ -855,13 +887,12 @@ def create_app(config_file=None, config_overrides=None):
     app.allowed_file = allowed_file
     app.safe_extract = safe_extract
     app.safe_join = safe_join
-    app.load_config = load_config
 
     return app
 
 
 if __name__ == "__main__":
-    app = create_app()
+    app = create_app(config_file="config_dev.yaml")
     logger.info(
         f"STL files: {app.config['STL_FILES_PATH']}, GCODE files: {app.config['GCODE_FILES_PATH']}"
     )
@@ -872,4 +903,4 @@ if __name__ == "__main__":
         app.run()
 
 # Create global app instance for gunicorn
-app = create_app()
+# app = create_app()
