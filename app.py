@@ -870,10 +870,14 @@ def create_app(config_file=None, config_overrides=None, config_manager=None):
         data = request.json or {}
         if not isinstance(data, dict):
             return jsonify({"error": "Invalid data format"}), 400
-        config_manager.update_override(data)
+
+        # Calculate diff and save to override file
+        diff = config_manager.calculate_and_save_diff(data)
+
         return jsonify(
             {
                 "success": True,
+                "diff": diff,
                 "override": config_manager.get_override_config(),
                 "merged": config_manager.get_config().to_dict(),
             }

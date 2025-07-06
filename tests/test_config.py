@@ -311,3 +311,83 @@ class TestConfigManager:
         assert merged_config.base_path == "/base/stl"
         assert merged_config.gcode_path == "/base/gcode"
         assert merged_config.mode == "DEV"
+
+    def test_calculate_and_save_diff(self):
+        """Test calculate_and_save_diff method"""
+        base_config = {
+            "base_path": "/base/stl",
+            "gcode_path": "/base/gcode",
+            "log_level": "INFO",
+            "search_result_limit": 25,
+            "moonraker_url": "http://base:7125",
+            "mode": "DEV",
+        }
+
+        config_manager = ConfigManager.from_dict(base_config, {})
+
+        # New config with some changes
+        new_config = {
+            "base_path": "/base/stl",  # Same as base
+            "gcode_path": "/new/gcode",  # Different
+            "log_level": "DEBUG",  # Different
+            "search_result_limit": 25,  # Same as base
+            "moonraker_url": "http://new:7125",  # Different
+            "mode": "DEV",  # Same as base
+        }
+
+        # Calculate and save diff
+        diff = config_manager.calculate_and_save_diff(new_config)
+
+        # Verify diff contains only changed values
+        expected_diff = {
+            "gcode_path": "/new/gcode",
+            "log_level": "DEBUG",
+            "moonraker_url": "http://new:7125",
+        }
+        assert diff == expected_diff
+
+        # Verify override config was updated
+        assert config_manager.get_override_config() == expected_diff
+
+        # Verify merged config reflects changes
+        merged_config = config_manager.get_config()
+        assert merged_config.base_path == "/base/stl"  # Unchanged
+        assert merged_config.gcode_path == "/new/gcode"  # Changed
+        assert merged_config.log_level == "DEBUG"  # Changed
+        assert merged_config.search_result_limit == 25  # Unchanged
+        assert merged_config.moonraker_url == "http://new:7125"  # Changed
+        assert merged_config.mode == "DEV"  # Unchanged
+
+    def test_calculate_and_save_diff_no_changes(self):
+        """Test calculate_and_save_diff with no changes"""
+        base_config = {
+            "base_path": "/base/stl",
+            "gcode_path": "/base/gcode",
+            "log_level": "INFO",
+            "search_result_limit": 25,
+            "moonraker_url": "http://base:7125",
+            "mode": "DEV",
+        }
+
+        config_manager = ConfigManager.from_dict(base_config, {})
+
+        # New config identical to base
+        new_config = base_config.copy()
+
+        # Calculate and save diff
+        diff = config_manager.calculate_and_save_diff(new_config)
+
+        # Verify diff is empty
+        assert diff == {}
+
+        # Verify override config is empty
+        assert config_manager.get_override_config() == {}
+
+        # Verify merged config is same as base
+        merged_config = config_manager.get_config()
+        assert merged_config.base_path == "/base/stl"
+        assert merged_config.gcode_path == "/base/gcode"
+        assert merged_config.log_level == "INFO"
+        assert merged_config.search_result_limit == 25
+        assert merged_config.moonraker_url == "http://base:7125"
+        assert merged_config.mode == "DEV"

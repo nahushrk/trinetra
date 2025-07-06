@@ -1,6 +1,7 @@
 *.log
 venv/
 config_dev.yaml
+config_override.yaml
 data/
 data*/
 .idea/
