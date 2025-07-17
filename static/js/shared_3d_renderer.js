@@ -360,9 +360,9 @@ function createFileActionButtons(containerElement, fileData, buttonTypes = ['dow
         downloadButton.innerHTML = `<i class="fas fa-download"></i> Download ${isGcode ? 'G-code' : 'STL'}`;
         downloadButton.onclick = function () {
             if (isGcode) {
-                window.location.href = `/gcode/${encodeURIComponent(fileData.basePath || fileData.path)}/${encodeURIComponent(fileData.relPath)}`;
+                window.location.href = `/gcode/${encodeURIComponent(fileData.basePath || fileData.path)}/${encodeURIComponent(fileData.rel_path || fileData.relPath || '')}`;
             } else {
-                window.location.href = `/stl/${encodeURIComponent(fileData.relPath)}`;
+                window.location.href = `/stl/${encodeURIComponent(fileData.rel_path || fileData.relPath || '')}`;
             }
         };
         buttonContainer.appendChild(downloadButton);
