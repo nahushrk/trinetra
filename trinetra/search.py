@@ -1,34 +1,59 @@
 """
-Search functionality for Trinetra using thefuzz library for fuzzy matching and ranking
+Advanced fuzzy search using hybrid scoring (Jaccard + Edit Distance)
 """
 
 import re
 from typing import List, Tuple, Dict, Any
-from thefuzz import process
+import Levenshtein
 
 from trinetra.logger import get_logger
 
 # Get logger for this module
 logger = get_logger(__name__)
+logger.setLevel('DEBUG')
 
 
-def tokenize(text: str) -> List[str]:
-    """Tokenize text into words, removing special characters."""
-    return [word.lower() for word in re.split(r"\W+|_", text) if word]
+def jaccard_similarity(a: str, b: str) -> float:
+    """Compute Jaccard similarity between two strings"""
+    set_a = set(a.lower().split())
+    set_b = set(b.lower().split())
+    intersection = set_a & set_b
+    union = set_a | set_b
+    return len(intersection) / len(union) if union else 0.0
+
+
+def normalized_edit_score(a: str, b: str) -> float:
+    """Compute normalized edit distance similarity score"""
+    dist = Levenshtein.distance(a.lower(), b.lower())
+    max_len = max(len(a), len(b))
+    return 1 - (dist / max_len) if max_len > 0 else 0.0
+
+
+def compute_match_score(query: str, target: str) -> int:
+    """
+    Compute hybrid match score (0-100) using:
+    - Jaccard similarity (token-based)
+    - Normalized edit distance (character-based)
+    - Substring boost
+    """
+    jaccard = jaccard_similarity(query, target)
+    edit_sim = normalized_edit_score(query, target)
+    substring_boost = 1.0 if query.lower() in target.lower() else 0.0
+    # New weights: substring 0.5, jaccard 0.3, edit_sim 0.2
+    score = (0.2 * edit_sim + 0.3 * jaccard + 0.5 * substring_boost) * 100
+    return round(score)
 
 
 def search_with_ranking(
     query: str, choices: List[str], limit: int = 25, threshold: int = 75
 ) -> List[Tuple[str, int]]:
     """
-    Search with fuzzy matching and ranking using thefuzz.
-
+    Search with hybrid fuzzy matching using Jaccard + Edit Distance
     Args:
         query: Search query string
         choices: List of strings to search in
         limit: Maximum number of results to return
         threshold: Minimum similarity score (0-100) to include in results
-
     Returns:
         List of tuples (choice, score) sorted by score descending
     """
@@ -37,34 +62,36 @@ def search_with_ranking(
         return []
 
     logger.debug(
-        f"Searching for '{query}' in {len(choices)} choices with limit={limit}, threshold={threshold}"
+        f"[search_with_ranking] Searching for '{query}' in {len(choices)} choices with limit={limit}, threshold={threshold}"
     )
 
-    # Use thefuzz process.extract for fuzzy matching
-    results = process.extract(query.lower(), choices, limit=limit)
+    results = []
+    for item in choices:
+        score = compute_match_score(query, item)
+        logger.debug(f"[search_with_ranking] Query='{query}' vs Item='{item}' => Score={score}")
+        if score >= threshold:
+            results.append((item, score))
 
-    # Filter by threshold and sort by score descending (highest first)
-    filtered_results = [(choice, score) for choice, score in results if score >= threshold]
-    filtered_results.sort(key=lambda x: x[1], reverse=True)
-
-    logger.debug(f"Found {len(filtered_results)} results above threshold {threshold}")
-    return filtered_results
+    # Sort by score descending
+    results.sort(key=lambda x: x[1], reverse=True)
+    logger.debug(f"[search_with_ranking] Results: {results[:5]} (top 5)")
+    return results[:limit]
 
 
 def search_files_and_folders(
-    query: str, stl_folders: List[Dict[str, Any]], limit: int = 25
+    query: str, stl_folders: List[Dict[str, Any]], limit: int = 25, threshold: int = 75
 ) -> List[Dict[str, Any]]:
     """
     Search through STL files and folders, returning ranked results.
-
     Args:
         query: Search query string
         stl_folders: List of folder dictionaries with files
         limit: Maximum number of results to return
-
+        threshold: Minimum similarity score (0-100) to include in results
     Returns:
         List of folder dictionaries with matching files, ranked by relevance
     """
+    logger.debug(f"[search_files_and_folders] Query='{query}', limit={limit}, threshold={threshold}")
     if not query.strip():
         logger.debug("Empty query, returning all folders")
         return stl_folders
@@ -88,7 +115,8 @@ def search_files_and_folders(
     logger.debug(f"Created searchable index with {len(searchable_items)} items")
 
     # Perform fuzzy search
-    search_results = search_with_ranking(query, searchable_items, limit=limit)
+    search_results = search_with_ranking(query, searchable_items, limit=limit, threshold=threshold)
+    logger.debug(f"[search_files_and_folders] search_results: {search_results}")
 
     # Group results by folder and calculate folder scores
     folder_scores = {}
@@ -132,6 +160,7 @@ def search_files_and_folders(
                 result_folder["files"] = matching_files
                 result_folders.append(result_folder)
 
+    logger.debug(f"[search_files_and_folders] Final result_folders: {[f['folder_name'] for f in result_folders]}")
     return result_folders
 
 
@@ -172,17 +201,3 @@ def search_gcode_files(
 
     logger.debug(f"Found {len(result_files)} matching G-code files")
     return result_files
-
-
-# Legacy functions for backward compatibility
-def search_tokens_all_match(query_tokens: List[str], target_tokens: List[str]) -> bool:
-    """Legacy function for backward compatibility."""
-    return all(token in target_tokens for token in query_tokens)
-
-
-def search_tokens(query_tokens: List[str], target_tokens: List[str]) -> bool:
-    """Legacy function for backward compatibility."""
-    for query in query_tokens:
-        if any(query == target or target.startswith(query) for target in target_tokens):
-            return True
-    return False

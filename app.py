@@ -605,7 +605,8 @@ def create_app(config_file=None, config_overrides=None):
         search_limit = app.config.get("SEARCH_RESULT_LIMIT", 25)
 
         stl_folders = get_stl_files(app.config["STL_FILES_PATH"])
-        filtered_folders = search.search_files_and_folders(query_text, stl_folders, search_limit)
+        # Use threshold=10 for good fuzzy matching
+        filtered_folders = search.search_files_and_folders(query_text, stl_folders, search_limit, threshold=10)
 
         total_matches = sum(len(folder["files"]) for folder in filtered_folders)
         metadata = {"matches": total_matches}
