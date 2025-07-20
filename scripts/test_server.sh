@@ -5,6 +5,7 @@ set -euo pipefail
 PORT=8969
 CONFIG=config_dev.yaml
 RUN_SCRIPT=run.sh
+PYTHON_BIN=".venv/bin/python"
 
 # Pre-check: is anything running on port 8969?
 if lsof -i :$PORT -sTCP:LISTEN -t >/dev/null; then
@@ -14,9 +15,9 @@ if lsof -i :$PORT -sTCP:LISTEN -t >/dev/null; then
 fi
 
 echo "============================== Testing server startup ====================="
-echo "Testing server startup with uv and $CONFIG..."
+echo "Testing server startup with $PYTHON_BIN and $CONFIG..."
 
-bash $RUN_SCRIPT $CONFIG &
+bash $RUN_SCRIPT $PYTHON_BIN $CONFIG &
 SERVER_PID=$!
 
 sleep 5

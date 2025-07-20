@@ -35,9 +35,10 @@ if ! command -v uv &>/dev/null; then
     pip install uv
 fi
 
+# Create virtual environment using make target
 if [ ! -d "$VENV_DIR" ]; then
-    echo "Creating Python 3.10 virtual environment using uv..."
-    uv venv
+    echo "Creating Python 3.10 virtual environment using make..."
+    make create-venv
 else
     echo "Virtual environment already exists."
 fi

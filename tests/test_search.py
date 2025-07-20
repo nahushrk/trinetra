@@ -417,17 +417,17 @@ def test_search_with_ranking_end_to_end(query, expected_positives, expected_nega
 
     # Check that all expected positives are found
     for positive in expected_positives:
-        assert positive in result_names, (
-            f"Expected positive '{positive}' not found for query '{query}'"
-        )
+        assert (
+            positive in result_names
+        ), f"Expected positive '{positive}' not found for query '{query}'"
 
     # Check that expected negatives are not in top results (with some tolerance for fuzzy matching)
     # We'll check that negatives don't appear in the top TEST_RESULT_LIMIT results
     top_result_names = result_names[:TEST_RESULT_LIMIT]
     for negative in expected_negatives:
-        assert negative not in top_result_names, (
-            f"Negative match '{negative}' found in top {TEST_RESULT_LIMIT} for query '{query}'"
-        )
+        assert (
+            negative not in top_result_names
+        ), f"Negative match '{negative}' found in top {TEST_RESULT_LIMIT} for query '{query}'"
 
 
 @pytest.mark.parametrize(
