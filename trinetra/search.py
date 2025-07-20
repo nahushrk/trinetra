@@ -10,7 +10,8 @@ from trinetra.logger import get_logger
 
 # Get logger for this module
 logger = get_logger(__name__)
-logger.setLevel('DEBUG')
+
+RANKING_THRESHOLD = 50
 
 
 def jaccard_similarity(a: str, b: str) -> float:
@@ -45,7 +46,7 @@ def compute_match_score(query: str, target: str) -> int:
 
 
 def search_with_ranking(
-    query: str, choices: List[str], limit: int = 25, threshold: int = 75
+    query: str, choices: List[str], limit: int = 25, threshold: int = RANKING_THRESHOLD
 ) -> List[Tuple[str, int]]:
     """
     Search with hybrid fuzzy matching using Jaccard + Edit Distance
@@ -79,7 +80,10 @@ def search_with_ranking(
 
 
 def search_files_and_folders(
-    query: str, stl_folders: List[Dict[str, Any]], limit: int = 25, threshold: int = 75
+    query: str,
+    stl_folders: List[Dict[str, Any]],
+    limit: int = 25,
+    threshold: int = RANKING_THRESHOLD,
 ) -> List[Dict[str, Any]]:
     """
     Search through STL files and folders, returning ranked results.
@@ -91,7 +95,9 @@ def search_files_and_folders(
     Returns:
         List of folder dictionaries with matching files, ranked by relevance
     """
-    logger.debug(f"[search_files_and_folders] Query='{query}', limit={limit}, threshold={threshold}")
+    logger.debug(
+        f"[search_files_and_folders] Query='{query}', limit={limit}, threshold={threshold}"
+    )
     if not query.strip():
         logger.debug("Empty query, returning all folders")
         return stl_folders
@@ -160,7 +166,9 @@ def search_files_and_folders(
                 result_folder["files"] = matching_files
                 result_folders.append(result_folder)
 
-    logger.debug(f"[search_files_and_folders] Final result_folders: {[f['folder_name'] for f in result_folders]}")
+    logger.debug(
+        f"[search_files_and_folders] Final result_folders: {[f['folder_name'] for f in result_folders]}"
+    )
     return result_folders
 
 
@@ -201,3 +209,14 @@ def search_gcode_files(
 
     logger.debug(f"Found {len(result_files)} matching G-code files")
     return result_files
+
+
+def tokenize(s: str) -> list:
+    """Tokenize a string into lowercase alphanumeric words."""
+    return re.findall(r"\w+", s.lower())
+
+
+def search_tokens_all_match(tokens1, tokens2) -> bool:
+    """Return True if all tokens in tokens1 are present in tokens2."""
+    set2 = set(tokens2)
+    return all(token in set2 for token in tokens1)
