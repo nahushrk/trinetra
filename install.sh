@@ -16,7 +16,7 @@ fi
 
 APP_DIR=~/trinetra
 DATA_DIR=~/trinetra-data/3dfiles
-VENV_DIR=$APP_DIR/venv
+VENV_DIR=$APP_DIR/.venv
 SYSTEMD_FILE=/etc/systemd/system/trinetra.service
 
 if [ "$(pwd)" != "$APP_DIR" ]; then
@@ -29,9 +29,15 @@ if ! python3.10 --version &>/dev/null; then
     exit 1
 fi
 
+# Install uv if not already installed
+if ! command -v uv &>/dev/null; then
+    echo "Installing uv..."
+    pip install uv
+fi
+
 if [ ! -d "$VENV_DIR" ]; then
-    echo "Creating Python 3.10 virtual environment..."
-    python3.10 -m venv "$VENV_DIR"
+    echo "Creating Python 3.10 virtual environment using uv..."
+    uv venv
 else
     echo "Virtual environment already exists."
 fi
@@ -39,9 +45,8 @@ fi
 source "$VENV_DIR/bin/activate"
 
 if [ -f "pyproject.toml" ]; then
-    echo "Installing required Python packages..."
-    pip install --upgrade pip
-    pip install .
+    echo "Installing required Python packages using uv..."
+    uv pip install .
 else
     echo "Error: pyproject.toml not found!"
     deactivate
@@ -69,7 +74,7 @@ Requires=network-online.target
 Type=simple
 User=pi
 WorkingDirectory=/home/pi/trinetra
-ExecStart=/home/pi/trinetra/run.sh /home/pi/trinetra/venv/bin/python /home/pi/trinetra/config.yaml
+ExecStart=/home/pi/trinetra/run.sh $VENV_DIR/bin/python /home/pi/trinetra/config.yaml
 Restart=always
 RestartSec=10
 

@@ -20,7 +20,7 @@ if [[ "$1" == "--help" || "$1" == "-h" ]]; then
 fi
 
 APP_DIR=~/trinetra
-VENV_DIR="$APP_DIR/venv"
+VENV_DIR="$APP_DIR/.venv"
 PYPROJECT_FILE="$APP_DIR/pyproject.toml"
 REPO_URL=$(git config --get remote.origin.url)
 
@@ -42,6 +42,12 @@ fi
 if [ -n "$(git status --porcelain)" ]; then
     echo "Error: You have uncommitted changes. Please commit or stash them before updating."
     exit 1
+fi
+
+# Install uv if not already installed
+if ! command -v uv &>/dev/null; then
+    echo "Installing uv..."
+    pip install uv
 fi
 
 # Fetch latest tags and branches
@@ -93,9 +99,8 @@ elif [ "$TARGET_TYPE" == "branch" ]; then
 fi
 
 source "$VENV_DIR/bin/activate"
-echo "Installing Python requirements..."
-pip install --upgrade pip
-pip install .
+echo "Installing Python requirements using uv..."
+uv pip install .
 deactivate
 
 echo "Update complete. Now on $TARGET_TYPE $TARGET_REF."
