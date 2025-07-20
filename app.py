@@ -19,6 +19,7 @@ from werkzeug.utils import secure_filename
 
 from trinetra import gcode_handler, search, moonraker
 from trinetra.moonraker import MoonrakerAPI, add_to_queue
+from trinetra.database import DatabaseManager
 
 # Import logging configuration from trinetra package
 from trinetra.logger import get_logger, configure_logging
@@ -85,30 +86,15 @@ def create_app(config_file=None, config_overrides=None):
     app.config["STL_FILES_PATH"] = stl_files_path
     app.config["GCODE_FILES_PATH"] = gcode_files_path
 
+    # Initialize database manager
+    db_path = config.get("database_path", "trinetra.db")
+    app.config["DATABASE_PATH"] = db_path
+    db_manager = DatabaseManager(db_path)
+    app.config["DB_MANAGER"] = db_manager
+
     def get_stl_files(base_path):
-        stl_files = []
-        # Only consider top-level folders
-        for entry in os.scandir(base_path):
-            if entry.is_dir():
-                folder_name = entry.name
-                folder_path = entry.path
-                folder_files = []
-                # Recursively collect all .stl files in this folder
-                for root, dirs, files in os.walk(folder_path):
-                    for file in files:
-                        if file.lower().endswith(".stl"):
-                            abs_path = os.path.join(root, file)
-                            rel_path = os.path.relpath(abs_path, base_path)
-                            folder_files.append({"file_name": file, "rel_path": rel_path})
-                if folder_files:
-                    stl_files.append(
-                        {
-                            "folder_name": folder_name,
-                            "top_level_folder": folder_name,
-                            "files": folder_files,
-                        }
-                    )
-        return stl_files
+        """Get STL files from database instead of filesystem."""
+        return db_manager.get_stl_files()
 
     def fix_duplicated_folders(base_path):
         """Fix existing folders that have duplicated structure like folder/folder/"""
@@ -154,164 +140,19 @@ def create_app(config_file=None, config_overrides=None):
         return metadata
 
     def get_folder_contents(folder_name):
-        try:
-            folder_path = safe_join(app.config["STL_FILES_PATH"], folder_name)
-        except Exception as e:
-            app.logger.error(f"Invalid folder path: {e}")
-            return [], [], [], []
-
-        stl_files = []
-        image_files = []
-        pdf_files = []
-        gcode_files = []
-
-        if not os.path.isdir(folder_path):
-            app.logger.error(f"Folder {folder_path} does not exist")
-            return stl_files, image_files, pdf_files, gcode_files
-        app.logger.debug(f"Scanning folder {folder_path}")
-
-        for root, dirs, files in os.walk(folder_path):
-            for file in files:
-                abs_path = os.path.join(root, file)
-                rel_path = os.path.relpath(abs_path, app.config["STL_FILES_PATH"])
-                ext = os.path.splitext(file)[1].lower()
-                if os.path.isfile(abs_path):
-                    app.logger.debug(f"Found file {file}")
-                    if ext == ".stl":
-                        stl_files.append(
-                            {"file_name": file, "path": "STL_BASE_PATH", "rel_path": rel_path}
-                        )
-                    elif ext in [".png", ".jpg", ".jpeg", ".gif", ".bmp"]:
-                        image_files.append(
-                            {
-                                "file_name": file,
-                                "path": "STL_BASE_PATH",
-                                "rel_path": rel_path,
-                                "ext": ext,
-                            }
-                        )
-                    elif ext == ".pdf":
-                        pdf_files.append(
-                            {
-                                "file_name": file,
-                                "path": "STL_BASE_PATH",
-                                "rel_path": rel_path,
-                                "ext": ext,
-                            }
-                        )
-                    elif ext == ".gcode":
-                        metadata = extract_gcode_metadata_from_file(abs_path)
-                        gcode_files.append(
-                            {
-                                "file_name": file,
-                                "path": "STL_BASE_PATH",
-                                "rel_path": rel_path,
-                                "metadata": metadata,
-                            }
-                        )
-
-        gcode_files_path = app.config["GCODE_FILES_PATH"]
-        if gcode_files_path and os.path.isdir(gcode_files_path):
-            for stl_file in stl_files:
-                stl_file_name = os.path.splitext(stl_file["file_name"])[0].lower()
-                for root, dirs, files in os.walk(gcode_files_path):
-                    for gcode_file in files:
-                        if gcode_file.endswith(".gcode") and search.search_tokens_all_match(
-                            search.tokenize(stl_file_name), search.tokenize(gcode_file.lower())
-                        ):
-                            abs_gcode_path = os.path.join(root, gcode_file)
-                            rel_gcode_path = os.path.relpath(abs_gcode_path, gcode_files_path)
-                            metadata = extract_gcode_metadata_from_file(abs_gcode_path)
-                            gcode_files.append(
-                                {
-                                    "file_name": gcode_file,
-                                    "path": "GCODE_BASE_PATH",
-                                    "rel_path": rel_gcode_path,
-                                    "metadata": metadata,
-                                }
-                            )
-                            app.logger.debug(
-                                f"Found matching G-code file for {stl_file_name}: {gcode_file}"
-                            )
-
-        app.logger.debug(f"STL files: {stl_files}")
-        app.logger.debug(f"Image files: {image_files}")
-        app.logger.debug(f"PDF files: {pdf_files}")
-        app.logger.debug(f"G-code files before deduplication: {gcode_files}")
-        # Deduplicate gcode_files by (file_name, rel_path)
-        seen = set()
-        deduped_gcode_files = []
-        for gfile in gcode_files:
-            key = (gfile["file_name"], gfile["rel_path"])
-            if key not in seen:
-                deduped_gcode_files.append(gfile)
-                seen.add(key)
-        app.logger.debug(f"G-code files after deduplication: {deduped_gcode_files}")
-        return stl_files, image_files, pdf_files, deduped_gcode_files
+        """Get folder contents from database instead of filesystem."""
+        return db_manager.get_folder_contents(folder_name)
 
     # --- All routes below, using app.config for paths ---
     @app.route("/")
     def index():
-        # Fix any existing duplicated folder structures
-        fixed_count = fix_duplicated_folders(app.config["STL_FILES_PATH"])
-        if fixed_count > 0:
-            app.logger.info(f"Fixed {fixed_count} duplicated folder structures")
-
         stl_files = get_stl_files(app.config["STL_FILES_PATH"])
         return render_template("index.html", stl_files=stl_files)
 
     @app.route("/gcode_files")
     def gcode_files_view():
         """Display all G-code files across all folders with links to their parent folders."""
-        all_gcode_files = []
-
-        # Collect G-code files from the GCODE_FILES_PATH
-        if app.config["GCODE_FILES_PATH"] and os.path.isdir(app.config["GCODE_FILES_PATH"]):
-            for root, dirs, files in os.walk(app.config["GCODE_FILES_PATH"]):
-                for file in files:
-                    if file.lower().endswith(".gcode"):
-                        abs_path = os.path.join(root, file)
-                        rel_path = os.path.relpath(abs_path, app.config["GCODE_FILES_PATH"])
-
-                        # Try to find the associated STL file to determine the folder
-                        stl_file_name = os.path.splitext(file)[0].lower()
-                        folder_name = "Unknown"
-
-                        # Search for matching STL file to determine folder
-                        for stl_root, stl_dirs, stl_files in os.walk(app.config["STL_FILES_PATH"]):
-                            for stl_file in stl_files:
-                                if stl_file.lower().endswith(".stl"):
-                                    stl_name = os.path.splitext(stl_file)[0].lower()
-                                    if search.search_tokens_all_match(
-                                        search.tokenize(stl_name), search.tokenize(stl_file_name)
-                                    ):
-                                        stl_rel_path = os.path.relpath(
-                                            os.path.join(stl_root, stl_file),
-                                            app.config["STL_FILES_PATH"],
-                                        )
-                                        folder_name = (
-                                            os.path.dirname(stl_rel_path)
-                                            if os.path.dirname(stl_rel_path)
-                                            else os.path.basename(stl_root)
-                                        )
-                                        break
-                            if folder_name != "Unknown":
-                                break
-
-                        metadata = extract_gcode_metadata_from_file(abs_path)
-                        all_gcode_files.append(
-                            {
-                                "file_name": file,
-                                "rel_path": rel_path,
-                                "folder_name": folder_name,
-                                "metadata": metadata,
-                                "base_path": "GCODE_BASE_PATH",
-                            }
-                        )
-
-        # Sort by folder name, then by file name
-        all_gcode_files.sort(key=lambda x: (x["folder_name"], x["file_name"]))
-
+        all_gcode_files = db_manager.get_all_gcode_files()
         return render_template("gcode_files.html", gcode_files=all_gcode_files)
 
     @app.route("/folder/<path:folder_name>")
@@ -509,18 +350,11 @@ def create_app(config_file=None, config_overrides=None):
             return jsonify({"success": False, "error": "Folder name is required."}), 400
 
         try:
-            folder_path = safe_join(app.config["STL_FILES_PATH"], folder_name)
-        except Exception as e:
-            return jsonify({"success": False, "error": str(e)}), 400
-
-        if not os.path.isdir(folder_path):
-            return jsonify({"success": False, "error": "Folder does not exist."}), 404
-
-        try:
-            import shutil
-
-            shutil.rmtree(folder_path)
-            return jsonify({"success": True}), 200
+            success = db_manager.delete_folder(folder_name)
+            if success:
+                return jsonify({"success": True}), 200
+            else:
+                return jsonify({"success": False, "error": "Folder does not exist."}), 404
         except Exception as e:
             app.logger.error(f"Error deleting folder: {e}")
             return jsonify({"success": False, "error": str(e)}), 500
@@ -615,8 +449,7 @@ def create_app(config_file=None, config_overrides=None):
         query_text = request.args.get("q", "").strip()
         search_limit = app.config.get("SEARCH_RESULT_LIMIT", 25)
 
-        stl_folders = get_stl_files(app.config["STL_FILES_PATH"])
-        filtered_folders = search.search_files_and_folders(query_text, stl_folders, search_limit)
+        filtered_folders = db_manager.search_stl_files(query_text, search_limit)
 
         total_matches = sum(len(folder["files"]) for folder in filtered_folders)
         metadata = {"matches": total_matches}
@@ -628,45 +461,7 @@ def create_app(config_file=None, config_overrides=None):
         query_text = request.args.get("q", "").strip()
         search_limit = app.config.get("SEARCH_RESULT_LIMIT", 25)
 
-        # Build gcode_folders: [{folder_name, files: [{file_name, rel_path, ...}]}]
-        gcode_folders = []
-        folder_map = {}
-        if app.config["GCODE_FILES_PATH"] and os.path.isdir(app.config["GCODE_FILES_PATH"]):
-            for root, dirs, files in os.walk(app.config["GCODE_FILES_PATH"]):
-                folder_name = os.path.relpath(root, app.config["GCODE_FILES_PATH"])
-                if folder_name == ".":
-                    folder_name = "GCODE_ROOT"
-                folder_files = []
-                for file in files:
-                    if file.lower().endswith(".gcode"):
-                        abs_path = os.path.join(root, file)
-                        rel_path = os.path.relpath(abs_path, app.config["GCODE_FILES_PATH"])
-                        metadata = extract_gcode_metadata_from_file(abs_path)
-                        folder_files.append(
-                            {
-                                "file_name": file,
-                                "rel_path": rel_path,
-                                "metadata": metadata,
-                                "base_path": "GCODE_BASE_PATH",
-                            }
-                        )
-                if folder_files:
-                    folder_map[folder_name] = folder_files
-        # Convert to list of dicts
-        for folder_name, files in folder_map.items():
-            gcode_folders.append({"folder_name": folder_name, "files": files})
-
-        filtered_gcode_folders = search.search_files_and_folders(
-            query_text, gcode_folders, search_limit
-        )
-        # Flatten files for frontend (as before)
-        filtered_gcode_files = []
-        for folder in filtered_gcode_folders:
-            for file in folder["files"]:
-                # Add folder_name to each file for frontend rendering
-                file_out = dict(file)
-                file_out["folder_name"] = folder["folder_name"]
-                filtered_gcode_files.append(file_out)
+        filtered_gcode_files = db_manager.search_gcode_files(query_text, search_limit)
         metadata = {"matches": len(filtered_gcode_files)}
         return jsonify({"gcode_files": filtered_gcode_files, "metadata": metadata})
 
@@ -674,31 +469,8 @@ def create_app(config_file=None, config_overrides=None):
     def stats_view():
         """Display comprehensive statistics about files, folders, and printing activity."""
         try:
-            # Get file and folder statistics
-            stl_folders = get_stl_files(app.config["STL_FILES_PATH"])
-            total_folders = len(stl_folders)
-            total_stl_files = sum(len(folder["files"]) for folder in stl_folders)
-
-            # Count G-code files
-            total_gcode_files = 0
-            folders_with_gcode = set()
-
-            if app.config["GCODE_FILES_PATH"] and os.path.isdir(app.config["GCODE_FILES_PATH"]):
-                for root, dirs, files in os.walk(app.config["GCODE_FILES_PATH"]):
-                    for file in files:
-                        if file.lower().endswith(".gcode"):
-                            total_gcode_files += 1
-
-                            # Find associated STL folder
-                            stl_file_name = os.path.splitext(file)[0].lower()
-                            for folder in stl_folders:
-                                for stl_file in folder["files"]:
-                                    stl_name = os.path.splitext(stl_file["file_name"])[0].lower()
-                                    if search.search_tokens_all_match(
-                                        search.tokenize(stl_name), search.tokenize(stl_file_name)
-                                    ):
-                                        folders_with_gcode.add(folder["folder_name"])
-                                        break
+            # Get file and folder statistics from database
+            db_stats = db_manager.get_stats()
 
             # Get Moonraker printing statistics
             printing_stats = get_moonraker_printing_stats()
@@ -734,10 +506,7 @@ def create_app(config_file=None, config_overrides=None):
             # --- End Activity Calendar Generation ---
 
             stats = {
-                "total_folders": total_folders,
-                "total_stl_files": total_stl_files,
-                "total_gcode_files": total_gcode_files,
-                "folders_with_gcode": len(folders_with_gcode),
+                **db_stats,
                 "printing_stats": printing_stats,
                 "activity_calendar": activity_calendar,
             }
@@ -831,6 +600,22 @@ def create_app(config_file=None, config_overrides=None):
                 "total_filament_meters": 0,
                 "print_days": 0,
             }
+
+    @app.route("/reload_index", methods=["POST"])
+    def reload_index():
+        """Reload the entire index from filesystem."""
+        try:
+            stl_base_path = app.config["STL_FILES_PATH"]
+            gcode_base_path = app.config["GCODE_FILES_PATH"]
+
+            counts = db_manager.reload_index(stl_base_path, gcode_base_path)
+
+            return jsonify(
+                {"success": True, "message": "Index reloaded successfully", "counts": counts}
+            ), 200
+        except Exception as e:
+            app.logger.error(f"Error reloading index: {e}")
+            return jsonify({"success": False, "error": str(e)}), 500
 
     @app.route("/api/add_to_queue", methods=["POST"])
     def api_add_to_queue():

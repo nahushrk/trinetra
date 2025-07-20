@@ -7,6 +7,8 @@ data*/
 
 .DS_Store
 trinetra-data
+trinetra.db
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

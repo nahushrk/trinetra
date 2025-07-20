@@ -177,14 +177,12 @@ class TestAppRoutes:
 
     def test_delete_folder_route_success(self):
         """Test successful folder deletion"""
-        # Create a test folder
-        test_folder = os.path.join(self.stl_path, "test_folder")
-        os.makedirs(test_folder, exist_ok=True)
-
-        response = self.client.post("/delete_folder", json={"folder_name": "test_folder"})
-        assert response.status_code == 200
-        data = json.loads(response.data)
-        assert data["success"] is True
+        # Mock the database manager to return success
+        with patch.object(self.app.config["DB_MANAGER"], "delete_folder", return_value=True):
+            response = self.client.post("/delete_folder", json={"folder_name": "test_folder"})
+            assert response.status_code == 200
+            data = json.loads(response.data)
+            assert data["success"] is True
 
     def test_delete_folder_route_nonexistent(self):
         """Test delete folder route with nonexistent folder"""
@@ -402,25 +400,23 @@ class TestAppRoutes:
 
     def test_get_stl_files_function(self):
         """Test get_stl_files function"""
-        test_base = os.path.join(self.temp_dir, "test_stl")
-        os.makedirs(test_base, exist_ok=True)
+        # Mock the database manager to return expected results
+        mock_result = [
+            {
+                "folder_name": "project1",
+                "top_level_folder": "project1",
+                "files": [
+                    {"file_name": "model1.stl", "rel_path": "project1/model1.stl"},
+                    {"file_name": "model2.stl", "rel_path": "project1/model2.stl"},
+                ],
+            }
+        ]
 
-        test_folder = os.path.join(test_base, "project1")
-        os.makedirs(test_folder, exist_ok=True)
-
-        # Create STL files
-        stl_file1 = os.path.join(test_folder, "model1.stl")
-        stl_file2 = os.path.join(test_folder, "model2.stl")
-
-        with open(stl_file1, "w") as f:
-            f.write("dummy stl content")
-        with open(stl_file2, "w") as f:
-            f.write("dummy stl content")
-
-        result = self.app.get_stl_files(test_base)
-        assert len(result) == 1
-        assert result[0]["folder_name"] == "project1"
-        assert len(result[0]["files"]) == 2
+        with patch.object(self.app.config["DB_MANAGER"], "get_stl_files", return_value=mock_result):
+            result = self.app.get_stl_files("dummy_path")
+            assert len(result) == 1
+            assert result[0]["folder_name"] == "project1"
+            assert len(result[0]["files"]) == 2
 
     def test_extract_gcode_metadata_from_file_function(self):
         """Test extract_gcode_metadata_from_file function"""
@@ -434,27 +430,52 @@ class TestAppRoutes:
 
     def test_get_folder_contents_function(self):
         """Test get_folder_contents function"""
-        test_folder = os.path.join(self.stl_path, "test_project")
-        os.makedirs(test_folder, exist_ok=True)
+        # Mock the database manager to return expected results
+        mock_stl_files = [
+            {
+                "file_name": "model.stl",
+                "path": "STL_BASE_PATH",
+                "rel_path": "test_project/model.stl",
+            }
+        ]
+        mock_image_files = [
+            {
+                "file_name": "image.png",
+                "path": "STL_BASE_PATH",
+                "rel_path": "test_project/image.png",
+                "ext": ".png",
+            }
+        ]
+        mock_pdf_files = [
+            {
+                "file_name": "document.pdf",
+                "path": "STL_BASE_PATH",
+                "rel_path": "test_project/document.pdf",
+                "ext": ".pdf",
+            }
+        ]
+        mock_gcode_files = [
+            {
+                "file_name": "model.gcode",
+                "path": "STL_BASE_PATH",
+                "rel_path": "test_project/model.gcode",
+                "metadata": {},
+            }
+        ]
 
-        # Create different file types
-        stl_file = os.path.join(test_folder, "model.stl")
-        image_file = os.path.join(test_folder, "image.png")
-        pdf_file = os.path.join(test_folder, "document.pdf")
-        gcode_file = os.path.join(test_folder, "model.gcode")
+        with patch.object(
+            self.app.config["DB_MANAGER"],
+            "get_folder_contents",
+            return_value=(mock_stl_files, mock_image_files, mock_pdf_files, mock_gcode_files),
+        ):
+            stl_files, image_files, pdf_files, gcode_files = self.app.get_folder_contents(
+                "test_project"
+            )
 
-        for file_path in [stl_file, image_file, pdf_file, gcode_file]:
-            with open(file_path, "w") as f:
-                f.write("dummy content")
-
-        stl_files, image_files, pdf_files, gcode_files = self.app.get_folder_contents(
-            "test_project"
-        )
-
-        assert len(stl_files) == 1
-        assert len(image_files) == 1
-        assert len(pdf_files) == 1
-        assert len(gcode_files) == 1
+            assert len(stl_files) == 1
+            assert len(image_files) == 1
+            assert len(pdf_files) == 1
+            assert len(gcode_files) == 1
 
     def test_get_moonraker_printing_stats_function(self):
         """Test get_moonraker_printing_stats function"""
