@@ -5,8 +5,15 @@ Database models for Trinetra 3D printing catalog
 import json
 from datetime import datetime
 from sqlalchemy import (
-    Column, Integer, String, Text, DateTime, Boolean, 
-    ForeignKey, Index, UniqueConstraint
+    Column,
+    Integer,
+    String,
+    Text,
+    DateTime,
+    Boolean,
+    ForeignKey,
+    Index,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 from sqlalchemy import create_engine
