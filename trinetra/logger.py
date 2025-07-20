@@ -7,20 +7,30 @@ import logging
 import os
 import sys
 from pathlib import Path
+from typing import Optional, Dict, Any
 
 # Global flag to track if basic config has been set up
 _logging_configured = False
+_config = None
 
 
-def _configure_logging():
-    """Configure basic logging settings once"""
-    global _logging_configured
+def configure_logging(config: Optional[Dict[str, Any]] = None):
+    """Configure basic logging settings once using config file"""
+    global _logging_configured, _config
+
     if _logging_configured:
         return
 
-    # Get configuration from environment variables
-    log_level = os.getenv("TRINETRA_LOG_LEVEL", "INFO")
-    log_file = os.getenv("TRINETRA_LOG_FILE", "trinetra.log")
+    # Store config for later use
+    _config = config or {}
+
+    # Get configuration from config file
+    log_level = _config.get("log_level") or os.getenv("TRINETRA_LOG_LEVEL", "INFO")
+    log_file = _config.get("log_file") or os.getenv("TRINETRA_LOG_FILE", "trinetra.log")
+
+    # Require log_level to be specified in config
+    if not log_level:
+        raise ValueError("log_level must be specified in config file")
 
     # Convert string to logging level
     numeric_level = getattr(logging, log_level.upper(), logging.INFO)
@@ -64,7 +74,20 @@ def get_logger(name):
     Returns:
         Configured logger instance with consistent formatting
     """
-    # Ensure logging is configured
-    _configure_logging()
+    # If logging is not configured yet, return a basic logger
+    if not _logging_configured:
+        # Create a basic logger that will be configured later
+        logger = logging.getLogger(name)
+        # Set a reasonable default level
+        logger.setLevel(logging.INFO)
+        # Add a handler if none exists
+        if not logger.handlers:
+            handler = logging.StreamHandler(sys.stdout)
+            formatter = logging.Formatter(
+                "%(asctime)s - %(name)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
+            )
+            handler.setFormatter(formatter)
+            logger.addHandler(handler)
+        return logger
 
     return logging.getLogger(name)

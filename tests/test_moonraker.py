@@ -11,8 +11,11 @@ from typing import Dict, Any
 import os
 
 # Setup logging for tests
-from trinetra.logger import get_logger
+from trinetra.logger import get_logger, configure_logging
 
+# Configure logging for tests
+test_config = {"log_level": "INFO", "log_file": "test.log"}
+configure_logging(test_config)
 logger = get_logger(__name__)
 
 from trinetra.moonraker import (

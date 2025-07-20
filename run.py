@@ -31,13 +31,17 @@ if __name__ == "__main__":
     else:
         raise FileNotFoundError("config.yaml not found in the local directory.")
 
-    # Set up Gunicorn options (these can be adjusted based on your config.yaml data)
+    # Validate required config values
+    if "log_level" not in config_data:
+        raise ValueError("log_level must be specified in config.yaml")
+
+    # Set up Gunicorn options using config file values
     options = {
         "bind": f"0.0.0.0:{config_data.get('port', 8969)}",
         "workers": config_data.get("workers", 1),
         "threads": config_data.get("threads", 2),
-        "loglevel": config_data.get("log_level", "debug"),
-        "logfile": config_data.get("log_file", "gunicorn.log"),
+        "loglevel": config_data["log_level"],
+        "logfile": config_data.get("log_file", "trinetra.log"),
     }
 
     # Start Gunicorn with the Flask app
