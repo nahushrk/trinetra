@@ -22,7 +22,7 @@ dependencies = [
     "gunicorn==23.0.0",
     "Flask-Compress==1.15",
     "requests==2.32.4",
-    "python-Levenshtein==0.25.0",
+    "python-levenshtein>=0.26.0",
     "SQLAlchemy==2.0.28",
 ]
 
