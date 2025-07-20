@@ -605,8 +605,7 @@ def create_app(config_file=None, config_overrides=None):
         search_limit = app.config.get("SEARCH_RESULT_LIMIT", 25)
 
         stl_folders = get_stl_files(app.config["STL_FILES_PATH"])
-        # Use threshold=10 for good fuzzy matching
-        filtered_folders = search.search_files_and_folders(query_text, stl_folders, search_limit, threshold=10)
+        filtered_folders = search.search_files_and_folders(query_text, stl_folders, search_limit)
 
         total_matches = sum(len(folder["files"]) for folder in filtered_folders)
         metadata = {"matches": total_matches}
@@ -618,54 +617,46 @@ def create_app(config_file=None, config_overrides=None):
         query_text = request.args.get("q", "").strip()
         search_limit = app.config.get("SEARCH_RESULT_LIMIT", 25)
 
-        # Get all G-code files
-        all_gcode_files = []
+        # Build gcode_folders: [{folder_name, files: [{file_name, rel_path, ...}]}]
+        gcode_folders = []
+        folder_map = {}
         if app.config["GCODE_FILES_PATH"] and os.path.isdir(app.config["GCODE_FILES_PATH"]):
             for root, dirs, files in os.walk(app.config["GCODE_FILES_PATH"]):
+                folder_name = os.path.relpath(root, app.config["GCODE_FILES_PATH"])
+                if folder_name == ".":
+                    folder_name = "GCODE_ROOT"
+                folder_files = []
                 for file in files:
                     if file.lower().endswith(".gcode"):
                         abs_path = os.path.join(root, file)
                         rel_path = os.path.relpath(abs_path, app.config["GCODE_FILES_PATH"])
-
-                        # Try to find the associated STL file to determine the folder
-                        stl_file_name = os.path.splitext(file)[0].lower()
-                        folder_name = "Unknown"
-
-                        # Search for matching STL file to determine folder
-                        for stl_root, stl_dirs, stl_files in os.walk(app.config["STL_FILES_PATH"]):
-                            for stl_file in stl_files:
-                                if stl_file.lower().endswith(".stl"):
-                                    stl_name = os.path.splitext(stl_file)[0].lower()
-                                    if search.search_tokens_all_match(
-                                        search.tokenize(stl_name), search.tokenize(stl_file_name)
-                                    ):
-                                        stl_rel_path = os.path.relpath(
-                                            os.path.join(stl_root, stl_file),
-                                            app.config["STL_FILES_PATH"],
-                                        )
-                                        folder_name = (
-                                            os.path.dirname(stl_rel_path)
-                                            if os.path.dirname(stl_rel_path)
-                                            else os.path.basename(stl_root)
-                                        )
-                                        break
-                        if folder_name != "Unknown":
-                            break
-
                         metadata = extract_gcode_metadata_from_file(abs_path)
-                        all_gcode_files.append(
+                        folder_files.append(
                             {
                                 "file_name": file,
                                 "rel_path": rel_path,
-                                "folder_name": folder_name,
                                 "metadata": metadata,
                                 "base_path": "GCODE_BASE_PATH",
                             }
                         )
+                if folder_files:
+                    folder_map[folder_name] = folder_files
+        # Convert to list of dicts
+        for folder_name, files in folder_map.items():
+            gcode_folders.append({"folder_name": folder_name, "files": files})
 
-        filtered_gcode_files = search.search_gcode_files(query_text, all_gcode_files, search_limit)
+        filtered_gcode_folders = search.search_files_and_folders(
+            query_text, gcode_folders, search_limit
+        )
+        # Flatten files for frontend (as before)
+        filtered_gcode_files = []
+        for folder in filtered_gcode_folders:
+            for file in folder["files"]:
+                # Add folder_name to each file for frontend rendering
+                file_out = dict(file)
+                file_out["folder_name"] = folder["folder_name"]
+                filtered_gcode_files.append(file_out)
         metadata = {"matches": len(filtered_gcode_files)}
-
         return jsonify({"gcode_files": filtered_gcode_files, "metadata": metadata})
 
     @app.route("/stats")
