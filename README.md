@@ -20,10 +20,11 @@ downloading from websites like Thingiverse, Printables, or using custom models.
 
 - **Slicer Integration**: When using a slicer (like Cura) with Klipper, Trinetra can link the generated gcode back to the original STL file, keeping track of slicer settings.
 
-<img src="static/images/screenshot_1.png" alt="Homepage shows all stl files in all folders">
-<img src="static/images/screenshot_2.png" alt="Folder view shows all stl files in the folder">
-<img src="static/images/screenshot_3.png" alt="Folder view shows associated gcode files">
-<img src="static/images/screenshot_4.png" alt="Folder view shows associated image and PDF files">
+<img src="static/images/screenshot_1.png">
+<img src="static/images/screenshot_2.png">
+<img src="static/images/screenshot_3.png">
+<img src="static/images/screenshot_4.png">
+<img src="static/images/screenshot_5.png">
 
 ## Usage
 
