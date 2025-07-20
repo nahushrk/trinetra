@@ -3,17 +3,6 @@
 set -euo pipefail
 
 PORT=8969
-# Find the correct Python binary (prefer .venv, then python3, then python)
-if [ -x ".venv/bin/python" ]; then
-  PYTHON_BIN=".venv/bin/python"
-elif command -v python3 >/dev/null 2>&1; then
-  PYTHON_BIN="$(command -v python3)"
-elif command -v python >/dev/null 2>&1; then
-  PYTHON_BIN="$(command -v python)"
-else
-  echo "✗ Could not find a suitable Python interpreter (.venv/bin/python, python3, or python). Aborting test."
-  exit 1
-fi
 CONFIG=config_dev.yaml
 RUN_SCRIPT=run.sh
 
@@ -25,9 +14,9 @@ if lsof -i :$PORT -sTCP:LISTEN -t >/dev/null; then
 fi
 
 echo "============================== Testing server startup ====================="
-echo "Testing server startup with $PYTHON_BIN and $CONFIG..."
+echo "Testing server startup with uv and $CONFIG..."
 
-bash $RUN_SCRIPT $PYTHON_BIN $CONFIG &
+bash $RUN_SCRIPT $CONFIG &
 SERVER_PID=$!
 
 sleep 5

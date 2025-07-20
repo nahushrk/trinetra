@@ -1,0 +1,12 @@
+services:
+  trinetra:
+    build: .
+    container_name: trinetra
+    ports:
+      - "8969:8969"
+    environment:
+      - CONFIG_FILE=/app/config.yaml
+    volumes:
+      - ./config.docker.yaml:/app/config.yaml:ro
+      - ./trinetra-data/3dfiles:/data
+      - ./printer_data/gcodes:/gcodes 

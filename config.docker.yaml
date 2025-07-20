@@ -1,0 +1,6 @@
+base_path: "/data/"
+gcode_path: "/gcodes/"
+moonraker_url: "http://localhost:7125"
+log_level: "WARNING"
+mode: "PROD"
+search_result_limit: 100 
