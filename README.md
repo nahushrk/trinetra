@@ -51,8 +51,42 @@ downloading from websites like Thingiverse, Printables, or using custom models.
     ./install.sh
     ```
 
+3. Open your browser and go to [http://localhost:8969](http://localhost:8969) (or the host IP if running remotely).
 
-3. Open a browser and access Trinetra at `http://klipper.local:8969`.
+## Running with Docker
+
+You can also run Trinetra using Docker and Docker Compose. This is a convenient way to deploy on any platform (not just Raspberry Pi). The Docker setup uses [uv](https://github.com/astral-sh/uv) for fast, modern Python dependency management.
+
+### 1. Build and Start with Docker Compose
+
+```bash
+docker compose up --build
+```
+
+This will build the image and start the Trinetra service.
+
+### 2. Configuration and Data
+
+- **config.docker.yaml**: For Docker, the app uses `config.docker.yaml` (mounted as `/app/config.yaml` in the container). This file sets the correct paths for data and gcode inside the container:
+  - `base_path: "/data/"`
+  - `gcode_path: "/gcodes/"`
+- **Data Volumes**:
+  - `./trinetra-data/3dfiles` is mounted to `/data` in the container (for your STL and project files).
+  - `./printer_data/gcodes` is mounted to `/gcodes` in the container (for gcode files).
+
+**Note:** The default `config.yaml` is for native installs (e.g., on Raspberry Pi). For Docker, always use `config.docker.yaml`.
+
+You can change these paths in `docker-compose.yml` and `config.docker.yaml` as needed.
+
+### 3. Access the App
+
+Open your browser and go to [http://localhost:8969](http://localhost:8969) (or the host IP if running remotely).
+
+### 4. Stopping the App
+
+```bash
+docker compose down
+```
 
 ## Contributing
 
@@ -85,7 +119,7 @@ For development, we recommend using [uv](https://github.com/astral-sh/uv) for fa
 
 This will create a `.venv` using uv and install all development dependencies. All development commands (format, test, etc.) are run inside this environment.
 
-For production deployment, use a standard venv and pip as described in the Installation section above.
+**Note:** Both native installation (Raspberry Pi) and Docker deployment also use uv for dependency management, ensuring consistency across all environments.
 
 ## License
 
