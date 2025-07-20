@@ -20,9 +20,12 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Setup logging for tests
-from trinetra.logger import get_logger
+# Setup logging for tests - will be configured by create_app
+from trinetra.logger import get_logger, configure_logging
 
+# Configure logging for tests with a default config
+test_config = {"log_level": "INFO", "log_file": "test.log"}
+configure_logging(test_config)
 logger = get_logger(__name__)
 
 from app import create_app

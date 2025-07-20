@@ -12,10 +12,17 @@ CONFIG_FILE=$2
 
 echo "Loading from config: "$CONFIG_FILE
 
+# Extract log level from config file
+LOG_LEVEL=$(grep "log_level:" "$CONFIG_FILE" | cut -d':' -f2 | tr -d ' "')
+if [ -z "$LOG_LEVEL" ]; then
+    echo "Warning: log_level not found in config file, using 'info' as default"
+    LOG_LEVEL="info"
+fi
+
 # Run Gunicorn using the specified Python runtime and config file
 $PYTHON_RUNTIME -m gunicorn \
   -w 1 --threads 2 \
   -b 0.0.0.0:8969 app:app \
-  --log-level info \
+  --log-level "$LOG_LEVEL" \
   --env CONFIG_FILE=$CONFIG_FILE \
-  --log-file gunicorn.log
+  --log-file trinetra.log

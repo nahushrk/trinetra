@@ -1,16 +1,24 @@
+"""
+Tests for gcode_handler.py module
+Covers all functions and edge cases for G-code metadata extraction
+"""
+
 import unittest
-from unittest import TestCase
 from unittest.mock import patch, mock_open, MagicMock
-import json
+import pytest
 
-from trinetra import gcode_handler
-from trinetra.logger import get_logger
+# Setup logging for tests
+from trinetra.logger import get_logger, configure_logging
 
-# Get logger for tests
+# Configure logging for tests
+test_config = {"log_level": "INFO", "log_file": "test.log"}
+configure_logging(test_config)
 logger = get_logger(__name__)
 
+from trinetra import gcode_handler
 
-class Test(TestCase):
+
+class Test(unittest.TestCase):
     def test_extract_gcode_metadata(self):
         gcode_snippet = """
         ;FLAVOR:Marlin
@@ -245,6 +253,8 @@ support_enable = True
         ;TIME:14355
         G28 ;Home
         """
+
+        # Create a proper mock file object
         mock_file = MagicMock()
         mock_file.read.return_value = gcode_content
 
