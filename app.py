@@ -21,10 +21,10 @@ from trinetra import gcode_handler, search, moonraker
 from trinetra.moonraker import MoonrakerAPI, add_to_queue
 
 # Import logging configuration from trinetra package
-from trinetra.logger import get_logger
+from trinetra.logger import get_logger, configure_logging
 
-# Get logger for this module
-logger = get_logger(__name__)
+# Global logger - will be configured after config is loaded
+logger = None
 
 
 def safe_join(base, *paths):
@@ -46,7 +46,8 @@ def load_config(yaml_file=None):
             config = yaml.safe_load(file)
             return config or {}
     except Exception as e:
-        logger.error(f"Error loading configuration file: {e}")
+        # Use basic logging here since logger might not be configured yet
+        print(f"Error loading configuration file: {e}")
         return {}
 
 
@@ -55,6 +56,13 @@ def create_app(config_file=None, config_overrides=None):
     if config_overrides:
         config.update(config_overrides)
 
+    # Configure logging first using config
+    configure_logging(config)
+
+    # Now get logger after configuration
+    global logger
+    logger = get_logger(__name__)
+
     app = Flask(__name__)
     Compress(app)
 
@@ -62,9 +70,12 @@ def create_app(config_file=None, config_overrides=None):
     for k, v in config.items():
         app.config[k.upper()] = v
 
-    log_level = config.get("log_level", "INFO")
-    app.logger.setLevel(getattr(logging, log_level.upper(), logging.INFO))
-    app.logger.info(f"Config: {config}")
+    # Set Flask app logger level from config
+    log_level = config.get("log_level")
+    if log_level:
+        app.logger.setLevel(getattr(logging, log_level.upper(), logging.INFO))
+
+    logger.info(f"Config: {config}")
 
     # Set up paths
     stl_files_path = os.path.expanduser(config.get("base_path", "./stl_files"))
