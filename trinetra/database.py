@@ -236,9 +236,9 @@ class DatabaseManager:
                     matching_folder = None
 
                     for stl_name, stl_file in stl_name_map.items():
-                        if search.search_tokens_all_match(
-                            search.tokenize(stl_name), search.tokenize(gcode_name)
-                        ):
+                        # Use fuzzy match score instead of token match
+                        score = search.compute_match_score(stl_name, gcode_name)
+                        if score >= 80:
                             matching_stl = stl_file
                             matching_folder = stl_file.folder
                             break

@@ -3,16 +3,14 @@
 STYLE_DIRS := $(pwd)
 
 dev-setup:
-	@echo "============================== Setting up development environment ====================="
-	pip install .[dev]
+	uv venv .venv
+	uv pip install -e .[dev]
 
 format:
-	@echo "============================== Ruff formatting ====================="
-	ruff format $(STYLE_DIRS)
+	uv run ruff format $(STYLE_DIRS)
 
 test:
-	@echo "============================== Running tests ====================="
-	python -m pytest tests/ -v --tb=short
+	uv run python -m pytest tests/ -v --tb=short
 
 test-server:
 	@bash scripts/test_server.sh

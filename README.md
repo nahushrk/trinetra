@@ -57,6 +57,35 @@ downloading from websites like Thingiverse, Printables, or using custom models.
 
 Contributions are welcome! Please open an issue or submit a pull request if you would like to contribute or report any bugs.
 
+### Development Setup (using uv)
+
+For development, we recommend using [uv](https://github.com/astral-sh/uv) for fast, modern Python dependency management and virtual environments.
+
+1. Install uv (if not already):
+
+    ```bash
+    pip install uv
+    ```
+
+2. Set up the development environment:
+
+    ```bash
+    make dev-setup
+    ```
+
+3. Run formatting and tests:
+
+    ```bash
+    make format
+    make test
+    # or run all checks
+    make all
+    ```
+
+This will create a `.venv` using uv and install all development dependencies. All development commands (format, test, etc.) are run inside this environment.
+
+For production deployment, use a standard venv and pip as described in the Installation section above.
+
 ## License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.

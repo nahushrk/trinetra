@@ -209,14 +209,3 @@ def search_gcode_files(
 
     logger.debug(f"Found {len(result_files)} matching G-code files")
     return result_files
-
-
-def tokenize(s: str) -> list:
-    """Tokenize a string into lowercase alphanumeric words."""
-    return re.findall(r"\w+", s.lower())
-
-
-def search_tokens_all_match(tokens1, tokens2) -> bool:
-    """Return True if all tokens in tokens1 are present in tokens2."""
-    set2 = set(tokens2)
-    return all(token in set2 for token in tokens1)

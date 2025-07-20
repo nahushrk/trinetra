@@ -6,9 +6,9 @@ data*/
 .idea/
 
 .DS_Store
-trinetra-data
+trinetra-data*
 trinetra.db
-
+planning_docs
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
