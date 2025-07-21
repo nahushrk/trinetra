@@ -241,7 +241,7 @@ function loadGCodeFile(gcodeFile, basePath, scene, controls, camera) {
 function createGCodeItem(file, containerElement, scene, rowContainer) {
     const gcodeFile = file.file_name;
     const relPath = file.rel_path;
-    const basePath = file.path || file.base_path;
+    const basePath = file.base_path || file.path || file.basePath;
     const metadata = file.metadata;
 
     const sceneElement = document.createElement('div');
@@ -360,7 +360,7 @@ function createFileActionButtons(containerElement, fileData, buttonTypes = ['dow
         downloadButton.innerHTML = `<i class="fas fa-download"></i> Download ${isGcode ? 'G-code' : 'STL'}`;
         downloadButton.onclick = function () {
             if (isGcode) {
-                window.location.href = `/gcode/${encodeURIComponent(fileData.basePath || fileData.path)}/${encodeURIComponent(fileData.rel_path || fileData.relPath || '')}`;
+                window.location.href = `/gcode/${encodeURIComponent(fileData.base_path || fileData.basePath || fileData.path)}/${encodeURIComponent(fileData.rel_path || fileData.relPath || '')}`;
             } else {
                 window.location.href = `/stl/${encodeURIComponent(fileData.rel_path || fileData.relPath || '')}`;
             }
@@ -375,7 +375,7 @@ function createFileActionButtons(containerElement, fileData, buttonTypes = ['dow
         copyButton.innerHTML = '<i class="fas fa-copy"></i> Copy Path';
         copyButton.onclick = function () {
             const endpoint = fileData.file_name && fileData.file_name.toLowerCase().endsWith('.gcode') 
-                ? `/copy_gcode_path/${encodeURIComponent(fileData.basePath || fileData.path)}/${encodeURIComponent(fileData.relPath)}`
+                ? `/copy_gcode_path/${encodeURIComponent(fileData.base_path || fileData.basePath || fileData.path)}/${encodeURIComponent(fileData.relPath)}`
                 : `/copy_path/${encodeURIComponent(fileData.relPath)}`;
             
             fetch(endpoint)
