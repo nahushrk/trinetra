@@ -70,11 +70,15 @@ This will build the image and start the Trinetra service.
 - **config.docker.yaml**: For Docker, the app uses `config.docker.yaml` (mounted as `/app/config.yaml` in the container). This file sets the correct paths for data and gcode inside the container:
   - `base_path: "/data/"`
   - `gcode_path: "/gcodes/"`
+  - `database_path: "/app/trinetra.db"`
 - **Data Volumes**:
   - `./trinetra-data/3dfiles` is mounted to `/data` in the container (for your STL and project files).
   - `./printer_data/gcodes` is mounted to `/gcodes` in the container (for gcode files).
+  - `./trinetra.db` is mounted to `/app/trinetra.db` in the container (for database persistence).
 
 **Note:** The default `config.yaml` is for native installs (e.g., on Raspberry Pi). For Docker, always use `config.docker.yaml`.
+
+The database file (`trinetra.db`) is persisted outside the container, so your catalog data will be preserved when the container is restarted.
 
 You can change these paths in `docker-compose.yml` and `config.docker.yaml` as needed.
 

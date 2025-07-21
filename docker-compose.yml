@@ -9,4 +9,5 @@ services:
     volumes:
       - ./config.docker.yaml:/app/config.yaml:ro
       - ./trinetra-data/3dfiles:/data
-      - ./printer_data/gcodes:/gcodes 
+      - ./printer_data/gcodes:/gcodes
+      - ./trinetra.db:/app/trinetra.db 
