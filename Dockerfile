@@ -16,7 +16,7 @@ WORKDIR /app
 COPY . /app/
 
 # Create virtual environment using make target and install Python dependencies using uv
-RUN make create-venv && uv pip install .
+RUN make make-venv && uv pip install .
 
 # Final stage - copy only what's needed
 FROM python:3.10-slim
