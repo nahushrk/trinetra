@@ -24,21 +24,19 @@ if [ "$(pwd)" != "$APP_DIR" ]; then
     exit 1
 fi
 
-if ! python3.10 --version &>/dev/null; then
-    echo "Error: Python 3.10 is not installed."
+if ! python3 --version &>/dev/null; then
+    echo "Error: Python 3 is not installed."
     exit 1
 fi
 
-# Install uv if not already installed
-if ! command -v uv &>/dev/null; then
-    echo "Installing uv..."
-    pip install uv
-fi
-
-# Create virtual environment using make target
+# Create virtual environment using python3 -m venv
 if [ ! -d "$VENV_DIR" ]; then
-    echo "Creating Python 3.10 virtual environment using make..."
-    make create-venv
+    echo "Creating Python 3 virtual environment..."
+    python3 -m venv "$VENV_DIR"
+    if [ $? -ne 0 ]; then
+        echo "Error: Failed to create virtual environment."
+        exit 1
+    fi
 else
     echo "Virtual environment already exists."
 fi
@@ -46,8 +44,13 @@ fi
 source "$VENV_DIR/bin/activate"
 
 if [ -f "pyproject.toml" ]; then
-    echo "Installing required Python packages using uv..."
-    uv pip install .
+    echo "Installing required Python packages using pip..."
+    "$VENV_DIR/bin/pip" install .
+    if [ $? -ne 0 ]; then
+        echo "Error: Failed to install Python packages."
+        deactivate
+        exit 1
+    fi
 else
     echo "Error: pyproject.toml not found!"
     deactivate
