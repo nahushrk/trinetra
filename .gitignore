@@ -4,6 +4,7 @@ config_dev.yaml
 data/
 data*/
 .idea/
+.vscode/
 
 .DS_Store
 trinetra-data*
