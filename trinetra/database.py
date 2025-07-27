@@ -5,6 +5,7 @@ Handles all database operations and provides compatibility with existing app.py 
 
 import os
 import logging
+import re
 from typing import List, Dict, Any, Tuple, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_
@@ -16,12 +17,15 @@ from trinetra.models import (
     ImageFile,
     PDFFile,
     GCodeFile,
+    GCodeFileStats,
     create_database_engine,
     init_database,
     create_session_factory,
 )
 from trinetra import gcode_handler, search
 from trinetra.logger import get_logger
+from trinetra.moonraker import MoonrakerAPI
+from trinetra.moonraker_service import MoonrakerService
 
 logger = get_logger(__name__)
 
@@ -39,10 +43,21 @@ class DatabaseManager:
         """Get a new database session."""
         return self.SessionFactory()
 
-    def reload_index(self, stl_base_path: str, gcode_base_path: str) -> Dict[str, int]:
+    def reload_index(
+        self,
+        stl_base_path: str,
+        gcode_base_path: str,
+        moonraker_url: Optional[str] = None,
+        moonraker_client: Optional[MoonrakerAPI] = None,
+    ) -> Dict[str, int]:
         """
         Reload the entire index from filesystem.
         This replaces all existing data with fresh filesystem scan.
+
+        Args:
+            stl_base_path: Path to STL files base directory
+            gcode_base_path: Path to G-code files base directory
+            moonraker_url: Optional Moonraker URL to fetch statistics
 
         Returns:
             Dict with counts of processed items
@@ -68,15 +83,36 @@ class DatabaseManager:
 
             # Process STL base path
             if os.path.exists(stl_base_path):
-                counts.update(self._process_stl_base_path(session, stl_base_path))
+                stl_counts = self._process_stl_base_path(session, stl_base_path)
+                # Add STL base path counts to total counts
+                for key, value in stl_counts.items():
+                    if key in counts:
+                        counts[key] += value
+                    else:
+                        counts[key] = value
 
             # Process GCODE base path
             if os.path.exists(gcode_base_path):
-                counts.update(
-                    self._process_gcode_base_path(session, gcode_base_path, stl_base_path)
+                gcode_counts = self._process_gcode_base_path(
+                    session, gcode_base_path, stl_base_path
                 )
+                # Add GCODE base path counts to total counts
+                for key, value in gcode_counts.items():
+                    if key in counts:
+                        counts[key] += value
+                    else:
+                        counts[key] = value
 
             session.commit()
+
+            # Update Moonraker stats if URL is provided
+            if moonraker_url:
+                logger.debug(f"Updating Moonraker stats from URL: {moonraker_url}")
+                stats_result = self.update_moonraker_stats(moonraker_url, moonraker_client)
+                logger.debug(f"Moonraker stats update result: {stats_result}")
+                counts["moonraker_stats_updated"] = stats_result["updated"]
+                counts["moonraker_stats_failed"] = stats_result["failed"]
+
             logger.info(f"Index reload completed: {counts}")
             return counts
 
@@ -201,7 +237,16 @@ class DatabaseManager:
                                 gcode_file.set_metadata(metadata)
                                 session.add(gcode_file)
                                 counts["gcode_files"] = counts.get("gcode_files", 0) + 1
+                                logger.debug(
+                                    f"Processed G-code file in STL base path: {file} (rel_path: {rel_path})"
+                                )
 
+        logger.debug(
+            f"Total G-code files processed in _process_stl_base_path: {counts.get('gcode_files', 0)}"
+        )
+        print(
+            f"DEBUG: Total G-code files processed in _process_stl_base_path: {counts.get('gcode_files', 0)}"
+        )
         return counts
 
     def _process_gcode_base_path(
@@ -212,11 +257,12 @@ class DatabaseManager:
 
         # Get all STL files for matching
         stl_files = session.query(STLFile).all()
-        stl_name_map = {}  # Map STL file names to their folders
 
+        # Create a mapping of STL base names to STL files
+        stl_bases = {}
         for stl_file in stl_files:
-            stl_name = os.path.splitext(stl_file.file_name)[0].lower()
-            stl_name_map[stl_name] = stl_file
+            stl_base = self._split_base(stl_file.file_name)
+            stl_bases[stl_base] = stl_file
 
         # Process all G-code files
         for root, dirs, files in os.walk(gcode_base_path):
@@ -231,17 +277,20 @@ class DatabaseManager:
                         file_size = 0
 
                     # Try to find matching STL file
-                    gcode_name = os.path.splitext(file)[0].lower()
+                    gcode_base = self._split_base(file)
                     matching_stl = None
                     matching_folder = None
 
-                    for stl_name, stl_file in stl_name_map.items():
-                        # Use fuzzy match score instead of token match
-                        score = search.compute_match_score(stl_name, gcode_name)
-                        if score >= 80:
-                            matching_stl = stl_file
-                            matching_folder = stl_file.folder
-                            break
+                    # Find STL base that is prefix of gcode base (and most specific / longest match)
+                    matching_stl_base = None
+                    for stl_base in stl_bases:
+                        if gcode_base.startswith(stl_base):
+                            if matching_stl_base is None or len(stl_base) > len(matching_stl_base):
+                                matching_stl_base = stl_base
+
+                    if matching_stl_base:
+                        matching_stl = stl_bases[matching_stl_base]
+                        matching_folder = matching_stl.folder
 
                     # Check if G-code file already exists
                     existing = (
@@ -269,8 +318,25 @@ class DatabaseManager:
                         gcode_file.set_metadata(metadata)
                         session.add(gcode_file)
                         counts["gcode_files"] += 1
+                        logger.debug(f"Processed G-code file: {file} (rel_path: {rel_path})")
 
+        logger.debug(
+            f"Total G-code files processed in _process_gcode_base_path: {counts['gcode_files']}"
+        )
+        print(
+            f"DEBUG: Total G-code files processed in _process_gcode_base_path: {counts['gcode_files']}"
+        )
         return counts
+
+    def _split_base(self, filename):
+        """Split base name from filename according to the matching logic."""
+        # Remove extension
+        base = os.path.splitext(filename)[0]
+
+        # Cut at slicing pattern like _0.3mm, _1.2mm etc.
+        base = re.split(r"(_\d+(\.\d+)?mm)", base)[0]
+
+        return base
 
     def _extract_gcode_metadata(self, file_path: str) -> Dict[str, Any]:
         """Extract metadata from G-code file."""
@@ -351,24 +417,66 @@ class DatabaseManager:
             # Get G-code files (both from STL and GCODE base paths)
             gcode_files = []
             for gcode_file in folder.gcode_files:
+                # Get stats data if available
+                stats_data = None
+                if gcode_file.stats:
+                    stats = (
+                        gcode_file.stats[0]
+                        if isinstance(gcode_file.stats, list)
+                        else gcode_file.stats
+                    )
+                    stats_data = {
+                        "print_count": stats.print_count,
+                        "total_print_time": stats.total_print_time,
+                        "total_filament_used": stats.total_filament_used,
+                        "last_print_date": stats.last_print_date.isoformat()
+                        if stats.last_print_date
+                        else None,
+                        "success_rate": stats.success_rate,
+                        "job_id": stats.job_id,
+                        "last_status": stats.last_status,
+                    }
+
                 gcode_files.append(
                     {
                         "file_name": gcode_file.file_name,
                         "path": gcode_file.base_path,
                         "rel_path": gcode_file.rel_path,
                         "metadata": gcode_file.get_metadata(),
+                        "stats": stats_data,
                     }
                 )
 
             # Also get G-code files that are associated with STL files in this folder
             for stl_file in folder.stl_files:
                 for gcode_file in stl_file.gcode_files:
+                    # Get stats data if available
+                    stats_data = None
+                    if gcode_file.stats:
+                        stats = (
+                            gcode_file.stats[0]
+                            if isinstance(gcode_file.stats, list)
+                            else gcode_file.stats
+                        )
+                        stats_data = {
+                            "print_count": stats.print_count,
+                            "total_print_time": stats.total_print_time,
+                            "total_filament_used": stats.total_filament_used,
+                            "last_print_date": stats.last_print_date.isoformat()
+                            if stats.last_print_date
+                            else None,
+                            "success_rate": stats.success_rate,
+                            "job_id": stats.job_id,
+                            "last_status": stats.last_status,
+                        }
+
                     gcode_files.append(
                         {
                             "file_name": gcode_file.file_name,
                             "path": gcode_file.base_path,
                             "rel_path": gcode_file.rel_path,
                             "metadata": gcode_file.get_metadata(),
+                            "stats": stats_data,
                         }
                     )
 
@@ -384,9 +492,10 @@ class DatabaseManager:
             return stl_files, image_files, pdf_files, deduped_gcode_files
 
     def get_all_gcode_files(self) -> List[Dict[str, Any]]:
-        """Get all G-code files with folder associations."""
+        """Get all G-code files with folder associations and stats."""
         with self.get_session() as session:
-            gcode_files = session.query(GCodeFile).all()
+            # Join GCodeFile with GCodeFileStats to get stats data
+            gcode_files = session.query(GCodeFile).outerjoin(GCodeFileStats).all()
             result = []
 
             for gcode_file in gcode_files:
@@ -396,6 +505,26 @@ class DatabaseManager:
                 elif gcode_file.stl_file and gcode_file.stl_file.folder:
                     folder_name = gcode_file.stl_file.folder.name
 
+                # Get stats data if available
+                stats_data = None
+                if gcode_file.stats:
+                    stats = (
+                        gcode_file.stats[0]
+                        if isinstance(gcode_file.stats, list)
+                        else gcode_file.stats
+                    )
+                    stats_data = {
+                        "print_count": stats.print_count,
+                        "total_print_time": stats.total_print_time,
+                        "total_filament_used": stats.total_filament_used,
+                        "last_print_date": stats.last_print_date.isoformat()
+                        if stats.last_print_date
+                        else None,
+                        "success_rate": stats.success_rate,
+                        "job_id": stats.job_id,
+                        "last_status": stats.last_status,
+                    }
+
                 result.append(
                     {
                         "file_name": gcode_file.file_name,
@@ -403,6 +532,7 @@ class DatabaseManager:
                         "folder_name": folder_name,
                         "metadata": gcode_file.get_metadata(),
                         "base_path": gcode_file.base_path,
+                        "stats": stats_data,
                     }
                 )
 
@@ -475,3 +605,77 @@ class DatabaseManager:
             session.add(stl_file)
             session.commit()
             return stl_file
+
+    def update_moonraker_stats(
+        self, moonraker_url: str, moonraker_client: Optional[MoonrakerAPI] = None
+    ) -> Dict[str, int]:
+        """Update Moonraker statistics for all G-code files."""
+        try:
+            # Initialize Moonraker service
+            if moonraker_client is None:
+                moonraker_client = MoonrakerAPI(moonraker_url)
+            moonraker_service = MoonrakerService(moonraker_client)
+
+            # Update stats
+            with self.get_session() as session:
+                result = moonraker_service.update_all_file_stats(session)
+                return result
+        except Exception as e:
+            logger.error(f"Error updating Moonraker stats: {e}")
+            return {"updated": 0, "failed": 0}
+
+    def reload_moonraker_only(
+        self, moonraker_url: str, moonraker_client: Optional[MoonrakerAPI] = None
+    ) -> Dict[str, int]:
+        """Reload only Moonraker statistics without touching files."""
+        return self.update_moonraker_stats(moonraker_url, moonraker_client)
+
+
+def main():
+    """CLI entry point for database generation process."""
+    import argparse
+    import yaml
+
+    parser = argparse.ArgumentParser(
+        description="Generate Trinetra database from filesystem and Moonraker"
+    )
+    parser.add_argument("config", help="Path to config file")
+    parser.add_argument("db_path", help="Path to database file")
+
+    args = parser.parse_args()
+
+    # Load config
+    with open(args.config, "r") as f:
+        config = yaml.safe_load(f)
+
+    # Configure logging
+    from trinetra.logger import configure_logging
+
+    configure_logging(config)
+
+    # Get paths from config
+    stl_base_path = config.get("base_path")
+    gcode_base_path = config.get("gcode_path")
+    moonraker_url = config.get("moonraker_url")
+
+    if not stl_base_path or not gcode_base_path:
+        print("Error: base_path and gcode_path must be specified in config")
+        return 1
+
+    # Create database manager
+    db_manager = DatabaseManager(args.db_path)
+
+    # Reload index
+    counts = db_manager.reload_index(stl_base_path, gcode_base_path, moonraker_url)
+
+    print(f"Database generation completed:")
+    for key, value in counts.items():
+        print(f"  {key}: {value}")
+
+    return 0
+
+
+if __name__ == "__main__":
+    import sys
+
+    sys.exit(main())

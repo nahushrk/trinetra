@@ -44,9 +44,13 @@ class MoonrakerAPI:
         url = urljoin(self.base_url, endpoint)
 
         try:
+            logger.debug(f"Making request to {url} with params {kwargs.get('params', {})}")
             response = self.session.request(method, url, **kwargs)
+            logger.debug(f"Response status code: {response.status_code}")
             response.raise_for_status()
-            return response.json()
+            result = response.json()
+            logger.debug(f"Response JSON: {result}")
+            return result
         except requests.exceptions.RequestException as e:
             logger.error(f"Moonraker API request failed for {url}: {e}")
             return None
@@ -149,8 +153,10 @@ class MoonrakerAPI:
         Returns:
             Dictionary containing print history or None if failed
         """
+        logger.debug(f"Getting history with limit {limit}")
         params = {"limit": limit}
         response = self._make_request("/server/history/list", params=params)
+        logger.debug(f"History response: {response}")
         if response and "result" in response:
             return response["result"]
         return None

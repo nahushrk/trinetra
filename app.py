@@ -608,7 +608,8 @@ def create_app(config_file=None, config_overrides=None):
             stl_base_path = app.config["STL_FILES_PATH"]
             gcode_base_path = app.config["GCODE_FILES_PATH"]
 
-            counts = db_manager.reload_index(stl_base_path, gcode_base_path)
+            moonraker_url = app.config.get("MOONRAKER_URL")
+            counts = db_manager.reload_index(stl_base_path, gcode_base_path, moonraker_url)
 
             return jsonify(
                 {"success": True, "message": "Index reloaded successfully", "counts": counts}

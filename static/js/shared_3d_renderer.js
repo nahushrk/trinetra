@@ -275,11 +275,16 @@ function createGCodeItem(file, containerElement, scene, rowContainer) {
     // Add Moonraker statistics section
     const statsElement = document.createElement('div');
     statsElement.className = 'moonraker-stats';
-    statsElement.innerHTML = '<em>Loading print statistics...</em>';
+    
+    // Check if stats data is available in the file object
+    if (file.stats) {
+        displayMoonrakerStats(file.stats, statsElement);
+    } else {
+        statsElement.innerHTML = '<em>Loading print statistics...</em>';
+        // Load Moonraker statistics if not available
+        loadMoonrakerStats(gcodeFile, statsElement);
+    }
     containerElement.appendChild(statsElement);
-
-    // Load Moonraker statistics
-    loadMoonrakerStats(gcodeFile, statsElement);
 
     // Create buttons using shared function
     createFileActionButtons(containerElement, file, ['download', 'copy', 'queue']);
