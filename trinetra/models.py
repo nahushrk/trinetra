@@ -176,6 +176,33 @@ class GCodeFile(Base):
             self.metadata_json = None
 
 
+class GCodeFileStats(Base):
+    """Statistics for G-code files from Moonraker."""
+
+    __tablename__ = "gcode_file_stats"
+
+    id = Column(Integer, primary_key=True)
+    gcode_file_id = Column(Integer, ForeignKey("gcode_files.id"), nullable=False, unique=True)
+    print_count = Column(Integer, default=0)
+    total_print_time = Column(Integer, default=0)  # in seconds
+    total_filament_used = Column(Integer, default=0)  # in mm
+    last_print_date = Column(DateTime, nullable=True)
+    success_rate = Column(Integer, default=0)  # percentage * 100 (stored as integer)
+    job_id = Column(String(255), nullable=True)
+    last_status = Column(String(50), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    gcode_file = relationship("GCodeFile", backref="stats")
+
+    # Indexes
+    __table_args__ = (Index("idx_gcode_stats_file_id", "gcode_file_id"),)
+
+    def __repr__(self):
+        return f"<GCodeFileStats(file_id={self.gcode_file_id}, prints={self.print_count})>"
+
+
 def create_database_engine(db_path="trinetra.db"):
     """Create SQLAlchemy engine for the database."""
     return create_engine(
