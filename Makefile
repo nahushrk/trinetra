@@ -1,4 +1,4 @@
-.PHONY: format test dev-setup test-server clean-venv make-venv
+.PHONY: format test dev-setup test-server clean-venv make-venv clear-data
 
 STYLE_DIRS := $(pwd)
 
@@ -22,6 +22,9 @@ test:
 
 test-server:
 	@bash scripts/test_server.sh
+
+clear-data:
+	rm trinetra.db trinetra.log test.log test.db
 
 # Run all tasks
 .PHONY: all

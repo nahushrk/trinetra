@@ -1,0 +1,6 @@
+base_path: "/Users/alfred/projects/trinetra/trinetra-data/3dfiles/"
+gcode_path: "/Users/alfred/projects/trinetra/trinetra-data/gcodes/"
+moonraker_url: "http://klipper.local:7125"
+log_level: "DEBUG"
+mode: "DEV"
+search_result_limit: 100
