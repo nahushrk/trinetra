@@ -80,26 +80,24 @@ G1 X10 Y10 Z0.2
         mock_moonraker_api_class.return_value = mock_moonraker_api
 
         mock_moonraker_api.get_history.return_value = {
-            "result": {
-                "jobs": [
-                    {
-                        "filename": "test.gcode",
-                        "status": "completed",
-                        "print_duration": 3600,
-                        "filament_used": 10000,
-                        "end_time": 1640995200,
-                        "job_id": "job_1",
-                    },
-                    {
-                        "filename": "test.gcode",
-                        "status": "completed",
-                        "print_duration": 3600,
-                        "filament_used": 10000,
-                        "end_time": 1640995200,
-                        "job_id": "job_2",
-                    },
-                ]
-            }
+            "jobs": [
+                {
+                    "filename": "test.gcode",
+                    "status": "completed",
+                    "print_duration": 3600,
+                    "filament_used": 10000,
+                    "end_time": 1640995200,
+                    "job_id": "job_1",
+                },
+                {
+                    "filename": "test.gcode",
+                    "status": "completed",
+                    "print_duration": 3600,
+                    "filament_used": 10000,
+                    "end_time": 1640995200,
+                    "job_id": "job_2",
+                },
+            ]
         }
 
         # Perform reload index with Moonraker URL and mocked client
@@ -177,18 +175,16 @@ G1 X10 Y10 Z0.2
         mock_moonraker_api_class.return_value = mock_moonraker_api
 
         mock_moonraker_api.get_history.return_value = {
-            "result": {
-                "jobs": [
-                    {
-                        "filename": "test.gcode",
-                        "status": "completed",
-                        "print_duration": 3600,
-                        "filament_used": 10000,
-                        "end_time": 1640995200,
-                        "job_id": "job_1",
-                    }
-                ]
-            }
+            "jobs": [
+                {
+                    "filename": "test.gcode",
+                    "status": "completed",
+                    "print_duration": 3600,
+                    "filament_used": 10000,
+                    "end_time": 1640995200,
+                    "job_id": "job_1",
+                }
+            ]
         }
 
         # Perform reload Moonraker only
@@ -224,18 +220,16 @@ G1 X10 Y10 Z0.2
             mock_moonraker_api_class.return_value = mock_moonraker_api
 
             mock_moonraker_api.get_history.return_value = {
-                "result": {
-                    "jobs": [
-                        {
-                            "filename": "test.gcode",
-                            "status": "completed",
-                            "print_duration": 3600,
-                            "filament_used": 10000,
-                            "end_time": 1640995200,
-                            "job_id": "job_1",
-                        }
-                    ]
-                }
+                "jobs": [
+                    {
+                        "filename": "test.gcode",
+                        "status": "completed",
+                        "print_duration": 3600,
+                        "filament_used": 10000,
+                        "end_time": 1640995200,
+                        "job_id": "job_1",
+                    }
+                ]
             }
 
             moonraker_url = "http://localhost:7125"
