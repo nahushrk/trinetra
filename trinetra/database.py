@@ -425,8 +425,16 @@ class DatabaseManager:
                         if isinstance(gcode_file.stats, list)
                         else gcode_file.stats
                     )
+                    # Calculate average duration in seconds
+                    avg_duration = 0
+                    if stats.print_count > 0 and stats.total_print_time > 0:
+                        avg_duration = stats.total_print_time / stats.print_count
+                    
                     stats_data = {
-                        "print_count": stats.print_count,
+                        "total_prints": stats.print_count,
+                        "successful_prints": stats.successful_prints,
+                        "canceled_prints": stats.canceled_prints,
+                        "avg_duration": avg_duration,
                         "total_print_time": stats.total_print_time,
                         "total_filament_used": stats.total_filament_used,
                         "last_print_date": stats.last_print_date.isoformat()
@@ -458,8 +466,16 @@ class DatabaseManager:
                             if isinstance(gcode_file.stats, list)
                             else gcode_file.stats
                         )
+                        # Calculate average duration in seconds
+                        avg_duration = 0
+                        if stats.print_count > 0 and stats.total_print_time > 0:
+                            avg_duration = stats.total_print_time / stats.print_count
+                        
                         stats_data = {
-                            "print_count": stats.print_count,
+                            "total_prints": stats.print_count,
+                            "successful_prints": stats.successful_prints,
+                            "canceled_prints": stats.canceled_prints,
+                            "avg_duration": avg_duration,
                             "total_print_time": stats.total_print_time,
                             "total_filament_used": stats.total_filament_used,
                             "last_print_date": stats.last_print_date.isoformat()
@@ -513,8 +529,16 @@ class DatabaseManager:
                         if isinstance(gcode_file.stats, list)
                         else gcode_file.stats
                     )
+                    # Calculate average duration in seconds
+                    avg_duration = 0
+                    if stats.print_count > 0 and stats.total_print_time > 0:
+                        avg_duration = stats.total_print_time / stats.print_count
+                    
                     stats_data = {
-                        "print_count": stats.print_count,
+                        "total_prints": stats.print_count,
+                        "successful_prints": stats.successful_prints,
+                        "canceled_prints": stats.canceled_prints,
+                        "avg_duration": avg_duration,
                         "total_print_time": stats.total_print_time,
                         "total_filament_used": stats.total_filament_used,
                         "last_print_date": stats.last_print_date.isoformat()
@@ -629,6 +653,93 @@ class DatabaseManager:
     ) -> Dict[str, int]:
         """Reload only Moonraker statistics without touching files."""
         return self.update_moonraker_stats(moonraker_url, moonraker_client)
+
+    def get_printing_stats(self) -> Dict[str, Any]:
+        """Get aggregated printing statistics from database."""
+        with self.get_session() as session:
+            try:
+                # Get all G-code file stats
+                all_stats = session.query(GCodeFileStats).all()
+
+                if not all_stats:
+                    return {
+                        "total_prints": 0,
+                        "successful_prints": 0,
+                        "canceled_prints": 0,
+                        "avg_print_time_hours": 0,
+                        "total_filament_meters": 0,
+                        "print_days": 0,
+                    }
+
+                total_prints = 0
+                successful_prints = 0
+                canceled_prints = 0
+                total_print_time = 0
+                total_filament = 0
+                print_days = set()
+
+                for stat in all_stats:
+                    total_prints += stat.print_count
+
+                    # For successful/canceled prints, we need to look at the last status
+                    if stat.last_status == "completed":
+                        successful_prints += 1
+                    elif stat.last_status == "cancelled":
+                        canceled_prints += 1
+
+                    total_print_time += stat.total_print_time
+                    total_filament += stat.total_filament_used
+
+                    if stat.last_print_date:
+                        print_days.add(stat.last_print_date.strftime("%Y-%m-%d"))
+
+                avg_print_time_hours = total_print_time / total_prints if total_prints > 0 else 0
+                total_filament_meters = (
+                    total_filament / 1000 if total_filament > 0 else 0
+                )  # Convert mm to meters
+
+                return {
+                    "total_prints": total_prints,
+                    "successful_prints": successful_prints,
+                    "canceled_prints": canceled_prints,
+                    "avg_print_time_hours": avg_print_time_hours / 3600,  # Convert seconds to hours
+                    "total_filament_meters": total_filament_meters,
+                    "print_days": len(print_days),
+                }
+            except Exception as e:
+                logger.error(f"Error getting printing stats from database: {e}")
+                return {
+                    "total_prints": 0,
+                    "successful_prints": 0,
+                    "canceled_prints": 0,
+                    "avg_print_time_hours": 0,
+                    "total_filament_meters": 0,
+                    "print_days": 0,
+                }
+
+    def get_activity_calendar(self) -> Dict[str, int]:
+        """Get activity calendar data from database."""
+        with self.get_session() as session:
+            try:
+                # Get all G-code file stats with last print dates
+                stats_with_dates = (
+                    session.query(GCodeFileStats)
+                    .filter(GCodeFileStats.last_print_date.isnot(None))
+                    .all()
+                )
+
+                activity_calendar = {}
+                for stat in stats_with_dates:
+                    date_str = stat.last_print_date.strftime("%Y-%m-%d")
+                    if date_str in activity_calendar:
+                        activity_calendar[date_str] += stat.print_count
+                    else:
+                        activity_calendar[date_str] = stat.print_count
+
+                return activity_calendar
+            except Exception as e:
+                logger.error(f"Error getting activity calendar from database: {e}")
+                return {}
 
 
 def main():

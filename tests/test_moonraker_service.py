@@ -38,6 +38,8 @@ class TestMoonrakerService(unittest.TestCase):
         self.sample_stats_data = {
             "test.gcode": {
                 "print_count": 3,
+                "successful_prints": 3,
+                "canceled_prints": 0,
                 "total_print_time": 7200,  # 2 hours
                 "total_filament_used": 10000,  # 10 meters
                 "success_rate": 1.0,
@@ -58,36 +60,35 @@ class TestMoonrakerService(unittest.TestCase):
         # Mock datetime for consistent timestamps
         mock_datetime.fromtimestamp.return_value = datetime(2023, 1, 1)
 
-        # Mock history response
+        # Mock history response - get_history() returns the result directly, not wrapped in result key
         mock_history_response = {
-            "result": {
-                "jobs": [
-                    {
-                        "filename": "test.gcode",
-                        "status": "completed",
-                        "print_duration": 3600,
-                        "filament_used": 5000,
-                        "end_time": 1640995200,  # 2022-01-01
-                        "job_id": "job_1",
-                    },
-                    {
-                        "filename": "test.gcode",
-                        "status": "completed",
-                        "print_duration": 3600,
-                        "filament_used": 5000,
-                        "end_time": 1640995200,  # 2022-01-01
-                        "job_id": "job_2",
-                    },
-                    {
-                        "filename": "other.gcode",
-                        "status": "cancelled",
-                        "print_duration": 1800,
-                        "filament_used": 2500,
-                        "end_time": 1640995200,  # 2022-01-01
-                        "job_id": "job_3",
-                    },
-                ]
-            }
+            "count": 3,
+            "jobs": [
+                {
+                    "filename": "test.gcode",
+                    "status": "completed",
+                    "print_duration": 3600,
+                    "filament_used": 5000,
+                    "end_time": 1640995200,  # 2022-01-01
+                    "job_id": "job_1",
+                },
+                {
+                    "filename": "test.gcode",
+                    "status": "completed",
+                    "print_duration": 3600,
+                    "filament_used": 5000,
+                    "end_time": 1640995200,  # 2022-01-01
+                    "job_id": "job_2",
+                },
+                {
+                    "filename": "other.gcode",
+                    "status": "cancelled",
+                    "print_duration": 1800,
+                    "filament_used": 2500,
+                    "end_time": 1640995200,  # 2022-01-01
+                    "job_id": "job_3",
+                },
+            ],
         }
 
         self.mock_moonraker_client.get_history.return_value = mock_history_response
@@ -112,8 +113,8 @@ class TestMoonrakerService(unittest.TestCase):
         result = self.service.fetch_all_file_statistics()
         self.assertEqual(result, {})
 
-    def test_fetch_all_file_statistics_missing_result_key(self):
-        """Test fetching file statistics with missing result key"""
+    def test_fetch_all_file_statistics_missing_jobs_key(self):
+        """Test fetching file statistics with missing jobs key"""
         self.mock_moonraker_client.get_history.return_value = {"error": "not found"}
 
         result = self.service.fetch_all_file_statistics()

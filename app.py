@@ -426,22 +426,26 @@ def create_app(config_file=None, config_overrides=None):
 
     @app.route("/moonraker_stats/<path:filename>", methods=["GET"])
     def get_moonraker_stats(filename):
-        """Get Moonraker print statistics for a G-code file."""
+        """Get Moonraker print statistics for a G-code file from database."""
         try:
-            moonraker_url = app.config.get("MOONRAKER_URL")
-            if not moonraker_url:
-                return jsonify({"success": False, "message": "Moonraker URL not configured"}), 503
+            # Get file stats from database
+            all_gcode_files = db_manager.get_all_gcode_files()
 
-            stats = moonraker.get_moonraker_stats(filename, moonraker_url)
+            # Find the file with matching name
+            file_stats = None
+            for gcode_file in all_gcode_files:
+                if gcode_file["file_name"] == filename:
+                    file_stats = gcode_file["stats"]
+                    break
 
-            if stats:
-                return jsonify({"success": True, "stats": stats})
+            if file_stats:
+                return jsonify({"success": True, "stats": file_stats})
             else:
                 return jsonify(
                     {"success": False, "message": "No print history found for this file"}
                 )
         except Exception as e:
-            app.logger.error(f"Error getting Moonraker stats for {filename}: {e}")
+            app.logger.error(f"Error getting stats for {filename}: {e}")
             return jsonify({"success": False, "message": "Failed to get print statistics"}), 500
 
     @app.route("/search", methods=["GET"])
@@ -472,37 +476,26 @@ def create_app(config_file=None, config_overrides=None):
             # Get file and folder statistics from database
             db_stats = db_manager.get_stats()
 
-            # Get Moonraker printing statistics
-            printing_stats = get_moonraker_printing_stats()
+            # Get printing statistics from database
+            printing_stats = db_manager.get_printing_stats()
 
             # --- Activity Calendar Generation ---
             from datetime import datetime, timedelta
             import collections
 
-            moonraker_url = app.config.get("MOONRAKER_URL")
+            # Initialize activity calendar with 0 prints for each day
             activity_calendar = collections.OrderedDict()
-            # Default: 0 prints for each day
             today = datetime.now().date()
             start_date = today - timedelta(days=364)
             for i in range(365):
                 day = start_date + timedelta(days=i)
                 activity_calendar[day.strftime("%Y-%m-%d")] = 0
-            # Fill with Moonraker data
-            history_data = None
-            if moonraker_url:
-                from trinetra import moonraker
 
-                history_data = moonraker.get_moonraker_history(moonraker_url)
-            if history_data and "jobs" in history_data:
-                for job in history_data["jobs"]:
-                    if job.get("start_time"):
-                        try:
-                            d = datetime.fromtimestamp(job["start_time"]).date()
-                            d_str = d.strftime("%Y-%m-%d")
-                            if d_str in activity_calendar:
-                                activity_calendar[d_str] += 1
-                        except Exception:
-                            pass
+            # Fill with data from database
+            db_activity_data = db_manager.get_activity_calendar()
+            for date_str, count in db_activity_data.items():
+                if date_str in activity_calendar:
+                    activity_calendar[date_str] = count
             # --- End Activity Calendar Generation ---
 
             stats = {
@@ -518,80 +511,11 @@ def create_app(config_file=None, config_overrides=None):
             return "Error generating statistics", 500
 
     def get_moonraker_printing_stats():
-        """Get aggregated printing statistics from Moonraker API."""
+        """Get aggregated printing statistics from database."""
         try:
-            moonraker_url = app.config.get("MOONRAKER_URL")
-            if not moonraker_url:
-                return {
-                    "total_prints": 0,
-                    "successful_prints": 0,
-                    "canceled_prints": 0,
-                    "avg_print_time_hours": 0,
-                    "total_filament_meters": 0,
-                    "print_days": 0,
-                }
-
-            # Get all print history
-            history_data = moonraker.get_moonraker_history(moonraker_url)
-            if not history_data or "jobs" not in history_data:
-                return {
-                    "total_prints": 0,
-                    "successful_prints": 0,
-                    "canceled_prints": 0,
-                    "avg_print_time_hours": 0,
-                    "total_filament_meters": 0,
-                    "print_days": 0,
-                }
-
-            jobs = history_data["jobs"]
-            total_prints = len(jobs)
-            successful_prints = 0
-            canceled_prints = 0
-            total_print_time = 0
-            total_filament = 0
-            print_days = set()
-
-            for job in jobs:
-                # Count successful vs canceled
-                if job.get("status") == "completed":
-                    successful_prints += 1
-                elif job.get("status") == "cancelled":
-                    canceled_prints += 1
-
-                # Calculate print time
-                if job.get("print_duration"):
-                    total_print_time += job["print_duration"]
-
-                # Calculate filament usage
-                if job.get("filament_used"):
-                    total_filament += job["filament_used"]
-
-                # Track print days
-                if job.get("start_time"):
-                    try:
-                        start_date = datetime.fromtimestamp(job["start_time"])
-                        print_days.add(start_date.strftime("%Y-%m-%d"))
-                    except:
-                        pass
-
-            avg_print_time_hours = (
-                total_print_time / successful_prints if successful_prints > 0 else 0
-            )
-            total_filament_meters = (
-                total_filament / 1000 if total_filament > 0 else 0
-            )  # Convert mm to meters
-
-            return {
-                "total_prints": total_prints,
-                "successful_prints": successful_prints,
-                "canceled_prints": canceled_prints,
-                "avg_print_time_hours": avg_print_time_hours / 3600,  # Convert seconds to hours
-                "total_filament_meters": total_filament_meters,
-                "print_days": len(print_days),
-            }
-
+            return db_manager.get_printing_stats()
         except Exception as e:
-            app.logger.error(f"Error getting Moonraker printing stats: {e}")
+            app.logger.error(f"Error getting printing stats from database: {e}")
             return {
                 "total_prints": 0,
                 "successful_prints": 0,

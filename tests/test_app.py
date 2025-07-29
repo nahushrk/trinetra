@@ -257,26 +257,36 @@ class TestAppRoutes:
         response = self.client.get("/copy_gcode_path/INVALID_BASE/test.gcode")
         assert response.status_code == 404
 
-    @patch("trinetra.moonraker.get_moonraker_stats")
-    def test_moonraker_stats_route_success(self, mock_get_stats):
-        """Test successful Moonraker stats retrieval"""
-        mock_get_stats.return_value = {"total_prints": 5, "successful_prints": 4}
+    def test_moonraker_stats_route_success(self):
+        """Test successful Moonraker stats retrieval from database"""
+        # Mock the database manager to return file with stats
+        mock_gcode_files = [
+            {"file_name": "test.gcode", "stats": {"total_prints": 5, "successful_prints": 4, "canceled_prints": 1}}
+        ]
 
-        response = self.client.get("/moonraker_stats/test.gcode")
-        assert response.status_code == 200
-        data = json.loads(response.data)
-        assert data["success"] is True
-        assert "stats" in data
+        with patch.object(
+            self.app.config["DB_MANAGER"], "get_all_gcode_files", return_value=mock_gcode_files
+        ):
+            response = self.client.get("/moonraker_stats/test.gcode")
+            assert response.status_code == 200
+            data = json.loads(response.data)
+            assert data["success"] is True
+            assert "stats" in data
 
-    @patch("trinetra.moonraker.get_moonraker_stats")
-    def test_moonraker_stats_route_no_stats(self, mock_get_stats):
-        """Test Moonraker stats route with no stats"""
-        mock_get_stats.return_value = None
+    def test_moonraker_stats_route_no_stats(self):
+        """Test Moonraker stats route with no stats in database"""
+        # Mock the database manager to return files without matching stats
+        mock_gcode_files = [
+            {"file_name": "other.gcode", "stats": {"total_prints": 1, "successful_prints": 1, "canceled_prints": 0}}
+        ]
 
-        response = self.client.get("/moonraker_stats/test.gcode")
-        assert response.status_code == 200
-        data = json.loads(response.data)
-        assert data["success"] is False
+        with patch.object(
+            self.app.config["DB_MANAGER"], "get_all_gcode_files", return_value=mock_gcode_files
+        ):
+            response = self.client.get("/moonraker_stats/test.gcode")
+            assert response.status_code == 200
+            data = json.loads(response.data)
+            assert data["success"] is False
 
     @patch("trinetra.search.search_files_and_folders")
     def test_search_route(self, mock_search):
@@ -301,22 +311,43 @@ class TestAppRoutes:
         assert "metadata" in data
 
     def test_stats_route(self):
-        # Patch the get_moonraker_printing_stats method on the app instance
-        with patch.object(
-            self.app,
-            "get_moonraker_printing_stats",
-            return_value={
-                "total_prints": 10,
-                "successful_prints": 8,
-                "canceled_prints": 2,
-                "avg_print_time_hours": 2.5,
-                "total_filament_meters": 100,
-                "print_days": 5,
-            },
-        ):
-            with patch("trinetra.moonraker.get_moonraker_history", return_value={"jobs": []}):
-                response = self.client.get("/stats")
-                assert response.status_code == 200
+        # Mock the database manager methods
+        mock_db_stats = {
+            "total_folders": 5,
+            "total_stl_files": 10,
+            "total_gcode_files": 8,
+            "total_image_files": 3,
+            "total_pdf_files": 2,
+            "folders_with_gcode": 4,
+        }
+
+        mock_printing_stats = {
+            "total_prints": 10,
+            "successful_prints": 8,
+            "canceled_prints": 2,
+            "avg_print_time_hours": 2.5,
+            "total_filament_meters": 100,
+            "print_days": 5,
+        }
+
+        mock_activity_calendar = {
+            "2023-01-01": 2,
+            "2023-01-02": 1,
+        }
+
+        with patch.object(self.app.config["DB_MANAGER"], "get_stats", return_value=mock_db_stats):
+            with patch.object(
+                self.app.config["DB_MANAGER"],
+                "get_printing_stats",
+                return_value=mock_printing_stats,
+            ):
+                with patch.object(
+                    self.app.config["DB_MANAGER"],
+                    "get_activity_calendar",
+                    return_value=mock_activity_calendar,
+                ):
+                    response = self.client.get("/stats")
+                    assert response.status_code == 200
 
     def test_api_add_to_queue_success(self):
         # Patch add_to_queue in the app module's namespace
@@ -479,30 +510,37 @@ class TestAppRoutes:
 
     def test_get_moonraker_printing_stats_function(self):
         """Test get_moonraker_printing_stats function"""
-        with patch("trinetra.moonraker.get_moonraker_history", return_value=None):
+        # Test with no stats in database
+        with patch.object(
+            self.app.config["DB_MANAGER"],
+            "get_printing_stats",
+            return_value={
+                "total_prints": 0,
+                "successful_prints": 0,
+                "canceled_prints": 0,
+                "avg_print_time_hours": 0,
+                "total_filament_meters": 0,
+                "print_days": 0,
+            },
+        ):
             result = self.app.get_moonraker_printing_stats()
             assert result["total_prints"] == 0
             assert result["successful_prints"] == 0
 
-        # Test with Moonraker URL but no history
-        with patch("trinetra.moonraker.get_moonraker_history", return_value=None):
-            result = self.app.get_moonraker_printing_stats()
-            assert result["total_prints"] == 0
-
-        # Test with valid history data
-        mock_history = {
-            "jobs": [
-                {
-                    "status": "completed",
-                    "print_duration": 3600,
-                    "filament_used": 1000,
-                    "start_time": 1640995200,  # 2022-01-01
-                }
-            ]
+        # Test with valid stats data
+        mock_stats = {
+            "total_prints": 10,
+            "successful_prints": 8,
+            "canceled_prints": 2,
+            "avg_print_time_hours": 2.5,
+            "total_filament_meters": 100,
+            "print_days": 5,
         }
 
-        with patch("trinetra.moonraker.get_moonraker_history", return_value=mock_history):
+        with patch.object(
+            self.app.config["DB_MANAGER"], "get_printing_stats", return_value=mock_stats
+        ):
             result = self.app.get_moonraker_printing_stats()
-            assert result["total_prints"] == 1
-            assert result["successful_prints"] == 1
-            assert result["print_days"] == 1
+            assert result["total_prints"] == 10
+            assert result["successful_prints"] == 8
+            assert result["print_days"] == 5

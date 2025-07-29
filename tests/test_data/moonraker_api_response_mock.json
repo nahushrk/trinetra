@@ -1,7 +1,6 @@
 {
-  "result": {
-    "count": 5,
-    "jobs": [
+  "count": 5,
+  "jobs": [
         {
         "job_id": "t000001",
         "user": "_TRUSTED_USER_",
@@ -116,7 +115,7 @@
         "filename": "part_b1_0.2mm_PLA.gcode",
         "status": "in_progress",
         "start_time": 1641009000.0,
-        "end_time": "null",
+        "end_time": null,
         "print_duration": 4500.0,
         "total_duration": 4600.0,
         "filament_used": 12000.0,
@@ -165,5 +164,4 @@
         "exists": true
       }
     ]
-  }
 }

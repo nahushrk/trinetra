@@ -277,13 +277,11 @@ function createGCodeItem(file, containerElement, scene, rowContainer) {
     statsElement.className = 'moonraker-stats';
     
     // Check if stats data is available in the file object
-    if (file.stats) {
-        displayMoonrakerStats(file.stats, statsElement);
-    } else {
-        statsElement.innerHTML = '<em>Loading print statistics...</em>';
-        // Load Moonraker statistics if not available
-        loadMoonrakerStats(gcodeFile, statsElement);
-    }
+    
+    statsElement.innerHTML = '<em>Loading print statistics...</em>';
+    // Load Moonraker statistics if not available
+    loadMoonrakerStats(gcodeFile, statsElement);
+    
     containerElement.appendChild(statsElement);
 
     // Create buttons using shared function
@@ -332,8 +330,8 @@ function loadMoonrakerStats(filename, statsElement) {
                     statsContent += `<div>Avg duration: ${avgDurationHours}h ${avgDurationMinutes}m</div>`;
                 }
                 
-                if (stats.most_recent_print) {
-                    const recentDate = new Date(stats.most_recent_print * 1000);
+                if (stats.last_print_date) {
+                    const recentDate = new Date(stats.last_print_date);
                     statsContent += `<div>Last printed: ${recentDate.toLocaleDateString()}</div>`;
                 }
                 
