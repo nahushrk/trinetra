@@ -261,7 +261,10 @@ class TestAppRoutes:
         """Test successful Moonraker stats retrieval from database"""
         # Mock the database manager to return file with stats
         mock_gcode_files = [
-            {"file_name": "test.gcode", "stats": {"total_prints": 5, "successful_prints": 4, "canceled_prints": 1}}
+            {
+                "file_name": "test.gcode",
+                "stats": {"total_prints": 5, "successful_prints": 4, "canceled_prints": 1},
+            }
         ]
 
         with patch.object(
@@ -277,7 +280,10 @@ class TestAppRoutes:
         """Test Moonraker stats route with no stats in database"""
         # Mock the database manager to return files without matching stats
         mock_gcode_files = [
-            {"file_name": "other.gcode", "stats": {"total_prints": 1, "successful_prints": 1, "canceled_prints": 0}}
+            {
+                "file_name": "other.gcode",
+                "stats": {"total_prints": 1, "successful_prints": 1, "canceled_prints": 0},
+            }
         ]
 
         with patch.object(

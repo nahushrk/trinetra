@@ -3,7 +3,7 @@ let canvas, renderer;
 let scenes = [];
 const observerOptions = {
     root: null,
-    rootMargin: '0px',
+    rootMargin: '50px',  // Only trigger when 50px of the element is visible
     threshold: 0.1
 };
 
@@ -20,7 +20,26 @@ function init() {
         }
     });
 
-    displayGCodeFiles(gcodeFiles);
+    // Get data from data attributes
+    const contentDiv = document.getElementById('content');
+    const gcodeFilesData = contentDiv ? contentDiv.getAttribute('data-gcode-files') : null;
+    let initialGcodeFiles = [];
+    if (gcodeFilesData) {
+        try {
+            // Check if gcodeFilesData is already an object (not a string)
+            if (typeof gcodeFilesData === 'object') {
+                initialGcodeFiles = gcodeFilesData.files || gcodeFilesData;
+            } else {
+                // Try to parse as JSON
+                const parsedData = JSON.parse(gcodeFilesData);
+                initialGcodeFiles = parsedData.files || parsedData;
+            }
+        } catch (e) {
+            console.error('Error parsing G-code files data:', e);
+        }
+    }
+
+    displayGCodeFiles(initialGcodeFiles);
     
     // Initialize the renderer after loading the scenes
     renderer = new THREE.WebGLRenderer({canvas: canvas, antialias: true});
@@ -30,13 +49,32 @@ function init() {
     renderer.setAnimationLoop(animate);
     
     // Update metadata
-    document.getElementById('metadata').textContent = `Showing ${gcodeFiles.length} files`;
+    const metadataDiv = document.getElementById('metadata');
+    if (metadataDiv) {
+        metadataDiv.textContent = `Showing ${initialGcodeFiles.length} files`;
+    }
+
+    // Sort by and sort order change
+    const sortBySelect = document.getElementById('sort-by');
+    const sortOrderSelect = document.getElementById('sort-order');
+    
+    if (sortBySelect) {
+        sortBySelect.addEventListener('change', function() {
+            refreshCurrentView();
+        });
+    }
+    
+    if (sortOrderSelect) {
+        sortOrderSelect.addEventListener('change', function() {
+            refreshCurrentView();
+        });
+    }
 }
 
 function performSearch(searchTerm) {
     if (!searchTerm.trim()) {
-        displayGCodeFiles(gcodeFiles);
-        document.getElementById('metadata').textContent = `Showing ${gcodeFiles.length} files`;
+        // For paginated view, reload first page
+        loadPage(1);
         return;
     }
 
@@ -97,4 +135,192 @@ function displayGCodeFiles(files) {
     content.appendChild(rowContainer);
 }
 
-window.addEventListener('resize', updateSize); 
+window.addEventListener('resize', updateSize);
+
+// View management functions
+let currentView = 'paginated'; // 'infinite-scroll' or 'paginated'
+let currentPage = 1;
+let currentFilter = '';
+let currentSortBy = 'folder_name';
+let currentSortOrder = 'asc';
+
+// Initialize with paginated view
+document.addEventListener('DOMContentLoaded', function() {
+    // Show pagination controls
+    const paginationControls = document.getElementById('pagination-controls');
+    if (paginationControls) {
+        paginationControls.style.display = 'flex';
+    }
+    
+    // Load first page
+    loadPage(1);
+});
+
+function loadPage(page) {
+    currentPage = page;
+    
+    // Get filter and sort options
+    const searchInput = document.getElementById('search-input');
+    const sortBySelect = document.getElementById('sort-by');
+    const sortOrderSelect = document.getElementById('sort-order');
+    
+    const filterText = searchInput ? searchInput.value : '';
+    const sortBy = sortBySelect ? sortBySelect.value : 'folder_name';
+    const sortOrder = sortOrderSelect ? sortOrderSelect.value : 'asc';
+    
+    // Update current values
+    currentFilter = filterText;
+    currentSortBy = sortBy;
+    currentSortOrder = sortOrder;
+    
+    // Make API call
+    const url = `/api/gcode_files?page=${page}&per_page=50&filter=${encodeURIComponent(filterText)}&sort_by=${encodeURIComponent(sortBy)}&sort_order=${encodeURIComponent(sortOrder)}`;
+    
+    fetch(url)
+        .then(response => response.json())
+        .then(data => {
+            // Display files
+            displayGCodeFiles(data.files);
+            
+            // Update metadata
+            const metadataDiv = document.getElementById('metadata');
+            if (metadataDiv) {
+                metadataDiv.innerText = `Showing ${data.pagination.total_files} files (page ${data.pagination.page} of ${data.pagination.total_pages})`;
+            }
+            
+            // Update pagination controls
+            updatePaginationControls(data.pagination);
+        })
+        .catch(error => {
+            console.error('Error loading page:', error);
+            const metadataDiv = document.getElementById('metadata');
+            if (metadataDiv) {
+                metadataDiv.innerText = 'Error loading data';
+            }
+        });
+}
+
+function updatePaginationControls(pagination) {
+    const paginationUl = document.getElementById('pagination');
+    if (!paginationUl) return;
+    
+    // Clear existing pagination
+    paginationUl.innerHTML = '';
+    
+    // Add previous button
+    if (pagination.page > 1) {
+        const prevLi = document.createElement('li');
+        prevLi.className = 'page-item';
+        const prevLink = document.createElement('a');
+        prevLink.className = 'page-link';
+        prevLink.href = '#';
+        prevLink.innerText = 'Previous';
+        prevLink.addEventListener('click', function(e) {
+            e.preventDefault();
+            loadPage(pagination.page - 1);
+        });
+        prevLi.appendChild(prevLink);
+        paginationUl.appendChild(prevLi);
+    }
+    
+    // Add page numbers (show up to 5 pages around current page)
+    const startPage = Math.max(1, pagination.page - 2);
+    const endPage = Math.min(pagination.total_pages, pagination.page + 2);
+    
+    for (let i = startPage; i <= endPage; i++) {
+        const pageLi = document.createElement('li');
+        pageLi.className = 'page-item' + (i === pagination.page ? ' active' : '');
+        const pageLink = document.createElement('a');
+        pageLink.className = 'page-link';
+        pageLink.href = '#';
+        pageLink.innerText = i;
+        if (i !== pagination.page) {
+            pageLink.addEventListener('click', function(e) {
+                e.preventDefault();
+                loadPage(i);
+            });
+        }
+        pageLi.appendChild(pageLink);
+        paginationUl.appendChild(pageLi);
+    }
+    
+    // Add next button
+    if (pagination.page < pagination.total_pages) {
+        const nextLi = document.createElement('li');
+        nextLi.className = 'page-item';
+        const nextLink = document.createElement('a');
+        nextLink.className = 'page-link';
+        nextLink.href = '#';
+        nextLink.innerText = 'Next';
+        nextLink.addEventListener('click', function(e) {
+            e.preventDefault();
+            loadPage(pagination.page + 1);
+        });
+        nextLi.appendChild(nextLink);
+        paginationUl.appendChild(nextLi);
+    }
+}
+
+function refreshCurrentView() {
+    if (currentView === 'paginated') {
+        loadPage(1); // Reload first page with new sort/filter options
+    } else {
+        // For infinite scroll, we would normally reapply filters
+        // But for now, we'll just reload with current settings
+        performSearch(currentFilter);
+    }
+}
+
+// Override performSearch to work with both views
+function performSearch(searchTerm) {
+    if (currentView === 'paginated') {
+        // For paginated view, update filter and reload first page
+        currentFilter = searchTerm;
+        loadPage(1);
+    } else {
+        // For infinite scroll view, use existing search functionality
+        if (!searchTerm.trim()) {
+            // Get data from data attributes
+            const contentDiv = document.getElementById('content');
+            const gcodeFilesData = contentDiv ? contentDiv.getAttribute('data-gcode-files') : null;
+            let initialGcodeFiles = [];
+            if (gcodeFilesData) {
+                try {
+                    // Check if gcodeFilesData is already an object (not a string)
+                    if (typeof gcodeFilesData === 'object') {
+                        initialGcodeFiles = gcodeFilesData.files || gcodeFilesData;
+                    } else {
+                        // Try to parse as JSON
+                        const parsedData = JSON.parse(gcodeFilesData);
+                        initialGcodeFiles = parsedData.files || parsedData;
+                    }
+                } catch (e) {
+                    console.error('Error parsing G-code files data:', e);
+                }
+            }
+            displayGCodeFiles(initialGcodeFiles);
+            const metadataDiv = document.getElementById('metadata');
+            if (metadataDiv) {
+                metadataDiv.textContent = `Showing ${initialGcodeFiles.length} files`;
+            }
+            return;
+        }
+
+        fetch(`/search_gcode?q=${encodeURIComponent(searchTerm)}`)
+            .then(response => response.json())
+            .then(data => {
+                displayGCodeFiles(data.gcode_files);
+                const metadataDiv = document.getElementById('metadata');
+                if (metadataDiv) {
+                    metadataDiv.textContent = `Found ${data.metadata.matches} matching files`;
+                }
+            })
+            .catch(error => {
+                console.error('Search error:', error);
+                const metadataDiv = document.getElementById('metadata');
+                if (metadataDiv) {
+                    metadataDiv.textContent = 'Search failed';
+                }
+            });
+    }
+}

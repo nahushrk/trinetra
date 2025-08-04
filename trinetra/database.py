@@ -372,6 +372,81 @@ class DatabaseManager:
 
             return result
 
+    def get_stl_files_paginated(
+        self,
+        page: int = 1,
+        per_page: int = 50,
+        sort_by: str = "folder_name",
+        sort_order: str = "asc",
+        filter_text: str = "",
+    ) -> Dict[str, Any]:
+        """Get STL files with pagination, sorting, and filtering."""
+        with self.get_session() as session:
+            # Base query for folders
+            query = session.query(Folder)
+
+            # Apply filtering if provided
+            if filter_text:
+                query = query.filter(Folder.name.contains(filter_text))
+
+            # Apply sorting
+            if sort_order.lower() == "desc":
+                query = query.order_by(Folder.name.desc())
+            else:
+                query = query.order_by(Folder.name.asc())
+
+            # Get total count for pagination
+            total_folders = query.count()
+
+            # Apply pagination
+            folders = query.offset((page - 1) * per_page).limit(per_page).all()
+
+            result = []
+            total_files = 0
+
+            for folder in folders:
+                # Query STL files for this folder
+                stl_query = session.query(STLFile).filter(STLFile.folder_id == folder.id)
+
+                # Apply file-level filtering if provided
+                if filter_text:
+                    stl_query = stl_query.filter(STLFile.file_name.contains(filter_text))
+
+                stl_files = stl_query.all()
+
+                if stl_files:
+                    folder_files = []
+                    for stl_file in stl_files:
+                        folder_files.append(
+                            {"file_name": stl_file.file_name, "rel_path": stl_file.rel_path}
+                        )
+
+                    total_files += len(folder_files)
+
+                    result.append(
+                        {
+                            "folder_name": folder.name,
+                            "top_level_folder": folder.name,
+                            "files": folder_files,
+                        }
+                    )
+
+            return {
+                "folders": result,
+                "pagination": {
+                    "page": page,
+                    "per_page": per_page,
+                    "total_folders": total_folders,
+                    "total_files": total_files,
+                    "total_pages": (total_folders + per_page - 1) // per_page,
+                },
+                "filter": {
+                    "text": filter_text,
+                    "sort_by": sort_by,
+                    "sort_order": sort_order,
+                },
+            }
+
     def get_folder_contents(self, folder_name: str) -> Tuple[List, List, List, List]:
         """Get contents of a specific folder (compatible with existing app.py)."""
         with self.get_session() as session:
@@ -429,7 +504,7 @@ class DatabaseManager:
                     avg_duration = 0
                     if stats.print_count > 0 and stats.total_print_time > 0:
                         avg_duration = stats.total_print_time / stats.print_count
-                    
+
                     stats_data = {
                         "total_prints": stats.print_count,
                         "successful_prints": stats.successful_prints,
@@ -470,7 +545,7 @@ class DatabaseManager:
                         avg_duration = 0
                         if stats.print_count > 0 and stats.total_print_time > 0:
                             avg_duration = stats.total_print_time / stats.print_count
-                        
+
                         stats_data = {
                             "total_prints": stats.print_count,
                             "successful_prints": stats.successful_prints,
@@ -533,7 +608,7 @@ class DatabaseManager:
                     avg_duration = 0
                     if stats.print_count > 0 and stats.total_print_time > 0:
                         avg_duration = stats.total_print_time / stats.print_count
-                    
+
                     stats_data = {
                         "total_prints": stats.print_count,
                         "successful_prints": stats.successful_prints,
@@ -563,6 +638,118 @@ class DatabaseManager:
             # Sort by folder name, then by file name
             result.sort(key=lambda x: (x["folder_name"], x["file_name"]))
             return result
+
+    def get_gcode_files_paginated(
+        self,
+        page: int = 1,
+        per_page: int = 50,
+        sort_by: str = "folder_name",
+        sort_order: str = "asc",
+        filter_text: str = "",
+    ) -> Dict[str, Any]:
+        """Get G-code files with pagination, sorting, and filtering."""
+        with self.get_session() as session:
+            # Base query for G-code files
+            query = session.query(GCodeFile).outerjoin(GCodeFileStats)
+
+            # Apply filtering if provided
+            if filter_text:
+                query = query.filter(
+                    or_(
+                        GCodeFile.file_name.contains(filter_text),
+                        GCodeFile.folder.has(Folder.name.contains(filter_text)),
+                    )
+                )
+
+            # Apply sorting
+            if sort_by == "file_name":
+                order_column = GCodeFile.file_name
+            elif sort_by == "folder_name":
+                # Join with Folder table for folder-based sorting
+                query = query.join(Folder, GCodeFile.folder_id == Folder.id, isouter=True)
+                order_column = Folder.name
+            elif sort_by == "print_count" and GCodeFileStats.print_count is not None:
+                order_column = GCodeFileStats.print_count
+            elif sort_by == "last_print_date" and GCodeFileStats.last_print_date is not None:
+                order_column = GCodeFileStats.last_print_date
+            else:
+                # Join with Folder table for default sorting
+                query = query.join(Folder, GCodeFile.folder_id == Folder.id, isouter=True)
+                order_column = Folder.name  # Default sorting
+
+            if sort_order.lower() == "desc":
+                query = query.order_by(order_column.desc())
+            else:
+                query = query.order_by(order_column.asc())
+
+            # Get total count for pagination
+            total_files = query.count()
+
+            # Apply pagination
+            gcode_files = query.offset((page - 1) * per_page).limit(per_page).all()
+
+            result = []
+
+            for gcode_file in gcode_files:
+                folder_name = "Unknown"
+                if gcode_file.folder:
+                    folder_name = gcode_file.folder.name
+                elif gcode_file.stl_file and gcode_file.stl_file.folder:
+                    folder_name = gcode_file.stl_file.folder.name
+
+                # Get stats data if available
+                stats_data = None
+                if gcode_file.stats:
+                    stats = (
+                        gcode_file.stats[0]
+                        if isinstance(gcode_file.stats, list)
+                        else gcode_file.stats
+                    )
+                    # Calculate average duration in seconds
+                    avg_duration = 0
+                    if stats.print_count > 0 and stats.total_print_time > 0:
+                        avg_duration = stats.total_print_time / stats.print_count
+
+                    stats_data = {
+                        "total_prints": stats.print_count,
+                        "successful_prints": stats.successful_prints,
+                        "canceled_prints": stats.canceled_prints,
+                        "avg_duration": avg_duration,
+                        "total_print_time": stats.total_print_time,
+                        "total_filament_used": stats.total_filament_used,
+                        "last_print_date": stats.last_print_date.isoformat()
+                        if stats.last_print_date
+                        else None,
+                        "success_rate": stats.success_rate,
+                        "job_id": stats.job_id,
+                        "last_status": stats.last_status,
+                    }
+
+                result.append(
+                    {
+                        "file_name": gcode_file.file_name,
+                        "rel_path": gcode_file.rel_path,
+                        "folder_name": folder_name,
+                        "metadata": gcode_file.get_metadata(),
+                        "base_path": gcode_file.base_path,
+                        "stats": stats_data,
+                    }
+                )
+
+            return {
+                "files": result,
+                "pagination": {
+                    "page": page,
+                    "per_page": per_page,
+                    "total_files": total_files,
+                    "total_pages": (total_files + per_page - 1) // per_page,
+                },
+                "filter": {
+                    "text": filter_text,
+                    "sort_by": sort_by,
+                    "sort_order": sort_order,
+                },
+            }
 
     def search_stl_files(self, query: str, limit: int = 25) -> List[Dict[str, Any]]:
         """Search STL files and folders."""
