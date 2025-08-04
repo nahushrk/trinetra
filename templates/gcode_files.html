@@ -28,7 +28,35 @@
         <div id="search-bar" class="input-group mb-3">
             <input type="text" id="search-input" class="form-control" placeholder="Search G-code files...">
         </div>
+        
+        <!-- Filter and Sort Options -->
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <select class="form-control" id="sort-by">
+                    <option value="folder_name">Sort by Folder</option>
+                    <option value="file_name">Sort by File</option>
+                    <option value="print_count">Sort by Print Count</option>
+                    <option value="last_print_date">Sort by Last Print Date</option>
+                </select>
+            </div>
+            <div class="col-md-6">
+                <select class="form-control" id="sort-order">
+                    <option value="asc">Ascending</option>
+                    <option value="desc">Descending</option>
+                </select>
+            </div>
+        </div>
+        
         <div id="metadata" class="text-center text-muted"></div>
+        
+        <!-- Pagination Controls -->
+        <div id="pagination-controls" class="d-flex justify-content-center mt-3">
+            <nav aria-label="Page navigation">
+                <ul class="pagination" id="pagination">
+                    <!-- Pagination will be populated by JavaScript -->
+                </ul>
+            </nav>
+        </div>
     </div>
 </div>
 
@@ -36,13 +64,14 @@
 <canvas id="c" class="d-block mx-auto"></canvas>
 
 <!-- G-code Files Content -->
-<div id="content" class="mt-4"></div>
+<div id="content" class="mt-4"
+     data-gcode-files="{{ gcode_files.files | tojson | safe }}"
+     data-pagination="{{ gcode_files.pagination | tojson | safe if gcode_files.pagination else 'null' }}"
+     data-filter="{{ gcode_files.filter | tojson | safe if gcode_files.filter else 'null' }}">
+</div>
 {% endblock %}
 
 {% block scripts %}
-<script>
-    const gcodeFiles = {{ gcode_files|tojson }};
-</script>
 <script src="{{ url_for('static', filename='js/shared_3d_renderer.js') }}"></script>
 <script src="{{ url_for('static', filename='js/gcode_files.js') }}"></script>
-{% endblock %} 
+{% endblock %}
