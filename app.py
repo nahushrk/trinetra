@@ -169,7 +169,7 @@ def create_app(config_file=None, config_overrides=None):
         """Display all G-code files across all folders with links to their parent folders."""
         # Check if pagination is requested
         page = request.args.get("page", 1, type=int)
-        per_page = request.args.get("per_page", 50, type=int)
+        per_page = request.args.get("per_page", 15, type=int)
         sort_by = request.args.get("sort_by", "folder_name")
         sort_order = request.args.get("sort_order", "asc")
         filter_text = request.args.get("filter", "")
@@ -503,7 +503,7 @@ def create_app(config_file=None, config_overrides=None):
     def api_stl_files():
         """API endpoint for paginated STL files."""
         page = request.args.get("page", 1, type=int)
-        per_page = request.args.get("per_page", 50, type=int)
+        per_page = request.args.get("per_page", 15, type=int)
         sort_by = request.args.get("sort_by", "folder_name")
         sort_order = request.args.get("sort_order", "asc")
         filter_text = request.args.get("filter", "")

@@ -375,7 +375,7 @@ class DatabaseManager:
     def get_stl_files_paginated(
         self,
         page: int = 1,
-        per_page: int = 50,
+        per_page: int = 15,
         sort_by: str = "folder_name",
         sort_order: str = "asc",
         filter_text: str = "",
@@ -642,7 +642,7 @@ class DatabaseManager:
     def get_gcode_files_paginated(
         self,
         page: int = 1,
-        per_page: int = 50,
+        per_page: int = 15,
         sort_by: str = "folder_name",
         sort_order: str = "asc",
         filter_text: str = "",
