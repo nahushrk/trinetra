@@ -437,7 +437,7 @@ function loadPage(page) {
     currentSortOrder = sortOrder;
     
     // Make API call
-    const url = `/api/stl_files?page=${page}&per_page=50&filter=${encodeURIComponent(filterText)}&sort_by=${encodeURIComponent(sortBy)}&sort_order=${encodeURIComponent(sortOrder)}`;
+    const url = `/api/stl_files?page=${page}&per_page=15&filter=${encodeURIComponent(filterText)}&sort_by=${encodeURIComponent(sortBy)}&sort_order=${encodeURIComponent(sortOrder)}`;
     
     fetch(url)
         .then(response => response.json())
