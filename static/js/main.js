@@ -2,7 +2,7 @@ let canvas, renderer;
 let scenes = [];
 const observerOptions = {
     root: null,
-    rootMargin: '0px',
+    rootMargin: '50px',  // Only trigger when 50px of the element is visible
     threshold: 0.1
 };
 
@@ -48,7 +48,42 @@ function init() {
         }
     });
 
-    loadSTLFiles(stlFiles);
+    // Get data from data attributes
+    const contentDiv = document.getElementById('content');
+    const stlFilesData = contentDiv ? contentDiv.getAttribute('data-stl-files') : null;
+    let initialStlFiles = [];
+    if (stlFilesData) {
+        try {
+            // Check if stlFilesData is already an object (not a string)
+            if (typeof stlFilesData === 'object') {
+                initialStlFiles = stlFilesData.folders || stlFilesData;
+            } else {
+                // Try to parse as JSON
+                const parsedData = JSON.parse(stlFilesData);
+                initialStlFiles = parsedData.folders || parsedData;
+            }
+        } catch (e) {
+            console.error('Error parsing STL files data:', e);
+        }
+    }
+
+    loadSTLFiles(initialStlFiles);
+
+    // Sort by and sort order change
+    const sortBySelect = document.getElementById('sort-by');
+    const sortOrderSelect = document.getElementById('sort-order');
+    
+    if (sortBySelect) {
+        sortBySelect.addEventListener('change', function() {
+            refreshCurrentView();
+        });
+    }
+    
+    if (sortOrderSelect) {
+        sortOrderSelect.addEventListener('change', function() {
+            refreshCurrentView();
+        });
+    }
 }
 
 let uploadStartTime = null;
@@ -363,4 +398,155 @@ function updateMetadata(matches) {
     const metadataDiv = document.getElementById('metadata');
     metadataDiv.innerText = `Number of matches: ${matches}`;
     metadataDiv.style.color = 'grey';
+}
+
+// View management functions
+let currentView = 'paginated'; // 'infinite-scroll' or 'paginated'
+let currentPage = 1;
+let currentFilter = '';
+let currentSortBy = 'folder_name';
+let currentSortOrder = 'asc';
+
+// Initialize with paginated view
+document.addEventListener('DOMContentLoaded', function() {
+    // Show pagination controls
+    const paginationControls = document.getElementById('pagination-controls');
+    if (paginationControls) {
+        paginationControls.style.display = 'flex';
+    }
+    
+    // Load first page
+    loadPage(1);
+});
+
+function loadPage(page) {
+    currentPage = page;
+    
+    // Get filter and sort options
+    const searchInput = document.getElementById('search-input');
+    const sortBySelect = document.getElementById('sort-by');
+    const sortOrderSelect = document.getElementById('sort-order');
+    
+    const filterText = searchInput ? searchInput.value : '';
+    const sortBy = sortBySelect ? sortBySelect.value : 'folder_name';
+    const sortOrder = sortOrderSelect ? sortOrderSelect.value : 'asc';
+    
+    // Update current values
+    currentFilter = filterText;
+    currentSortBy = sortBy;
+    currentSortOrder = sortOrder;
+    
+    // Make API call
+    const url = `/api/stl_files?page=${page}&per_page=50&filter=${encodeURIComponent(filterText)}&sort_by=${encodeURIComponent(sortBy)}&sort_order=${encodeURIComponent(sortOrder)}`;
+    
+    fetch(url)
+        .then(response => response.json())
+        .then(data => {
+            // Load files
+            loadSTLFiles(data.folders);
+            
+            // Update metadata
+            const metadataDiv = document.getElementById('metadata');
+            if (metadataDiv) {
+                metadataDiv.innerText = `Showing ${data.pagination.total_files} files in ${data.pagination.total_folders} folders (page ${data.pagination.page} of ${data.pagination.total_pages})`;
+            }
+            
+            // Update pagination controls
+            updatePaginationControls(data.pagination);
+        })
+        .catch(error => {
+            console.error('Error loading page:', error);
+            const metadataDiv = document.getElementById('metadata');
+            if (metadataDiv) {
+                metadataDiv.innerText = 'Error loading data';
+            }
+        });
+}
+
+function updatePaginationControls(pagination) {
+    const paginationUl = document.getElementById('pagination');
+    if (!paginationUl) return;
+    
+    // Clear existing pagination
+    paginationUl.innerHTML = '';
+    
+    // Add previous button
+    if (pagination.page > 1) {
+        const prevLi = document.createElement('li');
+        prevLi.className = 'page-item';
+        const prevLink = document.createElement('a');
+        prevLink.className = 'page-link';
+        prevLink.href = '#';
+        prevLink.innerText = 'Previous';
+        prevLink.addEventListener('click', function(e) {
+            e.preventDefault();
+            loadPage(pagination.page - 1);
+        });
+        prevLi.appendChild(prevLink);
+        paginationUl.appendChild(prevLi);
+    }
+    
+    // Add page numbers (show up to 5 pages around current page)
+    const startPage = Math.max(1, pagination.page - 2);
+    const endPage = Math.min(pagination.total_pages, pagination.page + 2);
+    
+    for (let i = startPage; i <= endPage; i++) {
+        const pageLi = document.createElement('li');
+        pageLi.className = 'page-item' + (i === pagination.page ? ' active' : '');
+        const pageLink = document.createElement('a');
+        pageLink.className = 'page-link';
+        pageLink.href = '#';
+        pageLink.innerText = i;
+        if (i !== pagination.page) {
+            pageLink.addEventListener('click', function(e) {
+                e.preventDefault();
+                loadPage(i);
+            });
+        }
+        pageLi.appendChild(pageLink);
+        paginationUl.appendChild(pageLi);
+    }
+    
+    // Add next button
+    if (pagination.page < pagination.total_pages) {
+        const nextLi = document.createElement('li');
+        nextLi.className = 'page-item';
+        const nextLink = document.createElement('a');
+        nextLink.className = 'page-link';
+        nextLink.href = '#';
+        nextLink.innerText = 'Next';
+        nextLink.addEventListener('click', function(e) {
+            e.preventDefault();
+            loadPage(pagination.page + 1);
+        });
+        nextLi.appendChild(nextLink);
+        paginationUl.appendChild(nextLi);
+    }
+}
+
+function refreshCurrentView() {
+    if (currentView === 'paginated') {
+        loadPage(1); // Reload first page with new sort/filter options
+    } else {
+        // For infinite scroll, we would normally reapply filters
+        // But for now, we'll just reload with current settings
+        performSearch(currentFilter);
+    }
+}
+
+// Override performSearch to work with both views
+function performSearch(searchTerm) {
+    if (currentView === 'paginated') {
+        // For paginated view, update filter and reload first page
+        currentFilter = searchTerm;
+        loadPage(1);
+    } else {
+        // For infinite scroll view, use existing search functionality
+        fetch(`/search?q=${encodeURIComponent(searchTerm)}`)
+            .then(response => response.json())
+            .then(data => {
+                loadSTLFiles(data.stl_files);
+                updateMetadata(data.metadata.matches);
+            });
+    }
 }

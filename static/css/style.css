@@ -801,3 +801,31 @@ button {
     }
 }
 
+/* Pagination Controls */
+.pagination {
+    margin-bottom: 0;
+}
+
+.page-item.active .page-link {
+    background-color: #007bff;
+    border-color: #007bff;
+    color: white;
+}
+
+.page-link {
+    color: #007bff;
+    text-decoration: none;
+}
+
+.page-link:hover {
+    color: #0056b3;
+    text-decoration: none;
+}
+
+/* View Toggle Buttons */
+.btn-group .btn.active {
+    background-color: #007bff;
+    color: white;
+    border-color: #007bff;
+}
+

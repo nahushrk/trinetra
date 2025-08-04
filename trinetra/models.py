@@ -185,7 +185,7 @@ class GCodeFileStats(Base):
     gcode_file_id = Column(Integer, ForeignKey("gcode_files.id"), nullable=False, unique=True)
     print_count = Column(Integer, default=0)
     successful_prints = Column(Integer, default=0)  # Number of successful prints
-    canceled_prints = Column(Integer, default=0)    # Number of canceled prints
+    canceled_prints = Column(Integer, default=0)  # Number of canceled prints
     total_print_time = Column(Integer, default=0)  # in seconds
     total_filament_used = Column(Integer, default=0)  # in mm
     last_print_date = Column(DateTime, nullable=True)

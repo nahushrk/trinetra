@@ -146,14 +146,44 @@ def create_app(config_file=None, config_overrides=None):
     # --- All routes below, using app.config for paths ---
     @app.route("/")
     def index():
-        stl_files = get_stl_files(app.config["STL_FILES_PATH"])
-        return render_template("index.html", stl_files=stl_files)
+        # Check if pagination is requested
+        page = request.args.get("page", 1, type=int)
+        per_page = request.args.get("per_page", 15, type=int)
+        sort_by = request.args.get("sort_by", "folder_name")
+        sort_order = request.args.get("sort_order", "asc")
+        filter_text = request.args.get("filter", "")
+
+        # Get paginated data
+        paginated_data = db_manager.get_stl_files_paginated(
+            page=page,
+            per_page=per_page,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            filter_text=filter_text,
+        )
+
+        return render_template("index.html", stl_files=paginated_data)
 
     @app.route("/gcode_files")
     def gcode_files_view():
         """Display all G-code files across all folders with links to their parent folders."""
-        all_gcode_files = db_manager.get_all_gcode_files()
-        return render_template("gcode_files.html", gcode_files=all_gcode_files)
+        # Check if pagination is requested
+        page = request.args.get("page", 1, type=int)
+        per_page = request.args.get("per_page", 50, type=int)
+        sort_by = request.args.get("sort_by", "folder_name")
+        sort_order = request.args.get("sort_order", "asc")
+        filter_text = request.args.get("filter", "")
+
+        # Get paginated data
+        paginated_data = db_manager.get_gcode_files_paginated(
+            page=page,
+            per_page=per_page,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            filter_text=filter_text,
+        )
+
+        return render_template("gcode_files.html", gcode_files=paginated_data)
 
     @app.route("/folder/<path:folder_name>")
     def folder_view(folder_name):
@@ -468,6 +498,44 @@ def create_app(config_file=None, config_overrides=None):
         filtered_gcode_files = db_manager.search_gcode_files(query_text, search_limit)
         metadata = {"matches": len(filtered_gcode_files)}
         return jsonify({"gcode_files": filtered_gcode_files, "metadata": metadata})
+
+    @app.route("/api/stl_files")
+    def api_stl_files():
+        """API endpoint for paginated STL files."""
+        page = request.args.get("page", 1, type=int)
+        per_page = request.args.get("per_page", 50, type=int)
+        sort_by = request.args.get("sort_by", "folder_name")
+        sort_order = request.args.get("sort_order", "asc")
+        filter_text = request.args.get("filter", "")
+
+        paginated_data = db_manager.get_stl_files_paginated(
+            page=page,
+            per_page=per_page,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            filter_text=filter_text,
+        )
+
+        return jsonify(paginated_data)
+
+    @app.route("/api/gcode_files")
+    def api_gcode_files():
+        """API endpoint for paginated G-code files."""
+        page = request.args.get("page", 1, type=int)
+        per_page = request.args.get("per_page", 15, type=int)
+        sort_by = request.args.get("sort_by", "folder_name")
+        sort_order = request.args.get("sort_order", "asc")
+        filter_text = request.args.get("filter", "")
+
+        paginated_data = db_manager.get_gcode_files_paginated(
+            page=page,
+            per_page=per_page,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            filter_text=filter_text,
+        )
+
+        return jsonify(paginated_data)
 
     @app.route("/stats")
     def stats_view():
