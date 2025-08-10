@@ -2,6 +2,7 @@
 Comprehensive tests for sorting and filtering capabilities
 of the Trinetra 3D printing catalog application.
 """
+
 import os
 import tempfile
 import shutil
@@ -13,6 +14,7 @@ from flask import Flask
 
 # Import the app after setting up test environment
 import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Setup logging for tests - will be configured by create_app
@@ -37,7 +39,7 @@ class TestSortFilter:
         self.gcode_path = os.path.join(self.temp_dir, "gcode_files")
         os.makedirs(self.stl_path, exist_ok=True)
         os.makedirs(self.gcode_path, exist_ok=True)
-        
+
         self.config = {
             "base_path": self.stl_path,
             "gcode_path": self.gcode_path,
@@ -90,18 +92,18 @@ class TestSortFilter:
                 "sort_order": "asc",
             },
         }
-        
+
         with patch.object(
-            self.app.config["DB_MANAGER"], 
-            "get_stl_files_paginated", 
-            return_value=mock_paginated_data
+            self.app.config["DB_MANAGER"],
+            "get_stl_files_paginated",
+            return_value=mock_paginated_data,
         ):
             response = self.client.get("/api/stl_files?sort_by=folder_name&sort_order=asc")
             assert response.status_code == 200
-            
+
             data = json.loads(response.data)
             folders = data["folders"]
-            
+
             # Verify folders are sorted by name (ascending)
             assert len(folders) == 2
             assert folders[0]["folder_name"] == "alpha_folder"
@@ -141,18 +143,18 @@ class TestSortFilter:
                 "sort_order": "desc",
             },
         }
-        
+
         with patch.object(
-            self.app.config["DB_MANAGER"], 
-            "get_stl_files_paginated", 
-            return_value=mock_paginated_data
+            self.app.config["DB_MANAGER"],
+            "get_stl_files_paginated",
+            return_value=mock_paginated_data,
         ):
             response = self.client.get("/api/stl_files?sort_by=folder_name&sort_order=desc")
             assert response.status_code == 200
-            
+
             data = json.loads(response.data)
             folders = data["folders"]
-            
+
             # Verify folders are sorted by name (descending)
             assert len(folders) == 2
             assert folders[0]["folder_name"] == "beta_folder"
@@ -186,18 +188,18 @@ class TestSortFilter:
                 "sort_order": "asc",
             },
         }
-        
+
         with patch.object(
-            self.app.config["DB_MANAGER"], 
-            "get_stl_files_paginated", 
-            return_value=mock_paginated_data
+            self.app.config["DB_MANAGER"],
+            "get_stl_files_paginated",
+            return_value=mock_paginated_data,
         ):
             response = self.client.get("/api/stl_files?sort_by=file_name&sort_order=asc")
             assert response.status_code == 200
-            
+
             data = json.loads(response.data)
             folders = data["folders"]
-            
+
             # Verify files within folders are sorted by name (ascending)
             assert len(folders) == 1
             files = folders[0]["files"]
@@ -233,18 +235,18 @@ class TestSortFilter:
                 "sort_order": "desc",
             },
         }
-        
+
         with patch.object(
-            self.app.config["DB_MANAGER"], 
-            "get_stl_files_paginated", 
-            return_value=mock_paginated_data
+            self.app.config["DB_MANAGER"],
+            "get_stl_files_paginated",
+            return_value=mock_paginated_data,
         ):
             response = self.client.get("/api/stl_files?sort_by=file_name&sort_order=desc")
             assert response.status_code == 200
-            
+
             data = json.loads(response.data)
             folders = data["folders"]
-            
+
             # Verify files within folders are sorted by name (descending)
             assert len(folders) == 1
             files = folders[0]["files"]
@@ -286,11 +288,11 @@ class TestSortFilter:
                 "sort_order": "asc",
             },
         }
-        
+
         with patch.object(
-            self.app.config["DB_MANAGER"], 
-            "get_stl_files_paginated", 
-            return_value=mock_paginated_data
+            self.app.config["DB_MANAGER"],
+            "get_stl_files_paginated",
+            return_value=mock_paginated_data,
         ):
             response = self.client.get("/api/stl_files?sort_by=created_at&sort_order=asc")
             assert response.status_code == 200
@@ -329,11 +331,11 @@ class TestSortFilter:
                 "sort_order": "desc",
             },
         }
-        
+
         with patch.object(
-            self.app.config["DB_MANAGER"], 
-            "get_stl_files_paginated", 
-            return_value=mock_paginated_data
+            self.app.config["DB_MANAGER"],
+            "get_stl_files_paginated",
+            return_value=mock_paginated_data,
         ):
             response = self.client.get("/api/stl_files?sort_by=created_at&sort_order=desc")
             assert response.status_code == 200
@@ -367,15 +369,15 @@ class TestSortFilter:
                 "sort_order": "asc",
             },
         }
-        
+
         with patch.object(
-            self.app.config["DB_MANAGER"], 
-            "get_stl_files_paginated", 
-            return_value=mock_paginated_data
+            self.app.config["DB_MANAGER"],
+            "get_stl_files_paginated",
+            return_value=mock_paginated_data,
         ):
             response = self.client.get("/api/stl_files?filter=project_a")
             assert response.status_code == 200
-            
+
             data = json.loads(response.data)
             # Verify filter was applied
             filter_info = data["filter"]
@@ -408,15 +410,15 @@ class TestSortFilter:
                 "sort_order": "asc",
             },
         }
-        
+
         with patch.object(
-            self.app.config["DB_MANAGER"], 
-            "get_stl_files_paginated", 
-            return_value=mock_paginated_data
+            self.app.config["DB_MANAGER"],
+            "get_stl_files_paginated",
+            return_value=mock_paginated_data,
         ):
             response = self.client.get("/api/stl_files?filter=part_a1")
             assert response.status_code == 200
-            
+
             data = json.loads(response.data)
             # Verify filter was applied
             filter_info = data["filter"]
@@ -431,7 +433,10 @@ class TestSortFilter:
                     "folder_name": "recent_folder",
                     "top_level_folder": "recent_folder",
                     "files": [
-                        {"file_name": "recent_model.stl", "rel_path": "recent_folder/recent_model.stl"},
+                        {
+                            "file_name": "recent_model.stl",
+                            "rel_path": "recent_folder/recent_model.stl",
+                        },
                     ],
                 },
             ],
@@ -449,15 +454,15 @@ class TestSortFilter:
                 "sort_order": "asc",
             },
         }
-        
+
         with patch.object(
-            self.app.config["DB_MANAGER"], 
-            "get_stl_files_paginated", 
-            return_value=mock_paginated_data
+            self.app.config["DB_MANAGER"],
+            "get_stl_files_paginated",
+            return_value=mock_paginated_data,
         ):
             response = self.client.get("/api/stl_files?filter_type=today")
             assert response.status_code == 200
-            
+
             data = json.loads(response.data)
             # Verify filter was applied
             filter_info = data["filter"]
@@ -472,7 +477,10 @@ class TestSortFilter:
                     "folder_name": "weekly_folder",
                     "top_level_folder": "weekly_folder",
                     "files": [
-                        {"file_name": "weekly_model.stl", "rel_path": "weekly_folder/weekly_model.stl"},
+                        {
+                            "file_name": "weekly_model.stl",
+                            "rel_path": "weekly_folder/weekly_model.stl",
+                        },
                     ],
                 },
             ],
@@ -490,15 +498,15 @@ class TestSortFilter:
                 "sort_order": "asc",
             },
         }
-        
+
         with patch.object(
-            self.app.config["DB_MANAGER"], 
-            "get_stl_files_paginated", 
-            return_value=mock_paginated_data
+            self.app.config["DB_MANAGER"],
+            "get_stl_files_paginated",
+            return_value=mock_paginated_data,
         ):
             response = self.client.get("/api/stl_files?filter_type=week")
             assert response.status_code == 200
-            
+
             data = json.loads(response.data)
             # Verify filter was applied
             filter_info = data["filter"]
@@ -541,18 +549,18 @@ class TestSortFilter:
                 "sort_order": "asc",
             },
         }
-        
+
         with patch.object(
-            self.app.config["DB_MANAGER"], 
-            "get_gcode_files_paginated", 
-            return_value=mock_paginated_data
+            self.app.config["DB_MANAGER"],
+            "get_gcode_files_paginated",
+            return_value=mock_paginated_data,
         ):
             response = self.client.get("/api/gcode_files?sort_by=file_name&sort_order=asc")
             assert response.status_code == 200
-            
+
             data = json.loads(response.data)
             files = data["files"]
-            
+
             # Verify files are sorted by name (ascending)
             assert len(files) == 2
             assert files[0]["file_name"] == "a_file.gcode"
@@ -593,18 +601,18 @@ class TestSortFilter:
                 "sort_order": "desc",
             },
         }
-        
+
         with patch.object(
-            self.app.config["DB_MANAGER"], 
-            "get_gcode_files_paginated", 
-            return_value=mock_paginated_data
+            self.app.config["DB_MANAGER"],
+            "get_gcode_files_paginated",
+            return_value=mock_paginated_data,
         ):
             response = self.client.get("/api/gcode_files?sort_by=file_name&sort_order=desc")
             assert response.status_code == 200
-            
+
             data = json.loads(response.data)
             files = data["files"]
-            
+
             # Verify files are sorted by name (descending)
             assert len(files) == 2
             assert files[0]["file_name"] == "z_file.gcode"
@@ -645,11 +653,11 @@ class TestSortFilter:
                 "sort_order": "asc",
             },
         }
-        
+
         with patch.object(
-            self.app.config["DB_MANAGER"], 
-            "get_gcode_files_paginated", 
-            return_value=mock_paginated_data
+            self.app.config["DB_MANAGER"],
+            "get_gcode_files_paginated",
+            return_value=mock_paginated_data,
         ):
             response = self.client.get("/api/gcode_files?sort_by=folder_name&sort_order=asc")
             assert response.status_code == 200
@@ -689,11 +697,11 @@ class TestSortFilter:
                 "sort_order": "desc",
             },
         }
-        
+
         with patch.object(
-            self.app.config["DB_MANAGER"], 
-            "get_gcode_files_paginated", 
-            return_value=mock_paginated_data
+            self.app.config["DB_MANAGER"],
+            "get_gcode_files_paginated",
+            return_value=mock_paginated_data,
         ):
             response = self.client.get("/api/gcode_files?sort_by=folder_name&sort_order=desc")
             assert response.status_code == 200
@@ -755,18 +763,18 @@ class TestSortFilter:
                 "sort_order": "desc",
             },
         }
-        
+
         with patch.object(
-            self.app.config["DB_MANAGER"], 
-            "get_gcode_files_paginated", 
-            return_value=mock_paginated_data
+            self.app.config["DB_MANAGER"],
+            "get_gcode_files_paginated",
+            return_value=mock_paginated_data,
         ):
             response = self.client.get("/api/gcode_files?sort_by=print_count&sort_order=desc")
             assert response.status_code == 200
-            
+
             data = json.loads(response.data)
             files = data["files"]
-            
+
             # Verify files are sorted by print count (descending)
             assert len(files) == 2
             assert files[0]["stats"]["print_count"] == 5
@@ -829,11 +837,11 @@ class TestSortFilter:
                 "sort_order": "desc",
             },
         }
-        
+
         with patch.object(
-            self.app.config["DB_MANAGER"], 
-            "get_gcode_files_paginated", 
-            return_value=mock_paginated_data
+            self.app.config["DB_MANAGER"],
+            "get_gcode_files_paginated",
+            return_value=mock_paginated_data,
         ):
             response = self.client.get("/api/gcode_files?sort_by=last_print_date&sort_order=desc")
             assert response.status_code == 200
@@ -867,20 +875,20 @@ class TestSortFilter:
                 "sort_order": "asc",
             },
         }
-        
+
         with patch.object(
-            self.app.config["DB_MANAGER"], 
-            "get_gcode_files_paginated", 
-            return_value=mock_paginated_data
+            self.app.config["DB_MANAGER"],
+            "get_gcode_files_paginated",
+            return_value=mock_paginated_data,
         ):
             response = self.client.get("/api/gcode_files?filter=part_a1")
             assert response.status_code == 200
-            
+
             data = json.loads(response.data)
             # Check that returned files match the filter
             assert len(data["files"]) == 1
             assert "part_a1" in data["files"][0]["file_name"].lower()
-            
+
             # Verify filter was applied
             filter_info = data["filter"]
             assert filter_info["text"] == "part_a1"
@@ -912,20 +920,20 @@ class TestSortFilter:
                 "sort_order": "asc",
             },
         }
-        
+
         with patch.object(
-            self.app.config["DB_MANAGER"], 
-            "get_gcode_files_paginated", 
-            return_value=mock_paginated_data
+            self.app.config["DB_MANAGER"],
+            "get_gcode_files_paginated",
+            return_value=mock_paginated_data,
         ):
             response = self.client.get("/api/gcode_files?filter=project_a")
             assert response.status_code == 200
-            
+
             data = json.loads(response.data)
             # Check that returned files are from matching folders
             assert len(data["files"]) == 1
             assert "project_a" in data["files"][0]["folder_name"].lower()
-            
+
             # Verify filter was applied
             filter_info = data["filter"]
             assert filter_info["text"] == "project_a"
@@ -968,15 +976,15 @@ class TestSortFilter:
                 "sort_order": "asc",
             },
         }
-        
+
         with patch.object(
-            self.app.config["DB_MANAGER"], 
-            "get_gcode_files_paginated", 
-            return_value=mock_paginated_data
+            self.app.config["DB_MANAGER"],
+            "get_gcode_files_paginated",
+            return_value=mock_paginated_data,
         ):
             response = self.client.get("/api/gcode_files?filter_type=successful")
             assert response.status_code == 200
-            
+
             data = json.loads(response.data)
             # Verify filter was applied
             filter_info = data["filter"]
@@ -1020,15 +1028,15 @@ class TestSortFilter:
                 "sort_order": "asc",
             },
         }
-        
+
         with patch.object(
-            self.app.config["DB_MANAGER"], 
-            "get_gcode_files_paginated", 
-            return_value=mock_paginated_data
+            self.app.config["DB_MANAGER"],
+            "get_gcode_files_paginated",
+            return_value=mock_paginated_data,
         ):
             response = self.client.get("/api/gcode_files?filter_type=failed")
             assert response.status_code == 200
-            
+
             data = json.loads(response.data)
             # Verify filter was applied
             filter_info = data["filter"]
@@ -1061,15 +1069,15 @@ class TestSortFilter:
                 "sort_order": "asc",
             },
         }
-        
+
         with patch.object(
-            self.app.config["DB_MANAGER"], 
-            "get_gcode_files_paginated", 
-            return_value=mock_paginated_data
+            self.app.config["DB_MANAGER"],
+            "get_gcode_files_paginated",
+            return_value=mock_paginated_data,
         ):
             response = self.client.get("/api/gcode_files?filter_type=today")
             assert response.status_code == 200
-            
+
             data = json.loads(response.data)
             # Verify filter was applied
             filter_info = data["filter"]
@@ -1102,15 +1110,15 @@ class TestSortFilter:
                 "sort_order": "asc",
             },
         }
-        
+
         with patch.object(
             self.app.config["DB_MANAGER"],
             "get_gcode_files_paginated",
-            return_value=mock_paginated_data
+            return_value=mock_paginated_data,
         ):
             response = self.client.get("/api/gcode_files?filter_type=week")
             assert response.status_code == 200
-            
+
             data = json.loads(response.data)
             # Verify filter was applied
             filter_info = data["filter"]
@@ -1145,22 +1153,22 @@ class TestSortFilter:
                 "sort_order": "asc",
             },
         }
-        
+
         with patch.object(
             self.app.config["DB_MANAGER"],
             "get_stl_files_paginated",
-            return_value=mock_paginated_data
+            return_value=mock_paginated_data,
         ):
             response = self.client.get(
                 "/api/stl_files?sort_by=folder_name&sort_order=asc&filter=project&per_page=10&page=1"
             )
             assert response.status_code == 200
-            
+
             data = json.loads(response.data)
             assert "folders" in data
             assert "pagination" in data
             assert "filter" in data
-            
+
             # Verify filter was applied
             filter_info = data["filter"]
             assert filter_info["text"] == "project"
@@ -1194,22 +1202,22 @@ class TestSortFilter:
                 "sort_order": "asc",
             },
         }
-        
+
         with patch.object(
             self.app.config["DB_MANAGER"],
             "get_gcode_files_paginated",
-            return_value=mock_paginated_data
+            return_value=mock_paginated_data,
         ):
             response = self.client.get(
                 "/api/gcode_files?sort_by=file_name&sort_order=asc&filter=part&per_page=10&page=1"
             )
             assert response.status_code == 200
-            
+
             data = json.loads(response.data)
             assert "files" in data
             assert "pagination" in data
             assert "filter" in data
-            
+
             # Verify filter was applied
             filter_info = data["filter"]
             assert filter_info["text"] == "part"
@@ -1237,11 +1245,11 @@ class TestSortFilter:
                 "sort_order": "asc",
             },
         }
-        
+
         with patch.object(
             self.app.config["DB_MANAGER"],
             "get_stl_files_paginated",
-            return_value=mock_paginated_data
+            return_value=mock_paginated_data,
         ):
             response = self.client.get("/api/stl_files?sort_by=invalid_field")
             assert response.status_code == 200  # Should use default sorting
@@ -1265,11 +1273,11 @@ class TestSortFilter:
                 "sort_order": "asc",  # Should default to asc
             },
         }
-        
+
         with patch.object(
             self.app.config["DB_MANAGER"],
             "get_stl_files_paginated",
-            return_value=mock_paginated_data
+            return_value=mock_paginated_data,
         ):
             response = self.client.get("/api/stl_files?sort_order=invalid")
             assert response.status_code == 200  # Should use default sorting
@@ -1292,11 +1300,11 @@ class TestSortFilter:
                 "sort_order": "asc",
             },
         }
-        
+
         with patch.object(
             self.app.config["DB_MANAGER"],
             "get_gcode_files_paginated",
-            return_value=mock_paginated_data
+            return_value=mock_paginated_data,
         ):
             response = self.client.get("/api/gcode_files?sort_by=invalid_field")
             assert response.status_code == 200  # Should use default sorting
@@ -1319,11 +1327,11 @@ class TestSortFilter:
                 "sort_order": "asc",  # Should default to asc
             },
         }
-        
+
         with patch.object(
             self.app.config["DB_MANAGER"],
             "get_gcode_files_paginated",
-            return_value=mock_paginated_data
+            return_value=mock_paginated_data,
         ):
             response = self.client.get("/api/gcode_files?sort_order=invalid")
             assert response.status_code == 200  # Should use default sorting
@@ -1347,15 +1355,17 @@ class TestSortFilter:
                 "sort_order": "asc",
             },
         }
-        
+
         with patch.object(
             self.app.config["DB_MANAGER"],
             "get_stl_files_paginated",
-            return_value=mock_paginated_data
+            return_value=mock_paginated_data,
         ):
-            response = self.client.get("/api/stl_files?sort_by=folder_name&sort_order=asc&filter=test")
+            response = self.client.get(
+                "/api/stl_files?sort_by=folder_name&sort_order=asc&filter=test"
+            )
             assert response.status_code == 200
-            
+
             data = json.loads(response.data)
             assert data["folders"] == []
             assert data["pagination"]["total_folders"] == 0
@@ -1379,15 +1389,17 @@ class TestSortFilter:
                 "sort_order": "asc",
             },
         }
-        
+
         with patch.object(
             self.app.config["DB_MANAGER"],
             "get_gcode_files_paginated",
-            return_value=mock_paginated_data
+            return_value=mock_paginated_data,
         ):
-            response = self.client.get("/api/gcode_files?sort_by=folder_name&sort_order=asc&filter=test")
+            response = self.client.get(
+                "/api/gcode_files?sort_by=folder_name&sort_order=asc&filter=test"
+            )
             assert response.status_code == 200
-            
+
             data = json.loads(response.data)
             assert data["files"] == []
             assert data["pagination"]["total_files"] == 0
