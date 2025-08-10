@@ -2,6 +2,7 @@
 Comprehensive tests for pagination capabilities
 of the Trinetra 3D printing catalog application.
 """
+
 import os
 import tempfile
 import shutil
@@ -13,6 +14,7 @@ from flask import Flask
 
 # Import the app after setting up test environment
 import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Setup logging for tests - will be configured by create_app
@@ -37,7 +39,7 @@ class TestPagination:
         self.gcode_path = os.path.join(self.temp_dir, "gcode_files")
         os.makedirs(self.stl_path, exist_ok=True)
         os.makedirs(self.gcode_path, exist_ok=True)
-        
+
         self.config = {
             "base_path": self.stl_path,
             "gcode_path": self.gcode_path,
@@ -91,20 +93,20 @@ class TestPagination:
                 "sort_order": "asc",
             },
         }
-        
+
         with patch.object(
-            self.app.config["DB_MANAGER"], 
-            "get_stl_files_paginated", 
-            return_value=mock_paginated_data
+            self.app.config["DB_MANAGER"],
+            "get_stl_files_paginated",
+            return_value=mock_paginated_data,
         ):
             response = self.client.get("/api/stl_files")
             assert response.status_code == 200
-            
+
             data = json.loads(response.data)
             assert "folders" in data
             assert "pagination" in data
             assert "filter" in data
-            
+
             # Check pagination defaults
             pagination = data["pagination"]
             assert pagination["page"] == 1
@@ -140,15 +142,15 @@ class TestPagination:
                 "sort_order": "asc",
             },
         }
-        
+
         with patch.object(
-            self.app.config["DB_MANAGER"], 
-            "get_stl_files_paginated", 
-            return_value=mock_paginated_data
+            self.app.config["DB_MANAGER"],
+            "get_stl_files_paginated",
+            return_value=mock_paginated_data,
         ):
             response = self.client.get("/api/stl_files?page=2&per_page=5")
             assert response.status_code == 200
-            
+
             data = json.loads(response.data)
             pagination = data["pagination"]
             assert pagination["page"] == 2
@@ -183,15 +185,15 @@ class TestPagination:
                 "sort_order": "asc",
             },
         }
-        
+
         with patch.object(
-            self.app.config["DB_MANAGER"], 
-            "get_stl_files_paginated", 
-            return_value=mock_paginated_data
+            self.app.config["DB_MANAGER"],
+            "get_stl_files_paginated",
+            return_value=mock_paginated_data,
         ):
             response = self.client.get("/api/stl_files?page=1&per_page=5")
             assert response.status_code == 200
-            
+
             data = json.loads(response.data)
             pagination = data["pagination"]
             assert pagination["page"] == 1
@@ -216,15 +218,15 @@ class TestPagination:
                 "sort_order": "asc",
             },
         }
-        
+
         with patch.object(
-            self.app.config["DB_MANAGER"], 
-            "get_stl_files_paginated", 
-            return_value=mock_paginated_data
+            self.app.config["DB_MANAGER"],
+            "get_stl_files_paginated",
+            return_value=mock_paginated_data,
         ):
             response = self.client.get("/api/stl_files?page=3&per_page=5")
             assert response.status_code == 200
-            
+
             data = json.loads(response.data)
             pagination = data["pagination"]
             assert pagination["page"] == 3
@@ -278,20 +280,20 @@ class TestPagination:
                 "sort_order": "asc",
             },
         }
-        
+
         with patch.object(
-            self.app.config["DB_MANAGER"], 
-            "get_gcode_files_paginated", 
-            return_value=mock_paginated_data
+            self.app.config["DB_MANAGER"],
+            "get_gcode_files_paginated",
+            return_value=mock_paginated_data,
         ):
             response = self.client.get("/api/gcode_files")
             assert response.status_code == 200
-            
+
             data = json.loads(response.data)
             assert "files" in data
             assert "pagination" in data
             assert "filter" in data
-            
+
             # Check pagination defaults
             pagination = data["pagination"]
             assert pagination["page"] == 1
@@ -326,15 +328,15 @@ class TestPagination:
                 "sort_order": "asc",
             },
         }
-        
+
         with patch.object(
-            self.app.config["DB_MANAGER"], 
-            "get_gcode_files_paginated", 
-            return_value=mock_paginated_data
+            self.app.config["DB_MANAGER"],
+            "get_gcode_files_paginated",
+            return_value=mock_paginated_data,
         ):
             response = self.client.get("/api/gcode_files?page=2&per_page=5")
             assert response.status_code == 200
-            
+
             data = json.loads(response.data)
             pagination = data["pagination"]
             assert pagination["page"] == 2
@@ -369,15 +371,15 @@ class TestPagination:
                 "sort_order": "asc",
             },
         }
-        
+
         with patch.object(
-            self.app.config["DB_MANAGER"], 
-            "get_gcode_files_paginated", 
-            return_value=mock_paginated_data
+            self.app.config["DB_MANAGER"],
+            "get_gcode_files_paginated",
+            return_value=mock_paginated_data,
         ):
             response = self.client.get("/api/gcode_files?page=1&per_page=5")
             assert response.status_code == 200
-            
+
             data = json.loads(response.data)
             pagination = data["pagination"]
             assert pagination["page"] == 1
@@ -401,15 +403,15 @@ class TestPagination:
                 "sort_order": "asc",
             },
         }
-        
+
         with patch.object(
-            self.app.config["DB_MANAGER"], 
-            "get_gcode_files_paginated", 
-            return_value=mock_paginated_data
+            self.app.config["DB_MANAGER"],
+            "get_gcode_files_paginated",
+            return_value=mock_paginated_data,
         ):
             response = self.client.get("/api/gcode_files?page=4&per_page=5")
             assert response.status_code == 200
-            
+
             data = json.loads(response.data)
             pagination = data["pagination"]
             assert pagination["page"] == 4
@@ -436,15 +438,15 @@ class TestPagination:
                 "sort_order": "asc",
             },
         }
-        
+
         with patch.object(
-            self.app.config["DB_MANAGER"], 
-            "get_stl_files_paginated", 
-            return_value=mock_paginated_data
+            self.app.config["DB_MANAGER"],
+            "get_stl_files_paginated",
+            return_value=mock_paginated_data,
         ):
             response = self.client.get("/api/stl_files?page=0")
             assert response.status_code == 200  # Should default to page 1
-            
+
             data = json.loads(response.data)
             assert data["pagination"]["page"] == 1
 
@@ -467,15 +469,15 @@ class TestPagination:
                 "sort_order": "asc",
             },
         }
-        
+
         with patch.object(
-            self.app.config["DB_MANAGER"], 
-            "get_stl_files_paginated", 
-            return_value=mock_paginated_data
+            self.app.config["DB_MANAGER"],
+            "get_stl_files_paginated",
+            return_value=mock_paginated_data,
         ):
             response = self.client.get("/api/stl_files?page=-1")
             assert response.status_code == 200  # Should default to page 1
-            
+
             data = json.loads(response.data)
             assert data["pagination"]["page"] == 1
 
@@ -497,15 +499,15 @@ class TestPagination:
                 "sort_order": "asc",
             },
         }
-        
+
         with patch.object(
-            self.app.config["DB_MANAGER"], 
-            "get_gcode_files_paginated", 
-            return_value=mock_paginated_data
+            self.app.config["DB_MANAGER"],
+            "get_gcode_files_paginated",
+            return_value=mock_paginated_data,
         ):
             response = self.client.get("/api/gcode_files?per_page=0")
             assert response.status_code == 200  # Should use default per_page
-            
+
             data = json.loads(response.data)
             assert data["pagination"]["per_page"] == 15
 
@@ -527,15 +529,15 @@ class TestPagination:
                 "sort_order": "asc",
             },
         }
-        
+
         with patch.object(
-            self.app.config["DB_MANAGER"], 
-            "get_gcode_files_paginated", 
-            return_value=mock_paginated_data
+            self.app.config["DB_MANAGER"],
+            "get_gcode_files_paginated",
+            return_value=mock_paginated_data,
         ):
             response = self.client.get("/api/gcode_files?per_page=-5")
             assert response.status_code == 200  # Should use default per_page
-            
+
             data = json.loads(response.data)
             assert data["pagination"]["per_page"] == 15
 
@@ -558,15 +560,15 @@ class TestPagination:
                 "sort_order": "asc",
             },
         }
-        
+
         with patch.object(
-            self.app.config["DB_MANAGER"], 
-            "get_stl_files_paginated", 
-            return_value=mock_paginated_data
+            self.app.config["DB_MANAGER"],
+            "get_stl_files_paginated",
+            return_value=mock_paginated_data,
         ):
             response = self.client.get("/api/stl_files")
             assert response.status_code == 200
-            
+
             data = json.loads(response.data)
             assert data["folders"] == []
             assert data["pagination"]["total_folders"] == 0
@@ -591,15 +593,15 @@ class TestPagination:
                 "sort_order": "asc",
             },
         }
-        
+
         with patch.object(
-            self.app.config["DB_MANAGER"], 
-            "get_gcode_files_paginated", 
-            return_value=mock_paginated_data
+            self.app.config["DB_MANAGER"],
+            "get_gcode_files_paginated",
+            return_value=mock_paginated_data,
         ):
             response = self.client.get("/api/gcode_files")
             assert response.status_code == 200
-            
+
             data = json.loads(response.data)
             assert data["files"] == []
             assert data["pagination"]["total_files"] == 0
