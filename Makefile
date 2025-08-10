@@ -1,4 +1,4 @@
-.PHONY: format test dev-setup test-server clean-venv make-venv clear-data
+.PHONY: format test unit-test playwright-test dev-setup test-server clean-venv make-venv clear-data
 
 STYLE_DIRS := $(pwd)
 
@@ -17,10 +17,21 @@ dev-setup: clean-venv
 format:
 	uv run ruff format $(STYLE_DIRS)
 
-test:
-	uv run python -m pytest tests/ -v --tb=short
+unit-test:
+	uv run python -m pytest tests/ -v --tb=short -m "not playwright"
 	uv run python -m trinetra.database tests/test_data/config.yaml test.db
-	rm test.db test.log
+# 	rm test.db test.log
+
+playwright-test:
+	bash run.sh .venv/bin/python config_dev.yaml & \
+	APP_PID=$$!; \
+	sleep 5; \
+	uv run python -m pytest tests/ -v --tb=short -m "playwright" --html=report.html --self-contained-html; \
+	TEST_EXIT=$$?; \
+	kill $$APP_PID; \
+	exit $$TEST_EXIT
+
+test: unit-test playwright-test
 
 test-server:
 	@bash scripts/test_server.sh
