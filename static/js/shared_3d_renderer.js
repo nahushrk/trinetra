@@ -625,4 +625,139 @@ window.loadGCodeFile = loadGCodeFile;
 window.loadMoonrakerStats = loadMoonrakerStats;
 window.clearScenes = clearScenes;
 window.updateSize = updateSize;
+// Shared sort and filter functionality
+function initSortFilterDropdowns() {
+    // Handle sort button click
+    const sortBtn = document.getElementById('sort-btn');
+    const sortDropdown = document.getElementById('sort-dropdown');
+    
+    if (sortBtn && sortDropdown) {
+        sortBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            sortDropdown.classList.toggle('show');
+            this.classList.toggle('active');
+            
+            // Position dropdown correctly
+            const rect = this.getBoundingClientRect();
+            sortDropdown.style.left = rect.left + 'px';
+            sortDropdown.style.top = rect.bottom + 'px';
+            sortDropdown.style.minWidth = rect.width + 'px';
+            sortDropdown.style.position = 'fixed'; // Ensure dropdown stays in correct position
+            
+            // Hide filter dropdown if open
+            const filterDropdown = document.getElementById('filter-dropdown');
+            const filterBtn = document.getElementById('filter-btn');
+            if (filterDropdown && filterBtn) {
+                filterDropdown.classList.remove('show');
+                filterBtn.classList.remove('active');
+            }
+        });
+        
+        // Handle sort option clicks
+        const sortItems = sortDropdown.querySelectorAll('.dropdown-item');
+        sortItems.forEach(item => {
+            item.addEventListener('click', function(e) {
+                e.preventDefault();
+                const sortBy = this.getAttribute('data-sort');
+                const sortOrder = this.getAttribute('data-order') || 'asc';
+                
+                // Update button text
+                sortBtn.innerHTML = `Sort <i class="fas fa-chevron-down"></i>`;
+                
+                // Hide dropdown
+                sortDropdown.classList.remove('show');
+                sortBtn.classList.remove('active');
+                
+                // Apply sort
+                applySortFilter(sortBy, sortOrder);
+            });
+        });
+    }
+    
+    // Handle filter button click
+    const filterBtn = document.getElementById('filter-btn');
+    const filterDropdown = document.getElementById('filter-dropdown');
+    
+    if (filterBtn && filterDropdown) {
+        filterBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            filterDropdown.classList.toggle('show');
+            this.classList.toggle('active');
+            
+            // Position dropdown correctly
+            const rect = this.getBoundingClientRect();
+            filterDropdown.style.left = rect.left + 'px';
+            filterDropdown.style.top = rect.bottom + 'px';
+            filterDropdown.style.minWidth = rect.width + 'px';
+            filterDropdown.style.position = 'fixed'; // Ensure dropdown stays in correct position
+            
+            // Hide sort dropdown if open
+            const sortDropdown = document.getElementById('sort-dropdown');
+            const sortBtn = document.getElementById('sort-btn');
+            if (sortDropdown && sortBtn) {
+                sortDropdown.classList.remove('show');
+                sortBtn.classList.remove('active');
+            }
+        });
+        
+        // Handle filter option clicks
+        const filterItems = filterDropdown.querySelectorAll('.dropdown-item');
+        filterItems.forEach(item => {
+            item.addEventListener('click', function(e) {
+                e.preventDefault();
+                const filterBy = this.getAttribute('data-filter');
+                
+                // Update button text
+                filterBtn.innerHTML = `Filter <i class="fas fa-chevron-down"></i>`;
+                
+                // Hide dropdown
+                filterDropdown.classList.remove('show');
+                filterBtn.classList.remove('active');
+                
+                // Apply filter
+                applySortFilter(null, null, filterBy);
+            });
+        });
+    }
+    
+    // Close dropdowns when clicking outside
+    document.addEventListener('click', function(e) {
+        if (sortDropdown && sortBtn && !sortBtn.contains(e.target) && !sortDropdown.contains(e.target)) {
+            sortDropdown.classList.remove('show');
+            sortBtn.classList.remove('active');
+        }
+        
+        if (filterDropdown && filterBtn && !filterBtn.contains(e.target) && !filterDropdown.contains(e.target)) {
+            filterDropdown.classList.remove('show');
+            filterBtn.classList.remove('active');
+        }
+    });
+}
+
+function applySortFilter(sortBy, sortOrder, filterBy) {
+    // Get current page info
+    const searchInput = document.getElementById('search-input');
+    const filterText = searchInput ? searchInput.value : '';
+    
+    // Get current page number (default to 1)
+    let currentPage = 1;
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.has('page')) {
+        currentPage = parseInt(urlParams.get('page'));
+    }
+    
+    // Build URL with parameters
+    const url = new URL(window.location);
+    if (sortBy) url.searchParams.set('sort_by', sortBy);
+    if (sortOrder) url.searchParams.set('sort_order', sortOrder);
+    if (filterBy) url.searchParams.set('filter_by', filterBy);
+    if (filterText) url.searchParams.set('filter', filterText);
+    url.searchParams.set('page', '1'); // Reset to first page when changing sort/filter
+    
+    // Reload page with new parameters
+    window.location.href = url.toString();
+}
+
+// Make functions globally available
+window.initSortFilterDropdowns = initSortFilterDropdowns;
 window.animate = animate; 
