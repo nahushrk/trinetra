@@ -48,9 +48,9 @@
         <div id="metadata" class="text-center text-muted"></div>
         
         <!-- Pagination Controls -->
-        <div id="pagination-controls" class="d-flex justify-content-center mt-3">
+        <div id="pagination-controls" class="d-flex justify-content-center mt-3" data-test-id="pagination-controls">
             <nav aria-label="Page navigation">
-                <ul class="pagination" id="pagination">
+                <ul class="pagination" id="pagination" data-test-id="pagination">
                     <!-- Pagination will be populated by JavaScript -->
                 </ul>
             </nav>
@@ -62,31 +62,31 @@
 <input type="file" id="file-input" style="display: none;" multiple accept=".zip" data-test-id="file-input">
 
 <!-- Upload Progress Modal -->
-<div id="upload-modal" class="upload-modal">
+<div id="upload-modal" class="upload-modal" data-test-id="upload-modal">
     <div class="upload-modal-content">
         <div class="upload-modal-header">
             <h3 class="upload-modal-title">Uploading Files</h3>
-            <span class="upload-modal-close" id="upload-modal-close">&times;</span>
+            <span class="upload-modal-close" id="upload-modal-close" data-test-id="upload-modal-close">&times;</span>
         </div>
         <div class="upload-progress">
             <div class="upload-progress-bar">
-                <div class="upload-progress-fill" id="upload-progress-fill"></div>
+                <div class="upload-progress-fill" id="upload-progress-fill" data-test-id="upload-progress-fill"></div>
             </div>
-            <div class="upload-progress-text" id="upload-progress-text">Preparing upload...</div>
+            <div class="upload-progress-text" id="upload-progress-text" data-test-id="upload-progress-text">Preparing upload...</div>
             <div style="text-align: center;">
-                <div class="upload-timer" id="upload-timer">00:00</div>
+                <div class="upload-timer" id="upload-timer" data-test-id="upload-timer">00:00</div>
             </div>
         </div>
-        <div id="upload-status" class="upload-status info">
+        <div id="upload-status" class="upload-status info" data-test-id="upload-status">
             Ready to upload
         </div>
-        <div id="upload-conflict-dialog" class="upload-conflict-dialog" style="display: none;">
+        <div id="upload-conflict-dialog" class="upload-conflict-dialog" style="display: none;" data-test-id="upload-conflict-dialog">
             <strong>Folder Conflict:</strong> One or more folders with the same name already exist.<br>
             What would you like to do?
             <div class="upload-conflict-buttons">
-                <button class="upload-conflict-btn stop" id="upload-stop-btn">Stop All</button>
-                <button class="upload-conflict-btn skip" id="upload-skip-btn">Skip Existing</button>
-                <button class="upload-conflict-btn overwrite" id="upload-overwrite-btn">Overwrite</button>
+                <button class="upload-conflict-btn stop" id="upload-stop-btn" data-test-id="upload-stop-btn">Stop All</button>
+                <button class="upload-conflict-btn skip" id="upload-skip-btn" data-test-id="upload-skip-btn">Skip Existing</button>
+                <button class="upload-conflict-btn overwrite" id="upload-overwrite-btn" data-test-id="upload-overwrite-btn">Overwrite</button>
             </div>
         </div>
     </div>
@@ -101,9 +101,9 @@
 </div>
 
 <!-- Bottom Pagination Controls -->
-<div id="pagination-controls-bottom" class="d-flex justify-content-center mt-3">
+<div id="pagination-controls-bottom" class="d-flex justify-content-center mt-3" data-test-id="pagination-controls-bottom">
     <nav aria-label="Page navigation">
-        <ul class="pagination" id="pagination-bottom">
+        <ul class="pagination" id="pagination-bottom" data-test-id="pagination-bottom">
             <!-- Pagination will be populated by JavaScript -->
         </ul>
     </nav>
