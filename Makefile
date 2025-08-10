@@ -20,6 +20,7 @@ format:
 test:
 	uv run python -m pytest tests/ -v --tb=short
 	uv run python -m trinetra.database tests/test_data/config.yaml test.db
+	rm test.db test.log
 
 test-server:
 	@bash scripts/test_server.sh
