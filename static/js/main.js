@@ -463,41 +463,69 @@ function loadPage(page) {
 
 function updatePaginationControls(pagination) {
     const paginationUl = document.getElementById('pagination');
-    if (!paginationUl) return;
+    const paginationUlBottom = document.getElementById('pagination-bottom');
+    if (!paginationUl && !paginationUlBottom) return;
     
     // Clear existing pagination
-    paginationUl.innerHTML = '';
+    if (paginationUl) paginationUl.innerHTML = '';
+    if (paginationUlBottom) paginationUlBottom.innerHTML = '';
+    
+    // Function to add a pagination element to both top and bottom controls
+    function addPaginationElement(element) {
+        if (paginationUl) {
+            // Create a new element for the top pagination
+            const topElement = element.cloneNode(true);
+            // Re-attach event listeners for the top element
+            const topLink = topElement.querySelector('a');
+            if (topLink && topLink.dataset.page) {
+                topLink.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    loadPage(parseInt(topLink.dataset.page));
+                });
+            }
+            paginationUl.appendChild(topElement);
+        }
+        
+        if (paginationUlBottom) {
+            // Create a new element for the bottom pagination
+            const bottomElement = element.cloneNode(true);
+            // Re-attach event listeners for the bottom element
+            const bottomLink = bottomElement.querySelector('a');
+            if (bottomLink && bottomLink.dataset.page) {
+                bottomLink.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    loadPage(parseInt(bottomLink.dataset.page));
+                });
+            }
+            paginationUlBottom.appendChild(bottomElement);
+        }
+    }
+    
+    // Function to create a pagination link
+    function createPaginationLink(text, page) {
+        const li = document.createElement('li');
+        li.className = 'page-item';
+        const link = document.createElement('a');
+        link.className = 'page-link';
+        link.href = '#';
+        link.innerText = text;
+        if (page !== null) {
+            link.dataset.page = page; // Store page number in data attribute
+        }
+        li.appendChild(link);
+        return li;
+    }
     
     // Add first button
     if (pagination.page > 1) {
-        const firstLi = document.createElement('li');
-        firstLi.className = 'page-item';
-        const firstLink = document.createElement('a');
-        firstLink.className = 'page-link';
-        firstLink.href = '#';
-        firstLink.innerText = 'First';
-        firstLink.addEventListener('click', function(e) {
-            e.preventDefault();
-            loadPage(1);
-        });
-        firstLi.appendChild(firstLink);
-        paginationUl.appendChild(firstLi);
+        const firstLi = createPaginationLink('First', 1);
+        addPaginationElement(firstLi);
     }
     
     // Add previous button
     if (pagination.page > 1) {
-        const prevLi = document.createElement('li');
-        prevLi.className = 'page-item';
-        const prevLink = document.createElement('a');
-        prevLink.className = 'page-link';
-        prevLink.href = '#';
-        prevLink.innerText = 'Previous';
-        prevLink.addEventListener('click', function(e) {
-            e.preventDefault();
-            loadPage(pagination.page - 1);
-        });
-        prevLi.appendChild(prevLink);
-        paginationUl.appendChild(prevLi);
+        const prevLi = createPaginationLink('Previous', pagination.page - 1);
+        addPaginationElement(prevLi);
     }
     
     // Add page numbers (show up to 5 pages around current page)
@@ -511,46 +539,21 @@ function updatePaginationControls(pagination) {
         pageLink.className = 'page-link';
         pageLink.href = '#';
         pageLink.innerText = i;
-        if (i !== pagination.page) {
-            pageLink.addEventListener('click', function(e) {
-                e.preventDefault();
-                loadPage(i);
-            });
-        }
+        pageLink.dataset.page = i; // Store page number in data attribute
         pageLi.appendChild(pageLink);
-        paginationUl.appendChild(pageLi);
+        addPaginationElement(pageLi);
     }
     
     // Add next button
     if (pagination.page < pagination.total_pages) {
-        const nextLi = document.createElement('li');
-        nextLi.className = 'page-item';
-        const nextLink = document.createElement('a');
-        nextLink.className = 'page-link';
-        nextLink.href = '#';
-        nextLink.innerText = 'Next';
-        nextLink.addEventListener('click', function(e) {
-            e.preventDefault();
-            loadPage(pagination.page + 1);
-        });
-        nextLi.appendChild(nextLink);
-        paginationUl.appendChild(nextLi);
+        const nextLi = createPaginationLink('Next', pagination.page + 1);
+        addPaginationElement(nextLi);
     }
     
     // Add last button
     if (pagination.page < pagination.total_pages) {
-        const lastLi = document.createElement('li');
-        lastLi.className = 'page-item';
-        const lastLink = document.createElement('a');
-        lastLink.className = 'page-link';
-        lastLink.href = '#';
-        lastLink.innerText = 'Last';
-        lastLink.addEventListener('click', function(e) {
-            e.preventDefault();
-            loadPage(pagination.total_pages);
-        });
-        lastLi.appendChild(lastLink);
-        paginationUl.appendChild(lastLi);
+        const lastLi = createPaginationLink('Last', pagination.total_pages);
+        addPaginationElement(lastLi);
     }
 }
 

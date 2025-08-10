@@ -99,6 +99,15 @@
      data-pagination="{{ stl_files.pagination | tojson | safe if stl_files.pagination else 'null' }}"
      data-filter="{{ stl_files.filter | tojson | safe if stl_files.filter else 'null' }}">
 </div>
+
+<!-- Bottom Pagination Controls -->
+<div id="pagination-controls-bottom" class="d-flex justify-content-center mt-3">
+    <nav aria-label="Page navigation">
+        <ul class="pagination" id="pagination-bottom">
+            <!-- Pagination will be populated by JavaScript -->
+        </ul>
+    </nav>
+</div>
 {% endblock %}
 
 {% block scripts %}

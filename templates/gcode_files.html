@@ -81,6 +81,15 @@
      data-pagination="{{ gcode_files.pagination | tojson | safe if gcode_files.pagination else 'null' }}"
      data-filter="{{ gcode_files.filter | tojson | safe if gcode_files.filter else 'null' }}">
 </div>
+
+<!-- Bottom Pagination Controls -->
+<div id="pagination-controls-bottom" class="d-flex justify-content-center mt-3">
+    <nav aria-label="Page navigation">
+        <ul class="pagination" id="pagination-bottom">
+            <!-- Pagination will be populated by JavaScript -->
+        </ul>
+    </nav>
+</div>
 {% endblock %}
 
 {% block scripts %}
