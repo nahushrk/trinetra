@@ -314,11 +314,11 @@ class DatabaseManager:
         # Get all STL files for matching
         stl_files = session.query(STLFile).all()
 
-        # Create a mapping of STL base names to STL files
+        # Create a mapping of STL filenames (without extension) to STL files
         stl_bases = {}
         for stl_file in stl_files:
-            stl_base = self._split_base(stl_file.file_name)
-            stl_bases[stl_base] = stl_file
+            stl_filename = os.path.splitext(stl_file.file_name)[0]
+            stl_bases[stl_filename] = stl_file
 
         # Process all G-code files
         folder_timestamps = {}  # Track timestamps for each folder
@@ -350,15 +350,18 @@ class DatabaseManager:
                     matching_stl = None
                     matching_folder = None
 
-                    # Find STL base that is prefix of gcode base (and most specific / longest match)
-                    matching_stl_base = None
-                    for stl_base in stl_bases:
-                        if gcode_base.startswith(stl_base):
-                            if matching_stl_base is None or len(stl_base) > len(matching_stl_base):
-                                matching_stl_base = stl_base
+                    # Find STL filename that is prefix of gcode base (most specific/longest match)
+                    matching_stl_filename = None
+                    max_match_len = 0
+                    for stl_filename in stl_bases:
+                        if gcode_base.startswith(stl_filename):
+                            # Prefer the longest matching prefix
+                            if len(stl_filename) > max_match_len:
+                                matching_stl_filename = stl_filename
+                                max_match_len = len(stl_filename)
 
-                    if matching_stl_base:
-                        matching_stl = stl_bases[matching_stl_base]
+                    if matching_stl_filename:
+                        matching_stl = stl_bases[matching_stl_filename]
                         matching_folder = matching_stl.folder
 
                     # Update folder timestamps if this file is newer
@@ -421,14 +424,8 @@ class DatabaseManager:
         return counts
 
     def _split_base(self, filename):
-        """Split base name from filename according to the matching logic."""
-        # Remove extension
-        base = os.path.splitext(filename)[0]
-
-        # Cut at slicing pattern like _0.3mm, _1.2mm etc.
-        base = re.split(r"(_\d+(\.\d+)?mm)", base)[0]
-
-        return base
+        """Get base name from filename (without extension)."""
+        return os.path.splitext(filename)[0]
 
     def _extract_gcode_metadata(self, file_path: str) -> Dict[str, Any]:
         """Extract metadata from G-code file."""

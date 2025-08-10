@@ -529,8 +529,8 @@ function updatePaginationControls(pagination) {
     }
     
     // Add page numbers (show up to 5 pages around current page)
-    const startPage = Math.max(1, pagination.page - 2);
-    const endPage = Math.min(pagination.total_pages, pagination.page + 2);
+    const startPage = Math.max(1, pagination.page - 4);
+    const endPage = Math.min(pagination.total_pages, pagination.page + 4);
     
     for (let i = startPage; i <= endPage; i++) {
         const pageLi = document.createElement('li');
