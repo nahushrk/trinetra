@@ -6,6 +6,7 @@ Handles all database operations and provides compatibility with existing app.py 
 import os
 import logging
 import re
+from datetime import datetime
 from typing import List, Dict, Any, Tuple, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_
@@ -38,6 +39,8 @@ class DatabaseManager:
         self.SessionFactory = create_session_factory(self.engine)
         init_database(self.engine)
         logger.info(f"Database initialized at {db_path}")
+        self.stl_base_path = None
+        self.gcode_base_path = None
 
     def get_session(self) -> Session:
         """Get a new database session."""
@@ -58,6 +61,14 @@ class DatabaseManager:
             stl_base_path: Path to STL files base directory
             gcode_base_path: Path to G-code files base directory
             moonraker_url: Optional Moonraker URL to fetch statistics
+        """
+        # Store base paths for use in other methods
+        self.stl_base_path = stl_base_path
+        self.gcode_base_path = gcode_base_path
+        """
+        # Store base paths for use in other methods
+        self.stl_base_path = stl_base_path
+        self.gcode_base_path = gcode_base_path
 
         Returns:
             Dict with counts of processed items
@@ -129,12 +140,26 @@ class DatabaseManager:
                 # Create or get folder
                 folder = session.query(Folder).filter(Folder.name == folder_name).first()
                 if not folder:
-                    folder = Folder(name=folder_name)
+                    # Get folder timestamps
+                    try:
+                        ctime = os.path.getctime(folder_path)
+                        mtime = os.path.getmtime(folder_path)
+                        created_at = datetime.fromtimestamp(ctime)
+                        updated_at = datetime.fromtimestamp(mtime)
+                    except OSError:
+                        # Fallback to current time if we can't get folder timestamps
+                        created_at = datetime.utcnow()
+                        updated_at = datetime.utcnow()
+
+                    folder = Folder(name=folder_name, created_at=created_at, updated_at=updated_at)
                     session.add(folder)
                     session.flush()  # Get the ID
                     counts["folders"] += 1
 
                 # Process all files in this folder recursively
+                folder_created_at = None
+                folder_updated_at = None
+
                 for root, dirs, files in os.walk(folder_path):
                     for file in files:
                         abs_path = os.path.join(root, file)
@@ -145,6 +170,23 @@ class DatabaseManager:
                             file_size = os.path.getsize(abs_path)
                         except OSError:
                             file_size = 0
+
+                        # Get file timestamps
+                        try:
+                            ctime = os.path.getctime(abs_path)
+                            mtime = os.path.getmtime(abs_path)
+                            file_created_at = datetime.fromtimestamp(ctime)
+                            file_updated_at = datetime.fromtimestamp(mtime)
+                        except OSError:
+                            # Fallback to current time if we can't get file timestamps
+                            file_created_at = datetime.utcnow()
+                            file_updated_at = datetime.utcnow()
+
+                        # Update folder timestamps if this file is newer
+                        if folder_created_at is None or file_created_at < folder_created_at:
+                            folder_created_at = file_created_at
+                        if folder_updated_at is None or file_updated_at > folder_updated_at:
+                            folder_updated_at = file_updated_at
 
                         if ext == ".stl":
                             # Check if STL file already exists
@@ -164,6 +206,8 @@ class DatabaseManager:
                                     rel_path=rel_path,
                                     abs_path=abs_path,
                                     file_size=file_size,
+                                    created_at=file_created_at,
+                                    updated_at=file_updated_at,
                                 )
                                 session.add(stl_file)
                                 counts["stl_files"] += 1
@@ -187,6 +231,8 @@ class DatabaseManager:
                                     abs_path=abs_path,
                                     file_size=file_size,
                                     extension=ext,
+                                    created_at=file_created_at,
+                                    updated_at=file_updated_at,
                                 )
                                 session.add(image_file)
                                 counts["image_files"] += 1
@@ -208,6 +254,8 @@ class DatabaseManager:
                                     rel_path=rel_path,
                                     abs_path=abs_path,
                                     file_size=file_size,
+                                    created_at=file_created_at,
+                                    updated_at=file_updated_at,
                                 )
                                 session.add(pdf_file)
                                 counts["pdf_files"] += 1
@@ -233,6 +281,8 @@ class DatabaseManager:
                                     abs_path=abs_path,
                                     file_size=file_size,
                                     base_path="STL_BASE_PATH",
+                                    created_at=file_created_at,
+                                    updated_at=file_updated_at,
                                 )
                                 gcode_file.set_metadata(metadata)
                                 session.add(gcode_file)
@@ -240,6 +290,12 @@ class DatabaseManager:
                                 logger.debug(
                                     f"Processed G-code file in STL base path: {file} (rel_path: {rel_path})"
                                 )
+
+                # Update folder timestamps to reflect the most recent file timestamps
+                if folder_created_at is not None:
+                    folder.created_at = folder_created_at
+                if folder_updated_at is not None:
+                    folder.updated_at = folder_updated_at
 
         logger.debug(
             f"Total G-code files processed in _process_stl_base_path: {counts.get('gcode_files', 0)}"
@@ -265,6 +321,8 @@ class DatabaseManager:
             stl_bases[stl_base] = stl_file
 
         # Process all G-code files
+        folder_timestamps = {}  # Track timestamps for each folder
+
         for root, dirs, files in os.walk(gcode_base_path):
             for file in files:
                 if file.lower().endswith(".gcode"):
@@ -275,6 +333,17 @@ class DatabaseManager:
                         file_size = os.path.getsize(abs_path)
                     except OSError:
                         file_size = 0
+
+                    # Get file timestamps
+                    try:
+                        ctime = os.path.getctime(abs_path)
+                        mtime = os.path.getmtime(abs_path)
+                        file_created_at = datetime.fromtimestamp(ctime)
+                        file_updated_at = datetime.fromtimestamp(mtime)
+                    except OSError:
+                        # Fallback to current time if we can't get file timestamps
+                        file_created_at = datetime.utcnow()
+                        file_updated_at = datetime.utcnow()
 
                     # Try to find matching STL file
                     gcode_base = self._split_base(file)
@@ -291,6 +360,20 @@ class DatabaseManager:
                     if matching_stl_base:
                         matching_stl = stl_bases[matching_stl_base]
                         matching_folder = matching_stl.folder
+
+                    # Update folder timestamps if this file is newer
+                    if matching_folder is not None:
+                        folder_id = matching_folder.id
+                        if folder_id not in folder_timestamps:
+                            folder_timestamps[folder_id] = {
+                                "created_at": file_created_at,
+                                "updated_at": file_updated_at,
+                            }
+                        else:
+                            if file_created_at < folder_timestamps[folder_id]["created_at"]:
+                                folder_timestamps[folder_id]["created_at"] = file_created_at
+                            if file_updated_at > folder_timestamps[folder_id]["updated_at"]:
+                                folder_timestamps[folder_id]["updated_at"] = file_updated_at
 
                     # Check if G-code file already exists
                     existing = (
@@ -314,11 +397,20 @@ class DatabaseManager:
                             abs_path=abs_path,
                             file_size=file_size,
                             base_path="GCODE_BASE_PATH",
+                            created_at=file_created_at,
+                            updated_at=file_updated_at,
                         )
                         gcode_file.set_metadata(metadata)
                         session.add(gcode_file)
                         counts["gcode_files"] += 1
                         logger.debug(f"Processed G-code file: {file} (rel_path: {rel_path})")
+
+        # Update folder timestamps to reflect the most recent file timestamps
+        for folder_id, timestamps in folder_timestamps.items():
+            folder = session.query(Folder).filter(Folder.id == folder_id).first()
+            if folder:
+                folder.created_at = timestamps["created_at"]
+                folder.updated_at = timestamps["updated_at"]
 
         logger.debug(
             f"Total G-code files processed in _process_gcode_base_path: {counts['gcode_files']}"
@@ -379,21 +471,54 @@ class DatabaseManager:
         sort_by: str = "folder_name",
         sort_order: str = "asc",
         filter_text: str = "",
+        filter_type: str = "all",
     ) -> Dict[str, Any]:
-        """Get STL files with pagination, sorting, and filtering."""
+        """Get STL files with pagination, sorting, and filtering.
+
+        Args:
+            page: Page number (1-based)
+            per_page: Number of items per page
+            sort_by: Field to sort by ('folder_name', 'file_name', 'created_at', 'updated_at')
+            sort_order: Sort order ('asc' or 'desc')
+            filter_text: Text to filter folders/files by
+            filter_type: Type of filter to apply ('all', 'today')
+        """
         with self.get_session() as session:
             # Base query for folders
             query = session.query(Folder)
 
-            # Apply filtering if provided
+            # Apply filter type
+            if filter_type == "today":
+                # Filter folders created within the last 24 hours
+                from datetime import datetime, timedelta
+
+                twenty_four_hours_ago = datetime.utcnow() - timedelta(hours=24)
+                query = query.filter(Folder.created_at >= twenty_four_hours_ago)
+            elif filter_type == "week":
+                # Filter folders created within the last 7 days
+                from datetime import datetime, timedelta
+
+                seven_days_ago = datetime.utcnow() - timedelta(days=7)
+                query = query.filter(Folder.created_at >= seven_days_ago)
+
+            # Apply text filtering if provided
             if filter_text:
                 query = query.filter(Folder.name.contains(filter_text))
 
             # Apply sorting
-            if sort_order.lower() == "desc":
-                query = query.order_by(Folder.name.desc())
+            if sort_by == "folder_name":
+                order_column = Folder.name
+            elif sort_by == "created_at":
+                order_column = Folder.created_at
+            elif sort_by == "updated_at":
+                order_column = Folder.updated_at
             else:
-                query = query.order_by(Folder.name.asc())
+                order_column = Folder.name  # Default sorting
+
+            if sort_order.lower() == "desc":
+                query = query.order_by(order_column.desc())
+            else:
+                query = query.order_by(order_column.asc())
 
             # Get total count for pagination
             total_folders = query.count()
@@ -408,9 +533,40 @@ class DatabaseManager:
                 # Query STL files for this folder
                 stl_query = session.query(STLFile).filter(STLFile.folder_id == folder.id)
 
+                # Apply filter type to files
+                if filter_type == "today":
+                    # Filter files created within the last 24 hours
+                    from datetime import datetime, timedelta
+
+                    twenty_four_hours_ago = datetime.utcnow() - timedelta(hours=24)
+                    stl_query = stl_query.filter(STLFile.created_at >= twenty_four_hours_ago)
+                elif filter_type == "week":
+                    # Filter files created within the last 7 days
+                    from datetime import datetime, timedelta
+
+                    seven_days_ago = datetime.utcnow() - timedelta(days=7)
+                    stl_query = stl_query.filter(STLFile.created_at >= seven_days_ago)
+
                 # Apply file-level filtering if provided
                 if filter_text:
                     stl_query = stl_query.filter(STLFile.file_name.contains(filter_text))
+
+                # Apply sorting to files
+                if sort_by == "file_name":
+                    if sort_order.lower() == "desc":
+                        stl_query = stl_query.order_by(STLFile.file_name.desc())
+                    else:
+                        stl_query = stl_query.order_by(STLFile.file_name.asc())
+                elif sort_by == "created_at":
+                    if sort_order.lower() == "desc":
+                        stl_query = stl_query.order_by(STLFile.created_at.desc())
+                    else:
+                        stl_query = stl_query.order_by(STLFile.created_at.asc())
+                elif sort_by == "updated_at":
+                    if sort_order.lower() == "desc":
+                        stl_query = stl_query.order_by(STLFile.updated_at.desc())
+                    else:
+                        stl_query = stl_query.order_by(STLFile.updated_at.asc())
 
                 stl_files = stl_query.all()
 
@@ -442,6 +598,7 @@ class DatabaseManager:
                 },
                 "filter": {
                     "text": filter_text,
+                    "type": filter_type,
                     "sort_by": sort_by,
                     "sort_order": sort_order,
                 },
@@ -506,7 +663,7 @@ class DatabaseManager:
                         avg_duration = stats.total_print_time / stats.print_count
 
                     stats_data = {
-                        "total_prints": stats.print_count,
+                        "print_count": stats.print_count,
                         "successful_prints": stats.successful_prints,
                         "canceled_prints": stats.canceled_prints,
                         "avg_duration": avg_duration,
@@ -547,7 +704,7 @@ class DatabaseManager:
                             avg_duration = stats.total_print_time / stats.print_count
 
                         stats_data = {
-                            "total_prints": stats.print_count,
+                            "print_count": stats.print_count,
                             "successful_prints": stats.successful_prints,
                             "canceled_prints": stats.canceled_prints,
                             "avg_duration": avg_duration,
@@ -610,7 +767,7 @@ class DatabaseManager:
                         avg_duration = stats.total_print_time / stats.print_count
 
                     stats_data = {
-                        "total_prints": stats.print_count,
+                        "print_count": stats.print_count,
                         "successful_prints": stats.successful_prints,
                         "canceled_prints": stats.canceled_prints,
                         "avg_duration": avg_duration,
@@ -646,13 +803,55 @@ class DatabaseManager:
         sort_by: str = "folder_name",
         sort_order: str = "asc",
         filter_text: str = "",
+        filter_type: str = "all",
     ) -> Dict[str, Any]:
-        """Get G-code files with pagination, sorting, and filtering."""
+        """Get G-code files with pagination, sorting, and filtering.
+
+        Args:
+            page: Page number (1-based)
+            per_page: Number of items per page
+            sort_by: Field to sort by ('folder_name', 'file_name', 'print_count', 'last_print_date', 'created_at', 'updated_at')
+            sort_order: Sort order ('asc' or 'desc')
+            filter_text: Text to filter files by
+            filter_type: Type of filter to apply ('all', 'today', 'successful', 'failed')
+        """
         with self.get_session() as session:
             # Base query for G-code files
             query = session.query(GCodeFile).outerjoin(GCodeFileStats)
 
-            # Apply filtering if provided
+            # Apply filter type
+            if filter_type == "today":
+                # Filter files created within the last 24 hours
+                from datetime import datetime, timedelta
+
+                twenty_four_hours_ago = datetime.utcnow() - timedelta(hours=24)
+                query = query.filter(GCodeFile.created_at >= twenty_four_hours_ago)
+            elif filter_type == "week":
+                # Filter files created within the last 7 days
+                from datetime import datetime, timedelta
+
+                seven_days_ago = datetime.utcnow() - timedelta(days=7)
+                query = query.filter(GCodeFile.created_at >= seven_days_ago)
+            elif filter_type == "successful":
+                # Filter files with successful prints
+                query = query.filter(
+                    and_(
+                        GCodeFileStats.successful_prints > 0,
+                        GCodeFileStats.successful_prints.isnot(None),
+                    )
+                )  # At least one successful print
+            elif filter_type == "failed":
+                # Filter files with failed prints (no successful prints but have print history)
+                query = query.filter(
+                    and_(
+                        GCodeFileStats.successful_prints == 0,
+                        GCodeFileStats.print_count > 0,
+                        GCodeFileStats.successful_prints.isnot(None),
+                        GCodeFileStats.print_count.isnot(None),
+                    )
+                )
+
+            # Apply text filtering if provided
             if filter_text:
                 query = query.filter(
                     or_(
@@ -672,6 +871,10 @@ class DatabaseManager:
                 order_column = GCodeFileStats.print_count
             elif sort_by == "last_print_date" and GCodeFileStats.last_print_date is not None:
                 order_column = GCodeFileStats.last_print_date
+            elif sort_by == "created_at":
+                order_column = GCodeFile.created_at
+            elif sort_by == "updated_at":
+                order_column = GCodeFile.updated_at
             else:
                 # Join with Folder table for default sorting
                 query = query.join(Folder, GCodeFile.folder_id == Folder.id, isouter=True)
@@ -711,7 +914,7 @@ class DatabaseManager:
                         avg_duration = stats.total_print_time / stats.print_count
 
                     stats_data = {
-                        "total_prints": stats.print_count,
+                        "print_count": stats.print_count,
                         "successful_prints": stats.successful_prints,
                         "canceled_prints": stats.canceled_prints,
                         "avg_duration": avg_duration,
@@ -746,6 +949,7 @@ class DatabaseManager:
                 },
                 "filter": {
                     "text": filter_text,
+                    "type": filter_type,
                     "sort_by": sort_by,
                     "sort_order": sort_order,
                 },
@@ -794,8 +998,26 @@ class DatabaseManager:
 
     def add_folder(self, folder_name: str) -> Folder:
         """Add a new folder."""
+        # Get folder path to extract timestamps
+        folder_path = os.path.join(self.stl_base_path or "stl_files", folder_name)
+
+        # Get folder timestamps
+        try:
+            ctime = os.path.getctime(folder_path)
+            mtime = os.path.getmtime(folder_path)
+            folder_created_at = datetime.fromtimestamp(ctime)
+            folder_updated_at = datetime.fromtimestamp(mtime)
+        except OSError:
+            # Fallback to current time if we can't get folder timestamps
+            folder_created_at = datetime.utcnow()
+            folder_updated_at = datetime.utcnow()
+
         with self.get_session() as session:
-            folder = Folder(name=folder_name)
+            folder = Folder(
+                name=folder_name,
+                created_at=folder_created_at,
+                updated_at=folder_updated_at,
+            )
             session.add(folder)
             session.commit()
             return folder
@@ -810,10 +1032,33 @@ class DatabaseManager:
                 folder = self.add_folder(folder_name)
                 session.refresh(folder)
 
+            # Get file timestamps
+            try:
+                ctime = os.path.getctime(abs_path)
+                mtime = os.path.getmtime(abs_path)
+                file_created_at = datetime.fromtimestamp(ctime)
+                file_updated_at = datetime.fromtimestamp(mtime)
+            except OSError:
+                # Fallback to current time if we can't get file timestamps
+                file_created_at = datetime.utcnow()
+                file_updated_at = datetime.utcnow()
+
             stl_file = STLFile(
-                folder_id=folder.id, file_name=file_name, rel_path=rel_path, abs_path=abs_path
+                folder_id=folder.id,
+                file_name=file_name,
+                rel_path=rel_path,
+                abs_path=abs_path,
+                created_at=file_created_at,
+                updated_at=file_updated_at,
             )
             session.add(stl_file)
+
+            # Update folder timestamps if this file is newer
+            if folder.created_at is None or file_created_at < folder.created_at:
+                folder.created_at = file_created_at
+            if folder.updated_at is None or file_updated_at > folder.updated_at:
+                folder.updated_at = file_updated_at
+
             session.commit()
             return stl_file
 
