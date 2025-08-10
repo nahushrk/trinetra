@@ -9,6 +9,8 @@ data*/
 .DS_Store
 trinetra-data*
 trinetra.db
+test.db
+
 planning_docs
 
 # Byte-compiled / optimized / DLL files
