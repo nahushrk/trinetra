@@ -13,6 +13,7 @@ clean-venv:
 
 dev-setup: clean-venv
 	uv pip install -e .[dev]
+	playwright install
 
 format:
 	uv run ruff format $(STYLE_DIRS)

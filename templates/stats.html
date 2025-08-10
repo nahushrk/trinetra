@@ -196,19 +196,19 @@
     <h2><i class="fas fa-folder"></i> File and Folder Statistics</h2>
     <div class="stats-grid">
         <div class="stat-card">
-            <div class="stat-number" id="total-folders">{{ stats.total_folders }}</div>
+            <div class="stat-number" id="total-folders" data-test-id="stat-total-folders">{{ stats.total_folders }}</div>
             <div class="stat-label">Total Folders</div>
         </div>
         <div class="stat-card">
-            <div class="stat-number" id="total-stl-files">{{ stats.total_stl_files }}</div>
+            <div class="stat-number" id="total-stl-files" data-test-id="stat-total-stl">{{ stats.total_stl_files }}</div>
             <div class="stat-label">Total STL Files</div>
         </div>
         <div class="stat-card">
-            <div class="stat-number" id="total-gcode-files">{{ stats.total_gcode_files }}</div>
+            <div class="stat-number" id="total-gcode-files" data-test-id="stat-total-gcode">{{ stats.total_gcode_files }}</div>
             <div class="stat-label">Total G-code Files</div>
         </div>
         <div class="stat-card">
-            <div class="stat-number" id="folders-with-gcode">{{ stats.folders_with_gcode }}</div>
+            <div class="stat-number" id="folders-with-gcode" data-test-id="stat-folders-with-gcode">{{ stats.folders_with_gcode }}</div>
             <div class="stat-label">Folders with G-code</div>
         </div>
     </div>
@@ -222,27 +222,27 @@
             <div class="col-12 text-center text-muted">No printing statistics available from Moonraker.</div>
         {% else %}
             <div class="stat-card">
-                <div class="stat-number" id="total-prints">{{ stats.printing_stats.total_prints }}</div>
+                <div class="stat-number" id="total-prints" data-test-id="stat-total-prints">{{ stats.printing_stats.total_prints }}</div>
                 <div class="stat-label">Total Prints</div>
             </div>
             <div class="stat-card">
-                <div class="stat-number" id="successful-prints">{{ stats.printing_stats.successful_prints }}</div>
+                <div class="stat-number" id="successful-prints" data-test-id="stat-successful-prints">{{ stats.printing_stats.successful_prints }}</div>
                 <div class="stat-label">Successful Prints</div>
             </div>
             <div class="stat-card">
-                <div class="stat-number" id="canceled-prints">{{ stats.printing_stats.canceled_prints }}</div>
+                <div class="stat-number" id="canceled-prints" data-test-id="stat-canceled-prints">{{ stats.printing_stats.canceled_prints }}</div>
                 <div class="stat-label">Canceled Prints</div>
             </div>
             <div class="stat-card">
-                <div class="stat-number" id="avg-print-time">{{ stats.printing_stats.avg_print_time_hours|round(1) }}</div>
+                <div class="stat-number" id="avg-print-time" data-test-id="stat-avg-print-time">{{ stats.printing_stats.avg_print_time_hours|round(1) }}</div>
                 <div class="stat-label">Avg Print Time (hrs)</div>
             </div>
             <div class="stat-card">
-                <div class="stat-number" id="total-filament">{{ stats.printing_stats.total_filament_meters|round(1) }}</div>
+                <div class="stat-number" id="total-filament" data-test-id="stat-total-filament">{{ stats.printing_stats.total_filament_meters|round(1) }}</div>
                 <div class="stat-label">Total Filament (m)</div>
             </div>
             <div class="stat-card">
-                <div class="stat-number" id="print-days">{{ stats.printing_stats.print_days }}</div>
+                <div class="stat-number" id="print-days" data-test-id="stat-print-days">{{ stats.printing_stats.print_days }}</div>
                 <div class="stat-label">Days with Prints</div>
             </div>
         {% endif %}
@@ -263,7 +263,7 @@
             <span class="legend-item"><span class="legend-color day-level-4"></span>10+</span>
         </span>
     </div>
-    <div id="activity-calendar" class="activity-calendar"></div>
+    <div id="activity-calendar" class="activity-calendar" data-test-id="activity-calendar"></div>
 </div>
 {% endblock %}
 

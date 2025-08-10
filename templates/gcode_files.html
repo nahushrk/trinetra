@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}All G-code Files - Trinetra{% endblock %}
+{% block title %}Trinetra{% endblock %}
 
 {% block extra_head %}
 <!-- Include GCodeLoader -->
@@ -26,9 +26,9 @@
 <div class="row justify-content-center">
     <div class="col-md-10">
         <div id="search-bar" class="input-group mb-3">
-            <input type="text" id="search-input" class="form-control" placeholder="Search G-code files...">
+            <input type="text" id="search-input" class="form-control" placeholder="Search G-code files..." data-test-id="search-input">
             <div class="input-group-append">
-                <button id="sort-btn" class="sort-filter-btn">
+                <button id="sort-btn" class="sort-filter-btn" data-test-id="sort-btn">
                     Sort <i class="fas fa-chevron-down"></i>
                 </button>
                 <div id="sort-dropdown" class="sort-filter-dropdown">
@@ -46,7 +46,7 @@
                     <a class="dropdown-item" href="#" data-sort="updated_at" data-order="asc">Modified (Oldest)</a>
                 </div>
                 
-                <button id="filter-btn" class="sort-filter-btn">
+                <button id="filter-btn" class="sort-filter-btn" data-test-id="filter-btn">
                     Filter <i class="fas fa-chevron-down"></i>
                 </button>
                 <div id="filter-dropdown" class="sort-filter-dropdown">
@@ -59,12 +59,12 @@
             </div>
         </div>
         
-        <div id="metadata" class="text-center text-muted"></div>
+        <div id="metadata" class="text-center text-muted" data-test-id="metadata">Loading files...</div>
         
         <!-- Pagination Controls -->
         <div id="pagination-controls" class="d-flex justify-content-center mt-3">
             <nav aria-label="Page navigation">
-                <ul class="pagination" id="pagination">
+                <ul class="pagination" id="pagination" data-test-id="pagination-top">
                     <!-- Pagination will be populated by JavaScript -->
                 </ul>
             </nav>
@@ -73,7 +73,7 @@
 </div>
 
 <!-- G-code Files Canvas -->
-<canvas id="c" class="d-block mx-auto"></canvas>
+<canvas id="c" class="d-block mx-auto" data-test-id="gcode-canvas"></canvas>
 
 <!-- G-code Files Content -->
 <div id="content" class="mt-4"
@@ -85,7 +85,7 @@
 <!-- Bottom Pagination Controls -->
 <div id="pagination-controls-bottom" class="d-flex justify-content-center mt-3">
     <nav aria-label="Page navigation">
-        <ul class="pagination" id="pagination-bottom">
+        <ul class="pagination" id="pagination-bottom" data-test-id="pagination-bottom">
             <!-- Pagination will be populated by JavaScript -->
         </ul>
     </nav>
