@@ -164,7 +164,14 @@ def create_app(config_file=None, config_overrides=None):
             filter_type=filter_type,
         )
 
-        return render_template("index.html", stl_files=paginated_data)
+        # Ensure proper JSON serialization
+        formatted_data = {
+            "folders": paginated_data.get("folders", []),
+            "pagination": paginated_data.get("pagination", {}),
+            "filter": paginated_data.get("filter", {})
+        }
+        
+        return render_template("index.html", stl_files=formatted_data)
 
     @app.route("/gcode_files")
     def gcode_files_view():

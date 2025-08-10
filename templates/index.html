@@ -12,10 +12,10 @@
 <!-- Search Bar -->
 <div class="row justify-content-center">
     <div class="col-md-10">
-        <div id="search-bar" class="input-group mb-3">
-            <input type="text" id="search-input" class="form-control" placeholder="Search STL files or folders...">
+        <div id="search-bar" class="input-group mb-3" data-test-id="search-bar">
+            <input type="text" id="search-input" class="form-control" placeholder="Search STL files or folders..." data-test-id="search-input">
             <div class="input-group-append">
-                <button id="sort-btn" class="sort-filter-btn">
+                <button id="sort-btn" class="sort-filter-btn" data-test-id="sort-btn">
                     Sort <i class="fas fa-chevron-down"></i>
                 </button>
                 <div id="sort-dropdown" class="sort-filter-dropdown">
@@ -28,7 +28,7 @@
                     <a class="dropdown-item" href="#" data-sort="updated_at" data-order="asc">Modified (Oldest)</a>
                 </div>
                 
-                <button id="filter-btn" class="sort-filter-btn">
+                <button id="filter-btn" class="sort-filter-btn" data-test-id="filter-btn">
                     Filter <i class="fas fa-chevron-down"></i>
                 </button>
                 <div id="filter-dropdown" class="sort-filter-dropdown">
@@ -41,7 +41,7 @@
         
         <!-- Upload Button -->
         <div class="upload-container">
-            <button id="upload-button" class="btn btn-outline-secondary">
+            <button id="upload-button" class="btn btn-outline-secondary" data-test-id="upload-btn">
                 <i class="bi bi-upload"></i> Upload ZIP File
             </button>
         </div>
@@ -59,7 +59,7 @@
 </div>
 
 <!-- Hidden file input for uploads -->
-<input type="file" id="file-input" style="display: none;" multiple accept=".zip">
+<input type="file" id="file-input" style="display: none;" multiple accept=".zip" data-test-id="file-input">
 
 <!-- Upload Progress Modal -->
 <div id="upload-modal" class="upload-modal">
@@ -92,7 +92,7 @@
     </div>
 </div>
 
-<canvas id="c" class="d-block mx-auto"></canvas>
+<canvas id="c" class="d-block mx-auto" data-test-id="3d-canvas"></canvas>
 
 <div id="content" class="mt-4"
      data-stl-files="{{ stl_files.folders | tojson | safe }}"
