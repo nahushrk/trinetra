@@ -21,8 +21,11 @@
                 <div id="sort-dropdown" class="sort-filter-dropdown">
                     <a class="dropdown-item" href="#" data-sort="folder_name" data-order="asc">Folder Name (A-Z)</a>
                     <a class="dropdown-item" href="#" data-sort="folder_name" data-order="desc">Folder Name (Z-A)</a>
-                    <a class="dropdown-item" href="#" data-sort="file_name" data-order="asc">File Name (A-Z)</a>
-                    <a class="dropdown-item" href="#" data-sort="file_name" data-order="desc">File Name (Z-A)</a>
+                    <div class="dropdown-divider"></div>
+                    <a class="dropdown-item" href="#" data-sort="created_at" data-order="desc">Created (Newest)</a>
+                    <a class="dropdown-item" href="#" data-sort="created_at" data-order="asc">Created (Oldest)</a>
+                    <a class="dropdown-item" href="#" data-sort="updated_at" data-order="desc">Modified (Newest)</a>
+                    <a class="dropdown-item" href="#" data-sort="updated_at" data-order="asc">Modified (Oldest)</a>
                 </div>
                 
                 <button id="filter-btn" class="sort-filter-btn">
@@ -30,7 +33,8 @@
                 </button>
                 <div id="filter-dropdown" class="sort-filter-dropdown">
                     <a class="dropdown-item" href="#" data-filter="all">All Files</a>
-                    <a class="dropdown-item" href="#" data-filter="recent">Recently Modified</a>
+                    <a class="dropdown-item" href="#" data-filter="today">Added Today</a>
+                    <a class="dropdown-item" href="#" data-filter="week">Added This Week</a>
                 </div>
             </div>
         </div>

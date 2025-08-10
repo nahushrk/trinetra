@@ -152,6 +152,7 @@ def create_app(config_file=None, config_overrides=None):
         sort_by = request.args.get("sort_by", "folder_name")
         sort_order = request.args.get("sort_order", "asc")
         filter_text = request.args.get("filter", "")
+        filter_type = request.args.get("filter_type", "all")
 
         # Get paginated data
         paginated_data = db_manager.get_stl_files_paginated(
@@ -160,6 +161,7 @@ def create_app(config_file=None, config_overrides=None):
             sort_by=sort_by,
             sort_order=sort_order,
             filter_text=filter_text,
+            filter_type=filter_type,
         )
 
         return render_template("index.html", stl_files=paginated_data)
@@ -173,6 +175,7 @@ def create_app(config_file=None, config_overrides=None):
         sort_by = request.args.get("sort_by", "folder_name")
         sort_order = request.args.get("sort_order", "asc")
         filter_text = request.args.get("filter", "")
+        filter_type = request.args.get("filter_type", "all")
 
         # Get paginated data
         paginated_data = db_manager.get_gcode_files_paginated(
@@ -181,6 +184,7 @@ def create_app(config_file=None, config_overrides=None):
             sort_by=sort_by,
             sort_order=sort_order,
             filter_text=filter_text,
+            filter_type=filter_type,
         )
 
         return render_template("gcode_files.html", gcode_files=paginated_data)
@@ -507,6 +511,7 @@ def create_app(config_file=None, config_overrides=None):
         sort_by = request.args.get("sort_by", "folder_name")
         sort_order = request.args.get("sort_order", "asc")
         filter_text = request.args.get("filter", "")
+        filter_type = request.args.get("filter_type", "all")
 
         paginated_data = db_manager.get_stl_files_paginated(
             page=page,
@@ -514,6 +519,7 @@ def create_app(config_file=None, config_overrides=None):
             sort_by=sort_by,
             sort_order=sort_order,
             filter_text=filter_text,
+            filter_type=filter_type,
         )
 
         return jsonify(paginated_data)
@@ -526,6 +532,7 @@ def create_app(config_file=None, config_overrides=None):
         sort_by = request.args.get("sort_by", "folder_name")
         sort_order = request.args.get("sort_order", "asc")
         filter_text = request.args.get("filter", "")
+        filter_type = request.args.get("filter_type", "all")
 
         paginated_data = db_manager.get_gcode_files_paginated(
             page=page,
@@ -533,6 +540,7 @@ def create_app(config_file=None, config_overrides=None):
             sort_by=sort_by,
             sort_order=sort_order,
             filter_text=filter_text,
+            filter_type=filter_type,
         )
 
         return jsonify(paginated_data)

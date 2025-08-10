@@ -420,13 +420,22 @@ function loadPage(page) {
     const sortBy = sortBySelect ? sortBySelect.value : 'folder_name';
     const sortOrder = sortOrderSelect ? sortOrderSelect.value : 'asc';
     
+    // Get filter type from URL parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const filterType = urlParams.get('filter_type') || 'all';
+    
     // Update current values
     currentFilter = filterText;
     currentSortBy = sortBy;
     currentSortOrder = sortOrder;
     
+    // Update URL without page reload
+    const newUrl = new URL(window.location);
+    newUrl.searchParams.set('page', page);
+    window.history.pushState({}, '', newUrl);
+    
     // Make API call
-    const url = `/api/stl_files?page=${page}&filter=${encodeURIComponent(filterText)}&sort_by=${encodeURIComponent(sortBy)}&sort_order=${encodeURIComponent(sortOrder)}`;
+    const url = `/api/stl_files?page=${page}&filter=${encodeURIComponent(filterText)}&sort_by=${encodeURIComponent(sortBy)}&sort_order=${encodeURIComponent(sortOrder)}&filter_type=${encodeURIComponent(filterType)}`;
     
     fetch(url)
         .then(response => response.json())
@@ -571,3 +580,13 @@ function performSearch(searchTerm) {
             });
     }
 }
+
+// Handle browser back/forward buttons
+window.addEventListener('popstate', function(event) {
+    // Get page from URL parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const page = parseInt(urlParams.get('page')) || 1;
+    
+    // Load the page
+    loadPage(page);
+});

@@ -746,16 +746,58 @@ function applySortFilter(sortBy, sortOrder, filterBy) {
         currentPage = parseInt(urlParams.get('page'));
     }
     
-    // Build URL with parameters
-    const url = new URL(window.location);
+    // Determine which API endpoint to use based on current page
+    const isGcodePage = window.location.pathname === '/gcode_files';
+    const apiEndpoint = isGcodePage ? '/api/gcode_files' : '/api/stl_files';
+    
+    // Build API URL with parameters
+    const url = new URL(apiEndpoint, window.location.origin);
+    url.searchParams.set('page', '1'); // Reset to first page when changing sort/filter
     if (sortBy) url.searchParams.set('sort_by', sortBy);
     if (sortOrder) url.searchParams.set('sort_order', sortOrder);
-    if (filterBy) url.searchParams.set('filter_by', filterBy);
+    if (filterBy) url.searchParams.set('filter_type', filterBy);
     if (filterText) url.searchParams.set('filter', filterText);
-    url.searchParams.set('page', '1'); // Reset to first page when changing sort/filter
     
-    // Reload page with new parameters
-    window.location.href = url.toString();
+    // Update URL without page reload
+    const newUrl = new URL(window.location);
+    newUrl.searchParams.set('page', '1');
+    if (sortBy) newUrl.searchParams.set('sort_by', sortBy);
+    if (sortOrder) newUrl.searchParams.set('sort_order', sortOrder);
+    if (filterBy) newUrl.searchParams.set('filter_type', filterBy);
+    if (filterText) newUrl.searchParams.set('filter', filterText);
+    window.history.pushState({}, '', newUrl);
+    
+    // Make AJAX request
+    fetch(url)
+        .then(response => response.json())
+        .then(data => {
+            // Update content based on page type
+            if (isGcodePage) {
+                // Update G-code files display
+                displayGCodeFiles(data.files);
+            } else {
+                // Update STL files display
+                loadSTLFiles(data.folders);
+            }
+            
+            // Update pagination controls
+            updatePaginationControls(data.pagination);
+            
+            // Update metadata display
+            const metadataDiv = document.getElementById('metadata');
+            if (metadataDiv) {
+                if (isGcodePage) {
+                    metadataDiv.innerText = `Showing ${data.pagination.total_files} files (page ${data.pagination.page} of ${data.pagination.total_pages})`;
+                } else {
+                    metadataDiv.innerText = `Showing ${data.pagination.total_files} files in ${data.pagination.total_folders} folders (page ${data.pagination.page} of ${data.pagination.total_pages})`;
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error applying sort/filter:', error);
+            // Fallback to page reload on error
+            window.location.reload();
+        });
 }
 
 // Make functions globally available
