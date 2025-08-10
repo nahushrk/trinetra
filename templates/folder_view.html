@@ -12,16 +12,16 @@
 <!-- Folder Name and Action Buttons -->
 <div class="row justify-content-center align-items-center">
     <div class="col text-center">
-        <h2>{{ folder_name }}</h2>
+        <h2 data-test-id="folder-name">{{ folder_name }}</h2>
     </div>
 </div>
 <!-- Action Buttons -->
 <div class="row justify-content-center mb-3">
     <div class="col text-center">
-        <button id="delete-folder-btn" class="btn btn-danger mr-2">
+        <button id="delete-folder-btn" class="btn btn-danger mr-2" data-test-id="delete-folder-btn">
             <i class="bi bi-trash"></i> Delete Folder
         </button>
-        <button id="download-folder-btn" class="btn btn-primary">
+        <button id="download-folder-btn" class="btn btn-primary" data-test-id="download-folder-btn">
             <i class="bi bi-download"></i> Download Folder
         </button>
     </div>
@@ -29,42 +29,42 @@
 
 <!-- STL Files Section -->
 {% if stl_files %}
-<div class="section">
+<div class="section" data-test-id="stl-section">
     <h3>STL Files</h3>
-    <canvas id="c" class="d-block mx-auto"></canvas>
-    <div id="stl-content" class="mt-4"></div>
+    <canvas id="c" class="d-block mx-auto" data-test-id="3d-canvas"></canvas>
+    <div id="stl-content" class="mt-4" data-test-id="stl-content"></div>
 </div>
 {% endif %}
 
 <!-- G-code Files Section -->
 {% if gcode_files %}
-<div class="section">
+<div class="section" data-test-id="gcode-section">
     <h3>G-code Files</h3>
-    <div id="gcode-content" class="mt-4"></div>
+    <div id="gcode-content" class="mt-4" data-test-id="gcode-content"></div>
 </div>
 {% endif %}
 
 <!-- Images Section -->
 {% if image_files %}
-<div class="section">
+<div class="section" data-test-id="image-section">
     <h3>Images</h3>
-    <div id="image-content" class="mt-4"></div>
+    <div id="image-content" class="mt-4" data-test-id="image-content"></div>
 </div>
 {% endif %}
 
 <!-- PDFs Section -->
 {% if pdf_files %}
-<div class="section">
+<div class="section" data-test-id="pdf-section">
     <h3>PDFs</h3>
-    <div id="pdf-content" class="mt-4"></div>
+    <div id="pdf-content" class="mt-4" data-test-id="pdf-content"></div>
 </div>
 {% endif %}
 
 <!-- Image Modal -->
-<div id="image-modal" class="modal">
-    <span class="close">&times;</span>
-    <div id="modal-content-wrapper">
-        <img class="modal-content" id="modal-image">
+<div id="image-modal" class="modal" data-test-id="image-modal">
+    <span class="close" data-test-id="modal-close-btn">&times;</span>
+    <div id="modal-content-wrapper" data-test-id="modal-content">
+        <img class="modal-content" id="modal-image" data-test-id="modal-image">
     </div>
 </div>
 {% endblock %}
