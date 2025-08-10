@@ -104,8 +104,13 @@ function displayGCodeFiles(files) {
 
         // Folder icon link (below the G-code view)
         const folderLink = document.createElement('a');
-        folderLink.href = `/folder/${encodeURIComponent(file.folder_name)}`;
-        folderLink.className = 'folder-link d-block text-center mt-2';
+        if (file.folder_name && file.folder_name !== 'Unknown') {
+            folderLink.href = `/folder/${encodeURIComponent(file.folder_name)}`;
+            folderLink.className = 'folder-link d-block text-center mt-2';
+        } else {
+            folderLink.className = 'folder-link disabled d-block text-center mt-2';
+            folderLink.onclick = (e) => e.preventDefault();
+        }
         folderLink.innerHTML = '<i class="fas fa-folder fa-2x"></i>';
         containerElement.appendChild(folderLink);
 
@@ -266,8 +271,8 @@ function updatePaginationControls(pagination) {
     }
     
     // Add page numbers (show up to 5 pages around current page)
-    const startPage = Math.max(1, pagination.page - 2);
-    const endPage = Math.min(pagination.total_pages, pagination.page + 2);
+    const startPage = Math.max(1, pagination.page - 4);
+    const endPage = Math.min(pagination.total_pages, pagination.page + 4);
     
     for (let i = startPage; i <= endPage; i++) {
         const pageLi = document.createElement('li');

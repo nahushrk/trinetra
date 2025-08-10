@@ -398,6 +398,16 @@ button {
     text-decoration: underline;
 }
 
+.folder-link.disabled {
+    color: #adb5bd;
+    cursor: not-allowed;
+}
+
+.folder-link.disabled:hover {
+    color: #adb5bd;
+    text-decoration: none;
+}
+
 /* G-code file name wrapping */
 .gcode-item .file-name {
     word-wrap: break-word;
