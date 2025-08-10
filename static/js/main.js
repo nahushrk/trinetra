@@ -69,20 +69,9 @@ function init() {
 
     loadSTLFiles(initialStlFiles);
 
-    // Sort by and sort order change
-    const sortBySelect = document.getElementById('sort-by');
-    const sortOrderSelect = document.getElementById('sort-order');
-    
-    if (sortBySelect) {
-        sortBySelect.addEventListener('change', function() {
-            refreshCurrentView();
-        });
-    }
-    
-    if (sortOrderSelect) {
-        sortOrderSelect.addEventListener('change', function() {
-            refreshCurrentView();
-        });
+    // Initialize sort/filter dropdowns
+    if (typeof initSortFilterDropdowns !== 'undefined') {
+        initSortFilterDropdowns();
     }
 }
 
@@ -437,7 +426,7 @@ function loadPage(page) {
     currentSortOrder = sortOrder;
     
     // Make API call
-    const url = `/api/stl_files?page=${page}filter=${encodeURIComponent(filterText)}&sort_by=${encodeURIComponent(sortBy)}&sort_order=${encodeURIComponent(sortOrder)}`;
+    const url = `/api/stl_files?page=${page}&filter=${encodeURIComponent(filterText)}&sort_by=${encodeURIComponent(sortBy)}&sort_order=${encodeURIComponent(sortOrder)}`;
     
     fetch(url)
         .then(response => response.json())
@@ -469,6 +458,22 @@ function updatePaginationControls(pagination) {
     
     // Clear existing pagination
     paginationUl.innerHTML = '';
+    
+    // Add first button
+    if (pagination.page > 1) {
+        const firstLi = document.createElement('li');
+        firstLi.className = 'page-item';
+        const firstLink = document.createElement('a');
+        firstLink.className = 'page-link';
+        firstLink.href = '#';
+        firstLink.innerText = 'First';
+        firstLink.addEventListener('click', function(e) {
+            e.preventDefault();
+            loadPage(1);
+        });
+        firstLi.appendChild(firstLink);
+        paginationUl.appendChild(firstLi);
+    }
     
     // Add previous button
     if (pagination.page > 1) {
@@ -521,6 +526,22 @@ function updatePaginationControls(pagination) {
         });
         nextLi.appendChild(nextLink);
         paginationUl.appendChild(nextLi);
+    }
+    
+    // Add last button
+    if (pagination.page < pagination.total_pages) {
+        const lastLi = document.createElement('li');
+        lastLi.className = 'page-item';
+        const lastLink = document.createElement('a');
+        lastLink.className = 'page-link';
+        lastLink.href = '#';
+        lastLink.innerText = 'Last';
+        lastLink.addEventListener('click', function(e) {
+            e.preventDefault();
+            loadPage(pagination.total_pages);
+        });
+        lastLi.appendChild(lastLink);
+        paginationUl.appendChild(lastLi);
     }
 }
 

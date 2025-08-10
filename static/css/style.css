@@ -829,3 +829,188 @@ button {
     border-color: #007bff;
 }
 
+
+/* Sort and Filter Dropdown Buttons */
+.sort-filter-container {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    align-items: center;
+}
+
+.sort-filter-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.375rem 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-decoration: none;
+    border: 1px solid #ced4da;
+    border-radius: 0.375rem;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    background-color: #fff;
+    color: #495057;
+    min-width: 120px;
+    justify-content: space-between;
+    height: calc(1.5em + 0.75rem + 2px); /* Match Bootstrap input height */
+}
+
+.sort-filter-btn:hover {
+    background-color: #e9ecef;
+    border-color: #adb5bd;
+    color: #212529;
+}
+
+.sort-filter-btn:focus {
+    outline: none;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+    border-color: #80bdff;
+}
+
+.sort-filter-btn i {
+    transition: transform 0.2s ease-in-out;
+}
+
+.sort-filter-btn.active i {
+    transform: rotate(180deg);
+}
+
+.sort-filter-dropdown {
+    position: absolute;
+    z-index: 1000;
+    display: none;
+    min-width: 200px;
+    padding: 0.5rem 0;
+    margin: 0.125rem 0 0;
+    font-size: 0.875rem;
+    color: #212529;
+    text-align: left;
+    list-style: none;
+    background-color: #fff;
+    background-clip: padding-box;
+    border: 1px solid rgba(0, 0, 0, 0.15);
+    border-radius: 0.375rem;
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.175);
+}
+
+.sort-filter-dropdown.show {
+    display: block;
+}
+
+/* Special styles for sort/filter buttons inside input groups */
+.input-group .sort-filter-btn {
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+    min-width: auto;
+    padding: 0.375rem 0.75rem;
+    margin-left: -1px; /* Overlap border with input */
+}
+
+.sort-filter-dropdown .dropdown-item {
+    display: block;
+    width: 100%;
+    padding: 0.25rem 1rem;
+    clear: both;
+    font-weight: 400;
+    color: #212529;
+    text-align: inherit;
+    text-decoration: none;
+    white-space: nowrap;
+    background-color: transparent;
+    border: 0;
+    cursor: pointer;
+}
+
+.sort-filter-dropdown .dropdown-item:hover,
+.sort-filter-dropdown .dropdown-item:focus {
+    color: #16181b;
+    text-decoration: none;
+    background-color: #f8f9fa;
+}
+
+.sort-filter-dropdown .dropdown-item.active,
+.sort-filter-dropdown .dropdown-item:active {
+    color: #fff;
+    text-decoration: none;
+    background-color: #007bff;
+}
+
+.sort-filter-dropdown .dropdown-divider {
+    height: 0;
+    margin: 0.5rem 0;
+    overflow: hidden;
+    border-top: 1px solid #e9ecef;
+}
+
+.sort-filter-dropdown .dropdown-header {
+    display: block;
+    padding: 0.5rem 1rem;
+    margin-bottom: 0;
+    font-size: 0.75rem;
+    color: #6c757d;
+    white-space: nowrap;
+}
+
+/* Responsive adjustments for sort/filter buttons */
+@media (max-width: 768px) {
+    .input-group .sort-filter-btn {
+        padding: 0.375rem 0.5rem;
+        font-size: 0.8rem;
+    }
+    
+    .sort-filter-dropdown {
+        min-width: 150px;
+    }
+}
+
+@media (max-width: 576px) {
+    .input-group .sort-filter-btn {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.75rem;
+    }
+    
+    .sort-filter-dropdown {
+        min-width: 120px;
+    }
+}
+
+/* Improved Pagination */
+.pagination-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 1rem 0;
+}
+
+.pagination-btn {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.875rem;
+    border: 1px solid #dee2e6;
+    border-radius: 0.375rem;
+    background-color: #fff;
+    color: #007bff;
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+}
+
+.pagination-btn:hover {
+    background-color: #e9ecef;
+    border-color: #adb5bd;
+    color: #0056b3;
+}
+
+.pagination-btn.active {
+    background-color: #007bff;
+    border-color: #007bff;
+    color: #fff;
+}
+
+.pagination-btn.disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    pointer-events: none;
+}

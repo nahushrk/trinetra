@@ -14,21 +14,24 @@
     <div class="col-md-10">
         <div id="search-bar" class="input-group mb-3">
             <input type="text" id="search-input" class="form-control" placeholder="Search STL files or folders...">
-        </div>
-        
-        <!-- Filter and Sort Options -->
-        <div class="row mb-3">
-            <div class="col-md-6">
-                <select class="form-control" id="sort-by">
-                    <option value="folder_name">Sort by Folder</option>
-                    <option value="file_name">Sort by File</option>
-                </select>
-            </div>
-            <div class="col-md-6">
-                <select class="form-control" id="sort-order">
-                    <option value="asc">Ascending</option>
-                    <option value="desc">Descending</option>
-                </select>
+            <div class="input-group-append">
+                <button id="sort-btn" class="sort-filter-btn">
+                    Sort <i class="fas fa-chevron-down"></i>
+                </button>
+                <div id="sort-dropdown" class="sort-filter-dropdown">
+                    <a class="dropdown-item" href="#" data-sort="folder_name" data-order="asc">Folder Name (A-Z)</a>
+                    <a class="dropdown-item" href="#" data-sort="folder_name" data-order="desc">Folder Name (Z-A)</a>
+                    <a class="dropdown-item" href="#" data-sort="file_name" data-order="asc">File Name (A-Z)</a>
+                    <a class="dropdown-item" href="#" data-sort="file_name" data-order="desc">File Name (Z-A)</a>
+                </div>
+                
+                <button id="filter-btn" class="sort-filter-btn">
+                    Filter <i class="fas fa-chevron-down"></i>
+                </button>
+                <div id="filter-dropdown" class="sort-filter-dropdown">
+                    <a class="dropdown-item" href="#" data-filter="all">All Files</a>
+                    <a class="dropdown-item" href="#" data-filter="recent">Recently Modified</a>
+                </div>
             </div>
         </div>
         

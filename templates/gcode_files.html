@@ -27,23 +27,31 @@
     <div class="col-md-10">
         <div id="search-bar" class="input-group mb-3">
             <input type="text" id="search-input" class="form-control" placeholder="Search G-code files...">
-        </div>
-        
-        <!-- Filter and Sort Options -->
-        <div class="row mb-3">
-            <div class="col-md-6">
-                <select class="form-control" id="sort-by">
-                    <option value="folder_name">Sort by Folder</option>
-                    <option value="file_name">Sort by File</option>
-                    <option value="print_count">Sort by Print Count</option>
-                    <option value="last_print_date">Sort by Last Print Date</option>
-                </select>
-            </div>
-            <div class="col-md-6">
-                <select class="form-control" id="sort-order">
-                    <option value="asc">Ascending</option>
-                    <option value="desc">Descending</option>
-                </select>
+            <div class="input-group-append">
+                <button id="sort-btn" class="sort-filter-btn">
+                    Sort <i class="fas fa-chevron-down"></i>
+                </button>
+                <div id="sort-dropdown" class="sort-filter-dropdown">
+                    <a class="dropdown-item" href="#" data-sort="folder_name" data-order="asc">Folder Name (A-Z)</a>
+                    <a class="dropdown-item" href="#" data-sort="folder_name" data-order="desc">Folder Name (Z-A)</a>
+                    <a class="dropdown-item" href="#" data-sort="file_name" data-order="asc">File Name (A-Z)</a>
+                    <a class="dropdown-item" href="#" data-sort="file_name" data-order="desc">File Name (Z-A)</a>
+                    <div class="dropdown-divider"></div>
+                    <a class="dropdown-item" href="#" data-sort="print_count" data-order="desc">Print Count (High to Low)</a>
+                    <a class="dropdown-item" href="#" data-sort="print_count" data-order="asc">Print Count (Low to High)</a>
+                    <a class="dropdown-item" href="#" data-sort="last_print_date" data-order="desc">Last Print Date (Newest)</a>
+                    <a class="dropdown-item" href="#" data-sort="last_print_date" data-order="asc">Last Print Date (Oldest)</a>
+                </div>
+                
+                <button id="filter-btn" class="sort-filter-btn">
+                    Filter <i class="fas fa-chevron-down"></i>
+                </button>
+                <div id="filter-dropdown" class="sort-filter-dropdown">
+                    <a class="dropdown-item" href="#" data-filter="all">All Files</a>
+                    <a class="dropdown-item" href="#" data-filter="recent">Recently Modified</a>
+                    <a class="dropdown-item" href="#" data-filter="successful">Successful Prints</a>
+                    <a class="dropdown-item" href="#" data-filter="failed">Failed Prints</a>
+                </div>
             </div>
         </div>
         
