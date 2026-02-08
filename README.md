@@ -52,62 +52,92 @@ Integrations like Moonraker are treated as optional connectors, with room for fu
     cd trinetra
     ```
 
-2. Install and start the app:
+2. Recommended: run with Docker (works across desktop and Linux hosts):
+
+    ```bash
+    make docker-up
+    ```
+
+3. Open your browser and go to [http://localhost:8969](http://localhost:8969) (or the host IP if running remotely).
+
+### Native install (optional)
+
+If you prefer a native service setup, run:
 
     ```bash
     ./install.sh
     ```
 
-3. Open your browser and go to [http://localhost:8969](http://localhost:8969) (or the host IP if running remotely).
-
 ## Running with Docker
 
-You can also run Trinetra using Docker and Docker Compose. This is a convenient way to deploy on any platform (not just Raspberry Pi). The Docker setup uses [uv](https://github.com/astral-sh/uv) for fast, modern Python dependency management.
+Docker is the recommended way to run Trinetra on most environments.
 
-### 1. Build and Start with Docker Compose
+### Quick Start (Docker)
+
+1. Install Docker (Docker Desktop on desktop OS, or Docker Engine + Compose plugin on Linux).
+2. From repo root, run:
 
 ```bash
-# Make sure Docker Desktop is running on macOS first.
-mkdir -p trinetra-data/3dfiles printer_data/gcodes
-docker compose up --build
+make docker-up
 ```
 
-This will build the image and start the Trinetra service.
+3. Open [http://localhost:8969](http://localhost:8969)
 
-If you use Moonraker as a connector and it runs on another machine, set `moonraker_url` in `config.docker.yaml` to that machine's URL (for example, `http://192.168.1.50:7125`).
+The `make docker-up` flow automatically creates data directories and starts the app in detached mode.
 
-### 2. Configuration and Data
-
-- **config.docker.yaml**: For Docker, the app uses `config.docker.yaml` (mounted as `/app/config.yaml` in the container). This file sets the correct paths for data and gcode inside the container:
-  - `base_path: "/data/"`
-  - `gcode_path: "/gcodes/"`
-  - `database_path: "/app/db/trinetra.db"`
-  - `moonraker_url: "http://host.docker.internal:7125"` (optional connector endpoint)
-- **Data Volumes**:
-  - `./trinetra-data/3dfiles` is mounted to `/data` in the container (for your STL and project files).
-  - `./printer_data/gcodes` is mounted to `/gcodes` in the container (for gcode files).
-  - `trinetra-db` named volume is mounted to `/app/db` in the container (for database persistence).
-
-**Note:** The default `config.yaml` is for native installs (e.g., on Raspberry Pi). For Docker, always use `config.docker.yaml`.
-
-The database file (`/app/db/trinetra.db`) is stored in a Docker named volume, so your catalog data is preserved across container restarts.
-
-You can change these paths in `docker-compose.yml` and `config.docker.yaml` as needed.
-
-### 3. Access the App
-
-Open your browser and go to [http://localhost:8969](http://localhost:8969) (or the host IP if running remotely).
-
-### 4. Stopping the App
+### Manual Start (without Make)
 
 ```bash
-docker compose down
+./scripts/docker-setup.sh
+docker compose up -d --build
 ```
 
-To remove the persisted database volume as well:
+### Data Persistence (host paths)
+
+By default, Docker Compose mounts these host paths:
+
+- `./trinetra-data/3dfiles` -> `/data` (models and project files)
+- `./printer_data/gcodes` -> `/gcodes` (sliced files)
+- `./trinetra-data/db` -> `/app/db` (SQLite database)
+
+### Docker Configuration
+
+- Runtime config file: `config.docker.yaml` (mounted as `/app/config.yaml`)
+- Default DB path in Docker: `/app/db/trinetra.db`
+- Optional Moonraker connector URL: `moonraker_url`
+
+Default Docker connector URL is:
+
+- `moonraker_url: "http://host.docker.internal:7125"`
+
+This works on Docker Desktop and is also mapped for Linux hosts via `extra_hosts` in `docker-compose.yml`.
+
+### Optional Overrides
+
+Copy `.env.docker.example` to `.env` and customize:
 
 ```bash
-docker compose down -v
+cp .env.docker.example .env
+```
+
+Supported overrides:
+
+- `TRINETRA_PORT`
+- `TRINETRA_MODELS_DIR`
+- `TRINETRA_GCODES_DIR`
+- `TRINETRA_DB_DIR`
+
+### Operations
+
+```bash
+# Start / rebuild
+make docker-up
+
+# View logs
+make docker-logs
+
+# Stop
+make docker-down
 ```
 
 ## Contributing
@@ -141,7 +171,7 @@ For development, we recommend using [uv](https://github.com/astral-sh/uv) for fa
 
 This will create a `.venv` using uv and install all development dependencies. All development commands (format, test, etc.) are run inside this environment.
 
-**Note:** Both native installation (Raspberry Pi) and Docker deployment also use uv for dependency management, ensuring consistency across all environments.
+**Note:** Both native installation and Docker deployment use uv for dependency management, ensuring consistency across environments.
 
 ## License
 

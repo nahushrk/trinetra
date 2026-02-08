@@ -1,4 +1,4 @@
-.PHONY: format test unit-test playwright-test dev-setup test-server clean-venv make-venv clear-data
+.PHONY: format test unit-test playwright-test dev-setup test-server clean-venv make-venv clear-data docker-setup docker-up docker-down docker-logs
 
 STYLE_DIRS := $(pwd)
 
@@ -39,6 +39,18 @@ test-server:
 
 clear-data:
 	rm trinetra.db trinetra.log test.log test.db
+
+docker-setup:
+	./scripts/docker-setup.sh
+
+docker-up: docker-setup
+	docker compose up -d --build
+
+docker-down:
+	docker compose down
+
+docker-logs:
+	docker compose logs -f trinetra
 
 # Run all tasks
 .PHONY: all

@@ -9,6 +9,7 @@ fi
 # Assign the first argument as the PYTHON_RUNTIME and the second as CONFIG_FILE
 PYTHON_RUNTIME=$1
 CONFIG_FILE=$2
+LOG_FILE=${TRINETRA_LOG_FILE:-trinetra.log}
 
 echo "Loading from config: "$CONFIG_FILE
 
@@ -25,4 +26,4 @@ $PYTHON_RUNTIME -m gunicorn \
   -b 0.0.0.0:8969 app:app \
   --log-level "$LOG_LEVEL" \
   --env CONFIG_FILE=$CONFIG_FILE \
-  --log-file trinetra.log
+  --log-file "$LOG_FILE"

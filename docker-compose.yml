@@ -2,12 +2,28 @@ services:
   trinetra:
     build: .
     container_name: trinetra
+    restart: unless-stopped
     ports:
-      - "8969:8969"
+      - "${TRINETRA_PORT:-8969}:8969"
     environment:
       - CONFIG_FILE=/app/config.yaml
+      - TRINETRA_LOG_FILE=-
     volumes:
       - ./config.docker.yaml:/app/config.yaml:ro
-      - ./trinetra-data/3dfiles:/data
-      - ./printer_data/gcodes:/gcodes
-      - ./trinetra.db:/app/trinetra.db 
+      - ${TRINETRA_MODELS_DIR:-./trinetra-data/3dfiles}:/data
+      - ${TRINETRA_GCODES_DIR:-./printer_data/gcodes}:/gcodes
+      - ${TRINETRA_DB_DIR:-./trinetra-data/db}:/app/db
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "/app/.venv/bin/python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8969/', timeout=5)",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s

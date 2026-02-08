@@ -1,6 +1,9 @@
 base_path: "/data/"
 gcode_path: "/gcodes/"
-moonraker_url: "http://localhost:7125"
+# Optional connector endpoint. Use host.docker.internal on macOS/Windows.
+# On Linux/Raspberry Pi this is mapped via docker-compose extra_hosts.
+moonraker_url: "http://host.docker.internal:7125"
+database_path: "/app/db/trinetra.db"
 log_level: "WARNING"
 mode: "PROD"
-search_result_limit: 100 
+search_result_limit: 100
