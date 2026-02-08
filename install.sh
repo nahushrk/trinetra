@@ -15,7 +15,7 @@ if ! is_raspberry_pi; then
 fi
 
 APP_DIR=~/trinetra
-DATA_DIR=~/trinetra-data/3dfiles
+BASE_DIR=~/trinetra-data
 VENV_DIR=$APP_DIR/.venv
 SYSTEMD_FILE=/etc/systemd/system/trinetra.service
 
@@ -59,11 +59,11 @@ fi
 
 deactivate
 
-if [ ! -d "$DATA_DIR" ]; then
-    echo "Creating directory for 3D files: $DATA_DIR"
-    mkdir -p "$DATA_DIR"
+if [ ! -d "$BASE_DIR" ]; then
+    echo "Creating Trinetra base directory: $BASE_DIR"
+    mkdir -p "$BASE_DIR"
 else
-    echo "$DATA_DIR already exists."
+    echo "$BASE_DIR already exists."
 fi
 
 if [ ! -f "$SYSTEMD_FILE" ]; then

@@ -49,5 +49,5 @@ USER trinetrauser
 # Expose port
 EXPOSE 8969
 
-# Entrypoint: use run.sh with config file for consistent log level and configuration
-ENTRYPOINT ["/bin/bash", "run.sh", "/app/.venv/bin/python", "/app/config.yaml"] 
+# Entrypoint: use run.sh; config path is resolved from CONFIG_FILE env if set
+ENTRYPOINT ["/bin/bash", "run.sh", "/app/.venv/bin/python"]

@@ -20,6 +20,7 @@ from werkzeug.utils import secure_filename
 from trinetra import gcode_handler, search, moonraker
 from trinetra.moonraker import MoonrakerAPI, add_to_queue
 from trinetra.database import DatabaseManager
+from trinetra.config_paths import resolve_storage_paths
 
 # Import logging configuration from trinetra package
 from trinetra.logger import get_logger, configure_logging
@@ -78,16 +79,17 @@ def create_app(config_file=None, config_overrides=None):
 
     logger.info(f"Config: {config}")
 
-    # Set up paths
-    stl_files_path = os.path.expanduser(config.get("base_path", "./stl_files"))
-    gcode_files_path = os.path.expanduser(config.get("gcode_path", "./gcode_files"))
+    # Set up storage paths (legacy two-path mode and single-root mode are both supported)
+    stl_files_path, gcode_files_path, db_path = resolve_storage_paths(config)
     os.makedirs(stl_files_path, exist_ok=True)
     os.makedirs(gcode_files_path, exist_ok=True)
+    db_dir = os.path.dirname(db_path)
+    if db_dir:
+        os.makedirs(db_dir, exist_ok=True)
     app.config["STL_FILES_PATH"] = stl_files_path
     app.config["GCODE_FILES_PATH"] = gcode_files_path
 
     # Initialize database manager
-    db_path = config.get("database_path", "trinetra.db")
     app.config["DATABASE_PATH"] = db_path
     db_manager = DatabaseManager(db_path)
     app.config["DB_MANAGER"] = db_manager

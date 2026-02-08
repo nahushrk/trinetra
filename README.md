@@ -83,7 +83,7 @@ make docker-up
 
 3. Open [http://localhost:8969](http://localhost:8969)
 
-The `make docker-up` flow automatically creates data directories and starts the app in detached mode.
+The `make docker-up` flow automatically creates data directories, writes a default Docker config (first run), and starts the app in detached mode.
 
 ### Manual Start (without Make)
 
@@ -92,19 +92,28 @@ The `make docker-up` flow automatically creates data directories and starts the 
 docker compose up -d --build
 ```
 
-### Data Persistence (host paths)
+### Data Persistence (single host path)
 
-By default, Docker Compose mounts these host paths:
+Docker Compose mounts one host directory by default:
 
-- `./trinetra-data/3dfiles` -> `/data` (models and project files)
-- `./printer_data/gcodes` -> `/gcodes` (sliced files)
-- `./trinetra-data/db` -> `/app/db` (SQLite database)
+- `./trinetra-data` -> `/trinetra-data`
+
+To change the host path, edit the first line in `docker-compose.yml`:
+
+- `x-trinetra-host-base-dir: &trinetra_host_base_dir ./trinetra-data`
+
+Inside that directory, Trinetra uses:
+
+- `models/` for model and project files
+- `gcodes/` for sliced files
+- `system/` for runtime config and SQLite database
 
 ### Docker Configuration
 
-- Runtime config file: `config.docker.yaml` (mounted as `/app/config.yaml`)
-- Default DB path in Docker: `/app/db/trinetra.db`
+- Runtime config file (inside mounted base dir): `system/config.yaml`
+- Default DB path in Docker: `/trinetra-data/system/trinetra.db`
 - Optional Moonraker connector URL: `moonraker_url`
+- Initial Docker config template in repo: `config.docker.yaml`
 
 Default Docker connector URL is:
 
@@ -114,18 +123,9 @@ This works on Docker Desktop and is also mapped for Linux hosts via `extra_hosts
 
 ### Optional Overrides
 
-Copy `.env.docker.example` to `.env` and customize:
-
-```bash
-cp .env.docker.example .env
-```
-
-Supported overrides:
+You can still use `.env` for port override only:
 
 - `TRINETRA_PORT`
-- `TRINETRA_MODELS_DIR`
-- `TRINETRA_GCODES_DIR`
-- `TRINETRA_DB_DIR`
 
 ### Operations
 

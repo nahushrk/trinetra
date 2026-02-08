@@ -58,6 +58,29 @@ class TestAppRoutes:
         if hasattr(self, "temp_dir") and os.path.exists(self.temp_dir):
             shutil.rmtree(self.temp_dir)
 
+    def test_single_root_base_path_derives_paths(self):
+        """When only base_path is configured, derive models/gcodes/system paths under it."""
+        single_root = os.path.join(self.temp_dir, "single-root")
+        app = create_app(
+            config_overrides={
+                "base_path": single_root,
+                "log_level": "INFO",
+                "search_result_limit": 25,
+                "mode": "DEV",
+            }
+        )
+
+        assert app.config["STL_FILES_PATH"] == os.path.join(os.path.abspath(single_root), "models")
+        assert app.config["GCODE_FILES_PATH"] == os.path.join(
+            os.path.abspath(single_root), "gcodes"
+        )
+        assert app.config["DATABASE_PATH"] == os.path.join(
+            os.path.abspath(single_root), "system", "trinetra.db"
+        )
+        assert os.path.isdir(app.config["STL_FILES_PATH"])
+        assert os.path.isdir(app.config["GCODE_FILES_PATH"])
+        assert os.path.isdir(os.path.dirname(app.config["DATABASE_PATH"]))
+
     def test_index_route(self):
         """Test the index route"""
         response = self.client.get("/")

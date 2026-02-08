@@ -1,3 +1,5 @@
+x-trinetra-host-base-dir: &trinetra_host_base_dir ./tests/test_data
+
 services:
   trinetra:
     build: .
@@ -6,13 +8,12 @@ services:
     ports:
       - "${TRINETRA_PORT:-8969}:8969"
     environment:
-      - CONFIG_FILE=/app/config.yaml
+      - CONFIG_FILE=/trinetra-data/system/config.yaml
       - TRINETRA_LOG_FILE=-
     volumes:
-      - ./config.docker.yaml:/app/config.yaml:ro
-      - ${TRINETRA_MODELS_DIR:-./trinetra-data/3dfiles}:/data
-      - ${TRINETRA_GCODES_DIR:-./printer_data/gcodes}:/gcodes
-      - ${TRINETRA_DB_DIR:-./trinetra-data/db}:/app/db
+      - type: bind
+        source: *trinetra_host_base_dir
+        target: /trinetra-data
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:

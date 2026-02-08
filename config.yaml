@@ -1,5 +1,4 @@
-base_path: "/home/pi/trinetra-data/3dfiles/"
-gcode_path: "/home/pi/printer_data/gcodes/"
+base_path: "/home/pi/trinetra-data/"
 moonraker_url: "http://localhost:7125"
 log_level: "WARNING"
 mode: "PROD"

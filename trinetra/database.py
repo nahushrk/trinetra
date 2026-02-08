@@ -27,6 +27,7 @@ from trinetra import gcode_handler, search
 from trinetra.logger import get_logger
 from trinetra.moonraker import MoonrakerAPI
 from trinetra.moonraker_service import MoonrakerService
+from trinetra.config_paths import resolve_storage_paths
 
 logger = get_logger(__name__)
 
@@ -1193,14 +1194,9 @@ def main():
 
     configure_logging(config)
 
-    # Get paths from config
-    stl_base_path = config.get("base_path")
-    gcode_base_path = config.get("gcode_path")
+    # Resolve storage paths from config (legacy + single-root mode)
+    stl_base_path, gcode_base_path, _ = resolve_storage_paths(config)
     moonraker_url = config.get("moonraker_url")
-
-    if not stl_base_path or not gcode_base_path:
-        print("Error: base_path and gcode_path must be specified in config")
-        return 1
 
     # Create database manager
     db_manager = DatabaseManager(args.db_path)
