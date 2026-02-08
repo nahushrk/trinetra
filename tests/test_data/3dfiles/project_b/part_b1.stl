@@ -1,9 +1,0 @@
-solid part_b1
-  facet normal 0 0 1
-    outer loop
-      vertex 0 0 0
-      vertex 3 0 0
-      vertex 0 3 0
-    endloop
-  endfacet
-endsolid part_b1
