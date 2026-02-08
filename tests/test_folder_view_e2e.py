@@ -6,7 +6,7 @@ def test_folder_view_page_loads(page, base_url):
     """Test basic page load with correct title and no errors"""
     response = page.goto(f"{base_url}/folder/test_folder", wait_until="networkidle")
     assert response.ok, f"Failed to load folder view page: {response.status}"
-    expect(page).to_have_title("test_folder - Trinetra")
+    expect(page).to_have_title("test_folder - Trinetra 3D Model Manager")
     
     # Verify key elements are present
     expect(page.locator('[data-test-id="folder-name"]')).to_have_text("test_folder")

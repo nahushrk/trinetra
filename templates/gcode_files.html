@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Trinetra{% endblock %}
+{% block title %}Sliced Files - Trinetra 3D Model Manager{% endblock %}
 
 {% block extra_head %}
 <!-- Include GCodeLoader -->
@@ -17,8 +17,8 @@
 <!-- Page Header -->
 <div class="row justify-content-center">
     <div class="col text-center">
-        <h1>All G-code Files</h1>
-        <p class="text-muted">Browse all G-code files across all folders</p>
+        <h1>All Sliced Files</h1>
+        <p class="text-muted">Browse all sliced files (.gcode) across your library</p>
     </div>
 </div>
 
@@ -26,7 +26,7 @@
 <div class="row justify-content-center">
     <div class="col-md-10">
         <div id="search-bar" class="input-group mb-3">
-            <input type="text" id="search-input" class="form-control" placeholder="Search G-code files..." data-test-id="search-input">
+            <input type="text" id="search-input" class="form-control" placeholder="Search sliced files..." data-test-id="search-input">
             <div class="input-group-append">
                 <button id="sort-btn" class="sort-filter-btn" data-test-id="sort-btn">
                     Sort <i class="fas fa-chevron-down"></i>
@@ -59,7 +59,7 @@
             </div>
         </div>
         
-        <div id="metadata" class="text-center text-muted" data-test-id="metadata">Loading files...</div>
+        <div id="metadata" class="text-center text-muted" data-test-id="metadata">Loading library files...</div>
         
         <!-- Pagination Controls -->
         <div id="pagination-controls" class="d-flex justify-content-center mt-3">

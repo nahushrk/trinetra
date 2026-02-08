@@ -1,6 +1,6 @@
 """
-Custom logging configuration for Trinetra application
-Provides a centralized get_logger function with consistent formatting
+Custom logging configuration for the Trinetra application.
+Provides a centralized get_logger function with consistent formatting.
 """
 
 import logging

@@ -8,7 +8,7 @@ def test_index_page_loads(page, base_url):
     """Test basic page load with correct title and no errors"""
     response = page.goto(f"{base_url}/", wait_until="networkidle")
     assert response.ok, f"Failed to load index page: {response.status}"
-    expect(page).to_have_title("Trinetra")
+    expect(page).to_have_title("Trinetra 3D Model Manager")
     
     # Verify key elements are present
     expect(page.locator('[data-test-id="search-bar"]')).to_be_visible()

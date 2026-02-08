@@ -1,5 +1,5 @@
 """
-Database models for Trinetra 3D printing catalog
+Database models for Trinetra 3D model manager.
 """
 
 import json

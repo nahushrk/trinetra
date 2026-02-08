@@ -272,14 +272,14 @@ function createGCodeItem(file, containerElement, scene, rowContainer) {
     }
     containerElement.appendChild(gcodeMetadataElement);
 
-    // Add Moonraker statistics section
+    // Add connector statistics section
     const statsElement = document.createElement('div');
     statsElement.className = 'moonraker-stats';
     
     // Check if stats data is available in the file object
     
-    statsElement.innerHTML = '<em>Loading print statistics...</em>';
-    // Load Moonraker statistics if not available
+    statsElement.innerHTML = '<em>Loading connector statistics...</em>';
+    // Load connector statistics if not available
     loadMoonrakerStats(gcodeFile, statsElement);
     
     containerElement.appendChild(statsElement);
@@ -311,7 +311,7 @@ function createGCodeItem(file, containerElement, scene, rowContainer) {
     return { scene, controls, camera, relPath, basePath };
 }
 
-// Load Moonraker statistics for a G-code file
+// Load connector statistics for a G-code file
 function loadMoonrakerStats(filename, statsElement) {
     fetch(`/moonraker_stats/${encodeURIComponent(filename)}`)
         .then(response => response.json())
@@ -338,12 +338,12 @@ function loadMoonrakerStats(filename, statsElement) {
                 statsElement.innerHTML = statsContent;
                 statsElement.className = 'moonraker-stats stats-loaded';
             } else {
-                statsElement.innerHTML = '<em>No print history available</em>';
+                statsElement.innerHTML = '<em>No connector print history available</em>';
                 statsElement.className = 'moonraker-stats stats-none';
             }
         })
         .catch(error => {
-            console.error('Error loading Moonraker stats:', error);
+            console.error('Error loading connector stats:', error);
             statsElement.innerHTML = '<em>Failed to load print statistics</em>';
             statsElement.className = 'moonraker-stats stats-error';
         });
@@ -360,7 +360,7 @@ function createFileActionButtons(containerElement, fileData, buttonTypes = ['dow
         const downloadButton = document.createElement('button');
         const isGcode = fileData.file_name && fileData.file_name.toLowerCase().endsWith('.gcode');
         downloadButton.className = `file-action-btn ${isGcode ? 'download-gcode' : 'download-stl'}`;
-        downloadButton.innerHTML = `<i class="fas fa-download"></i> Download ${isGcode ? 'G-code' : 'STL'}`;
+        downloadButton.innerHTML = `<i class="fas fa-download"></i> Download ${isGcode ? 'Sliced File' : 'STL'}`;
         downloadButton.onclick = function () {
             if (isGcode) {
                 window.location.href = `/gcode/${encodeURIComponent(fileData.base_path || fileData.basePath || fileData.path)}/${encodeURIComponent(fileData.rel_path || fileData.relPath || '')}`;
@@ -405,11 +405,11 @@ function createFileActionButtons(containerElement, fileData, buttonTypes = ['dow
     if (buttonTypes.includes('queue') && fileData.file_name && fileData.file_name.toLowerCase().endsWith('.gcode')) {
         const addToQueueButton = document.createElement('button');
         addToQueueButton.className = 'file-action-btn add-to-queue';
-        addToQueueButton.innerHTML = '<i class="fas fa-plus"></i> Add to Queue';
+        addToQueueButton.innerHTML = '<i class="fas fa-plus"></i> Queue Print Job';
         addToQueueButton.onclick = function () {
             addToQueueButton.disabled = true;
             addToQueueButton.classList.add('loading');
-            addToQueueButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
+            addToQueueButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Queueing...';
             
             fetch('/api/add_to_queue', {
                 method: 'POST',
@@ -426,9 +426,9 @@ function createFileActionButtons(containerElement, fileData, buttonTypes = ['dow
                 if (data.result === 'ok' || data.result === 'success' || data.job_ids) {
                     addToQueueButton.classList.remove('loading');
                     addToQueueButton.classList.add('success');
-                    addToQueueButton.innerHTML = '<i class="fas fa-check"></i> Added!';
+                    addToQueueButton.innerHTML = '<i class="fas fa-check"></i> Queued!';
                     setTimeout(() => {
-                        addToQueueButton.innerHTML = '<i class="fas fa-plus"></i> Add to Queue';
+                        addToQueueButton.innerHTML = '<i class="fas fa-plus"></i> Queue Print Job';
                         addToQueueButton.classList.remove('success');
                         addToQueueButton.disabled = false;
                     }, 2000);
@@ -440,9 +440,9 @@ function createFileActionButtons(containerElement, fileData, buttonTypes = ['dow
                 addToQueueButton.classList.remove('loading');
                 addToQueueButton.classList.add('error');
                 addToQueueButton.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error!';
-                alert('Failed to add to queue: ' + error.message);
+                alert('Failed to queue print job: ' + error.message);
                 setTimeout(() => {
-                    addToQueueButton.innerHTML = '<i class="fas fa-plus"></i> Add to Queue';
+                    addToQueueButton.innerHTML = '<i class="fas fa-plus"></i> Queue Print Job';
                     addToQueueButton.classList.remove('error');
                     addToQueueButton.disabled = false;
                 }, 2000);

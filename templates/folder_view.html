@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}{{ folder_name }} - Trinetra{% endblock %}
+{% block title %}{{ folder_name }} - Trinetra 3D Model Manager{% endblock %}
 
 {% block extra_head %}
 <!-- Include GCodeLoader -->
@@ -30,7 +30,7 @@
 <!-- STL Files Section -->
 {% if stl_files %}
 <div class="section" data-test-id="stl-section">
-    <h3>STL Files</h3>
+    <h3>Model Files (STL)</h3>
     <canvas id="c" class="d-block mx-auto" data-test-id="3d-canvas"></canvas>
     <div id="stl-content" class="mt-4" data-test-id="stl-content"></div>
 </div>
@@ -39,7 +39,7 @@
 <!-- G-code Files Section -->
 {% if gcode_files %}
 <div class="section" data-test-id="gcode-section">
-    <h3>G-code Files</h3>
+    <h3>Sliced Files (G-code)</h3>
     <div id="gcode-content" class="mt-4" data-test-id="gcode-content"></div>
 </div>
 {% endif %}

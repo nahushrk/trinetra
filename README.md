@@ -1,24 +1,31 @@
-# Trinetra: Local 3D Printing Catalog for Klipper
+# Trinetra: Self-hosted 3D Model Manager and Organizer
 
 <img src="static/images/trinetra.jpeg" alt="Trinetra">
 
-Trinetra, is a companion web app for the Klipper 3D printing software. It serves as a local 3D printing catalog to help you manage your STL files and gcode efficiently, especially for users
-downloading from websites like Thingiverse, Printables, or using custom models.
+Trinetra is a self-hosted 3D model library focused on local organization first. It helps you manage STL files, sliced files, project assets, and metadata in one place.
+Integrations like Moonraker are treated as optional connectors, with room for future ecosystem plugins (including Bambu).
+
+**Keywords**: self-hosted 3D model manager, STL organizer, G-code library, 3D print file management, local 3D model catalog.
+
+## Why Trinetra
+
+- **Own your library**: keep your 3D model archive local and searchable.
+- **Organize by project**: STL, G-code, images, and docs in one project view.
+- **Connector optional**: works standalone; connect Moonraker (and future ecosystems) only if you want print stats and queue actions.
 
 ## Features
 
-- **Unified View for Projects**: Each folder within your main project path is treated as a project, showing all STL, images, PDFs, and gcode files associated with that project.
+- **Unified Project View**: Each folder in your main model path is treated as a project, showing STL files, images, PDFs, and sliced files together.
 
-- **Manage STL Files**: Add any STL file to your catalog by uploading it, including those downloaded from the web or custom 3D models.
+- **Local-first Model Library**: Add and organize STL files from Thingiverse, Printables, or your own custom models.
 
-- **Zip File Support**: Upload zip files containing multiple files (STL, images, PDFs), and Trinetra will automatically categorize them under a single project.
+- **Zip Import**: Upload ZIP files containing multiple assets (STL, images, PDFs), and Trinetra automatically groups them into a single project.
 
-- **Automatic gcode Association**: Gcode files are pulled from `~/printer_data/gcode` and automatically linked with the original STL files, allowing you to track the gcode files with the original
-  model and slicing parameters used.
+- **Sliced File Association**: Sliced files (`.gcode`) can be linked with original STL models, so slicing metadata and print context stay connected.
 
-- **Search & Slice**: Search for models in your catalog, download STL files, slice them in your preferred slicer (such as Cura), and then upload the gcode back to Klipper.
+- **Search & Download**: Search your local library quickly and download model or sliced files when needed.
 
-- **Slicer Integration**: When using a slicer (like Cura) with Klipper, Trinetra can link the generated gcode back to the original STL file, keeping track of slicer settings.
+- **Connector-ready Architecture**: Integrations (Moonraker today, more ecosystems in future) are optional so the core app remains ecosystem-agnostic.
 
 <img src="static/images/screenshot_1.png">
 <img src="static/images/screenshot_2.png">
@@ -28,13 +35,13 @@ downloading from websites like Thingiverse, Printables, or using custom models.
 
 ## Usage
 
-1. **Add New Models**: Download 3D models from the web (Thingiverse, Printables, etc.) or use custom models. Upload them (either as individual files or zip archives) into Trinetra.
+1. **Add New Models**: Download 3D models from the web (Thingiverse, Printables, etc.) or use custom models. Upload as ZIP packages or place files in your library path.
 
-2. **Project View**: View all files related to a project in one place (STL, images, PDFs, gcode).
+2. **Project View**: View all files related to a project in one place (STL, images, PDFs, sliced files).
 
-3. **Slice & Print**: Search your catalog for models, download the STL, slice it in your slicer of choice, and upload the gcode back to Klipper.
+3. **Slice & Print**: Search your catalog for models, download the STL, slice in your preferred slicer, and keep generated gcode associated with the source model.
 
-4. **Track Slicer Settings**: Trinetra tracks the slicer settings for each gcode and shows them alongside the original STL.
+4. **Track Slicer Settings**: Trinetra keeps slicer metadata alongside the original STL where available.
 
 ## Installation
 
@@ -60,25 +67,30 @@ You can also run Trinetra using Docker and Docker Compose. This is a convenient 
 ### 1. Build and Start with Docker Compose
 
 ```bash
+# Make sure Docker Desktop is running on macOS first.
+mkdir -p trinetra-data/3dfiles printer_data/gcodes
 docker compose up --build
 ```
 
 This will build the image and start the Trinetra service.
+
+If you use Moonraker as a connector and it runs on another machine, set `moonraker_url` in `config.docker.yaml` to that machine's URL (for example, `http://192.168.1.50:7125`).
 
 ### 2. Configuration and Data
 
 - **config.docker.yaml**: For Docker, the app uses `config.docker.yaml` (mounted as `/app/config.yaml` in the container). This file sets the correct paths for data and gcode inside the container:
   - `base_path: "/data/"`
   - `gcode_path: "/gcodes/"`
-  - `database_path: "/app/trinetra.db"`
+  - `database_path: "/app/db/trinetra.db"`
+  - `moonraker_url: "http://host.docker.internal:7125"` (optional connector endpoint)
 - **Data Volumes**:
   - `./trinetra-data/3dfiles` is mounted to `/data` in the container (for your STL and project files).
   - `./printer_data/gcodes` is mounted to `/gcodes` in the container (for gcode files).
-  - `./trinetra.db` is mounted to `/app/trinetra.db` in the container (for database persistence).
+  - `trinetra-db` named volume is mounted to `/app/db` in the container (for database persistence).
 
 **Note:** The default `config.yaml` is for native installs (e.g., on Raspberry Pi). For Docker, always use `config.docker.yaml`.
 
-The database file (`trinetra.db`) is persisted outside the container, so your catalog data will be preserved when the container is restarted.
+The database file (`/app/db/trinetra.db`) is stored in a Docker named volume, so your catalog data is preserved across container restarts.
 
 You can change these paths in `docker-compose.yml` and `config.docker.yaml` as needed.
 
@@ -90,6 +102,12 @@ Open your browser and go to [http://localhost:8969](http://localhost:8969) (or t
 
 ```bash
 docker compose down
+```
+
+To remove the persisted database volume as well:
+
+```bash
+docker compose down -v
 ```
 
 ## Contributing

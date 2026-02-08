@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Trinetra{% endblock %}
+{% block title %}Trinetra 3D Model Manager{% endblock %}
 
 {% block extra_head %}
 <!-- Include GCodeLoader -->
@@ -13,7 +13,7 @@
 <div class="row justify-content-center">
     <div class="col-md-10">
         <div id="search-bar" class="input-group mb-3" data-test-id="search-bar">
-            <input type="text" id="search-input" class="form-control" placeholder="Search STL files or folders..." data-test-id="search-input">
+            <input type="text" id="search-input" class="form-control" placeholder="Search models, files, or folders..." data-test-id="search-input">
             <div class="input-group-append">
                 <button id="sort-btn" class="sort-filter-btn" data-test-id="sort-btn">
                     Sort <i class="fas fa-chevron-down"></i>
@@ -42,7 +42,7 @@
         <!-- Upload Button -->
         <div class="upload-container">
             <button id="upload-button" class="btn btn-outline-secondary" data-test-id="upload-btn">
-                <i class="bi bi-upload"></i> Upload ZIP File
+                <i class="bi bi-upload"></i> Import ZIP Package
             </button>
         </div>
         <div id="metadata" class="text-center text-muted"></div>
@@ -65,7 +65,7 @@
 <div id="upload-modal" class="upload-modal" data-test-id="upload-modal">
     <div class="upload-modal-content">
         <div class="upload-modal-header">
-            <h3 class="upload-modal-title">Uploading Files</h3>
+            <h3 class="upload-modal-title">Importing Files</h3>
             <span class="upload-modal-close" id="upload-modal-close" data-test-id="upload-modal-close">&times;</span>
         </div>
         <div class="upload-progress">

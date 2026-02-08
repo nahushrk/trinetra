@@ -1,6 +1,6 @@
 """
-Database manager for Trinetra 3D printing catalog
-Handles all database operations and provides compatibility with existing app.py functions
+Database manager for Trinetra 3D model manager.
+Handles all database operations and provides compatibility with existing app.py functions.
 """
 
 import os
@@ -1177,7 +1177,7 @@ def main():
     import yaml
 
     parser = argparse.ArgumentParser(
-        description="Generate Trinetra database from filesystem and Moonraker"
+        description="Generate Trinetra database from filesystem and optional connectors"
     )
     parser.add_argument("config", help="Path to config file")
     parser.add_argument("db_path", help="Path to database file")

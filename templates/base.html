@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <title>{% block title %}Trinetra{% endblock %}</title>
+    <title>{% block title %}Trinetra 3D Model Manager{% endblock %}</title>
     <link rel="icon" href="/static/images/trinetra.ico" type="image/x-icon">
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -26,7 +26,7 @@
                 <div class="col text-center">
                     <a href="{{ url_for('index') }}" class="header-link">
                         <img src="{{ url_for('static', filename='images/trinetra.jpeg') }}" alt="Trinetra Logo" class="header-logo">
-                        <span class="header-title">Trinetra</span>
+                        <span class="header-title">Trinetra Model Manager</span>
                     </a>
                 </div>
             </div>
@@ -38,7 +38,7 @@
                             <i class="fas fa-home"></i> Home
                         </a>
                         <a href="{{ url_for('gcode_files_view') }}" class="nav-link">
-                            <i class="fas fa-cube"></i> All G-code Files
+                            <i class="fas fa-cube"></i> All Sliced Files
                         </a>
                         <a href="{{ url_for('stats_view') }}" class="nav-link">
                             <i class="fas fa-chart-bar"></i> Stats
@@ -46,11 +46,11 @@
                         <div class="dropdown d-inline-block">
                           <button id="reload-dropdown" class="nav-link btn btn-link dropdown-toggle"
                                   data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                            <i class="fas fa-sync-alt"></i> Reload Index
+                            <i class="fas fa-sync-alt"></i> Refresh Library
                           </button>
                           <div class="dropdown-menu dropdown-menu-right" aria-labelledby="reload-dropdown">
-                            <a class="dropdown-item reload-option" href="#" data-mode="all">Reload All (Files + Stats)</a>
-                            <a class="dropdown-item reload-option" href="#" data-mode="stats">Reload Stats Only</a>
+                            <a class="dropdown-item reload-option" href="#" data-mode="all">Refresh All (Files + Connector Stats)</a>
+                            <a class="dropdown-item reload-option" href="#" data-mode="stats">Refresh Connector Stats Only</a>
                           </div>
                         </div>
                     </nav>
@@ -72,7 +72,7 @@
             <div class="row justify-content-center">
                 <div class="col text-center">
                     <p class="footer-text">
-                        Trinetra - Local 3D Printing Catalog for Klipper
+                        Trinetra - Self-hosted 3D model manager and organizer
                         <br>
                         <a href="https://github.com/nahushrk/trinetra" target="_blank" class="footer-link">
                             <i class="fab fa-github"></i> GitHub
@@ -99,8 +99,8 @@
                     e.preventDefault();
                     const mode = this.dataset.mode;
                     const action = mode === 'stats' ?
-                        'This will only reload Moonraker statistics. Continue?' :
-                        'This will reload ALL data from filesystem and Moonraker. This may take a while. Continue?';
+                        'This will only refresh connector statistics. Continue?' :
+                        'This will refresh all library data from your filesystem and configured connectors. This may take a while. Continue?';
                     
                     if (confirm(action)) {
                         const dropdown = document.getElementById('reload-dropdown');
@@ -116,8 +116,8 @@
                         .then(data => {
                             if (data.success) {
                                 const successMsg = mode === 'stats' ?
-                                    'Stats reloaded successfully!' :
-                                    'Index reloaded successfully!';
+                                    'Connector stats refreshed successfully!' :
+                                    'Library refreshed successfully!';
                                 const counts = Object.entries(data.counts)
                                     .map(([key, value]) => `${key}: ${value}`)
                                     .join('\n');
@@ -128,7 +128,7 @@
                             }
                         })
                         .catch(error => {
-                            alert(`Error reloading ${mode}: ${error.message}`);
+                            alert(`Error refreshing ${mode}: ${error.message}`);
                         })
                         .finally(() => {
                             dropdown.disabled = false;

@@ -86,7 +86,7 @@ function displayGCodeFiles(files) {
     content.innerHTML = '';
 
     if (files.length === 0) {
-        content.innerHTML = '<p class="text-center text-muted">No G-code files found.</p>';
+        content.innerHTML = '<p class="text-center text-muted">No sliced files found.</p>';
         return;
     }
 
