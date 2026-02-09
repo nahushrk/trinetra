@@ -29,6 +29,15 @@ from trinetra.logger import get_logger, configure_logging
 # Global logger - will be configured after config is loaded
 logger = None
 
+DEFAULT_PRINTER_VOLUME = {"x": 220.0, "y": 220.0, "z": 270.0}
+POPULAR_PRINTERS = [
+    {"id": "bambu_a1_mini", "name": "Bambu Lab A1 mini", "x": 180, "y": 180, "z": 180},
+    {"id": "bambu_a1", "name": "Bambu Lab A1", "x": 256, "y": 256, "z": 256},
+    {"id": "bambu_x1_p1", "name": "Bambu Lab X1 / P1 Series", "x": 256, "y": 256, "z": 256},
+    {"id": "prusa_mk4", "name": "Prusa MK4 / MK3S+", "x": 250, "y": 210, "z": 220},
+    {"id": "ender3_v2", "name": "Creality Ender 3 V2", "x": 220, "y": 220, "z": 250},
+]
+
 
 def safe_join(base, *paths):
     """Safely join one or more path components to a base path to prevent directory traversal."""
@@ -55,7 +64,8 @@ def load_config(yaml_file=None):
 
 
 def create_app(config_file=None, config_overrides=None):
-    config = load_config(config_file)
+    active_config_file = config_file or os.getenv("CONFIG_FILE", "config_dev.yaml")
+    config = load_config(active_config_file)
     if config_overrides:
         config.update(config_overrides)
 
@@ -72,6 +82,7 @@ def create_app(config_file=None, config_overrides=None):
     # Set up config in app.config
     for k, v in config.items():
         app.config[k.upper()] = v
+    app.config["CONFIG_FILE_PATH"] = os.path.abspath(active_config_file)
 
     # Set Flask app logger level from config
     log_level = config.get("log_level")
@@ -96,6 +107,47 @@ def create_app(config_file=None, config_overrides=None):
     db_manager.stl_base_path = stl_files_path
     db_manager.gcode_base_path = gcode_files_path
     app.config["DB_MANAGER"] = db_manager
+
+    def _coerce_positive_float(value):
+        try:
+            parsed = float(value)
+            if parsed <= 0:
+                return None
+            return parsed
+        except (TypeError, ValueError):
+            return None
+
+    def get_current_printer_volume():
+        raw = app.config.get("PRINTER_VOLUME", {})
+        if not isinstance(raw, dict):
+            raw = {}
+
+        x = _coerce_positive_float(raw.get("x"))
+        y = _coerce_positive_float(raw.get("y"))
+        z = _coerce_positive_float(raw.get("z"))
+        return {
+            "x": x if x is not None else DEFAULT_PRINTER_VOLUME["x"],
+            "y": y if y is not None else DEFAULT_PRINTER_VOLUME["y"],
+            "z": z if z is not None else DEFAULT_PRINTER_VOLUME["z"],
+        }
+
+    def write_config_updates(updates: dict):
+        config_path = app.config.get("CONFIG_FILE_PATH")
+        if not config_path:
+            raise ValueError("Config file path is not set")
+
+        current_config = load_config(config_path)
+        current_config.update(updates)
+
+        with open(config_path, "w", encoding="utf-8") as file:
+            yaml.safe_dump(current_config, file, sort_keys=False)
+
+        for key, value in updates.items():
+            app.config[key.upper()] = value
+
+    @app.context_processor
+    def inject_global_settings():
+        return {"trinetra_settings": {"printer_volume": get_current_printer_volume()}}
 
     def get_stl_files(base_path):
         """Get STL files from database instead of filesystem."""
@@ -709,6 +761,66 @@ def create_app(config_file=None, config_overrides=None):
             app.logger.error(f"Error generating stats: {e}")
             return "Error generating statistics", 500
 
+    @app.route("/settings")
+    def settings_view():
+        return render_template(
+            "settings.html",
+            printer_volume=get_current_printer_volume(),
+            popular_printers=POPULAR_PRINTERS,
+        )
+
+    @app.route("/api/settings/printer_volume", methods=["GET", "POST"])
+    def api_settings_printer_volume():
+        if request.method == "GET":
+            return jsonify(
+                {
+                    "success": True,
+                    "printer_volume": get_current_printer_volume(),
+                    "default_printer_volume": DEFAULT_PRINTER_VOLUME,
+                    "popular_printers": POPULAR_PRINTERS,
+                }
+            )
+
+        payload = request.get_json(silent=True) or {}
+        preset_id = payload.get("preset_id")
+        selected_preset = None
+
+        if preset_id:
+            selected_preset = next(
+                (printer for printer in POPULAR_PRINTERS if printer["id"] == preset_id), None
+            )
+            if not selected_preset:
+                return jsonify({"success": False, "error": "Invalid printer preset"}), 400
+
+        if selected_preset:
+            volume = {
+                "x": float(selected_preset["x"]),
+                "y": float(selected_preset["y"]),
+                "z": float(selected_preset["z"]),
+            }
+            profile = selected_preset["id"]
+        else:
+            x = _coerce_positive_float(payload.get("x"))
+            y = _coerce_positive_float(payload.get("y"))
+            z = _coerce_positive_float(payload.get("z"))
+            if x is None or y is None or z is None:
+                return jsonify({"success": False, "error": "Invalid printer volume values"}), 400
+            volume = {"x": x, "y": y, "z": z}
+            profile = "custom"
+
+        try:
+            write_config_updates({"printer_volume": volume, "printer_profile": profile})
+            return jsonify(
+                {
+                    "success": True,
+                    "printer_volume": get_current_printer_volume(),
+                    "printer_profile": profile,
+                }
+            )
+        except Exception as e:
+            app.logger.error(f"Error saving printer volume settings: {e}")
+            return jsonify({"success": False, "error": str(e)}), 500
+
     def get_moonraker_printing_stats():
         """Get aggregated printing statistics from database."""
         try:
@@ -765,6 +877,7 @@ def create_app(config_file=None, config_overrides=None):
     app.get_folder_contents = get_folder_contents
     app.get_folder_three_mf_projects = get_folder_three_mf_projects
     app.get_moonraker_printing_stats = get_moonraker_printing_stats
+    app.get_current_printer_volume = get_current_printer_volume
     app.allowed_file = allowed_file
     app.safe_extract = safe_extract
     app.safe_join = safe_join

@@ -43,6 +43,9 @@
                         <a href="{{ url_for('stats_view') }}" class="nav-link">
                             <i class="fas fa-chart-bar"></i> Stats
                         </a>
+                        <a href="{{ url_for('settings_view') }}" class="nav-link">
+                            <i class="fas fa-cog"></i> Settings
+                        </a>
                         <div class="dropdown d-inline-block">
                           <button id="reload-dropdown" class="nav-link btn btn-link dropdown-toggle"
                                   data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
@@ -138,6 +141,10 @@
                 });
             });
         });
+    </script>
+
+    <script>
+        window.TRINETRA_SETTINGS = {{ trinetra_settings | default({}) | tojson }};
     </script>
     
     {% block scripts %}{% endblock %}

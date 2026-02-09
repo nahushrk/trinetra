@@ -978,6 +978,70 @@ button {
     background-color: #f8f9fa;
 }
 
+/* Settings page */
+.settings-header h1 {
+    font-size: 2rem;
+    font-weight: 700;
+}
+
+.settings-sidebar .card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.settings-nav-item {
+    display: block;
+    padding: 0.55rem 0.75rem;
+    border-radius: 0.375rem;
+    color: #2f3640;
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.settings-nav-item:hover {
+    background-color: #f5f7fa;
+    text-decoration: none;
+}
+
+.settings-nav-item.active {
+    background-color: #e8f0ff;
+    color: #0d47a1;
+}
+
+.settings-nav-item.disabled {
+    color: #9aa4af;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.settings-section .card-header {
+    background: #f8fafc;
+}
+
+.settings-actions {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.settings-status {
+    min-height: 1.4rem;
+    font-weight: 500;
+}
+
+.settings-status.info {
+    color: #0056b3;
+}
+
+.settings-status.success {
+    color: #1b8f3c;
+}
+
+.settings-status.error {
+    color: #b00020;
+}
+
 .sort-filter-dropdown .dropdown-item.active,
 .sort-filter-dropdown .dropdown-item:active {
     color: #fff;

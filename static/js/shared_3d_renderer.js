@@ -3,6 +3,23 @@
 // Used by both folder_view.js and gcode_files.js
 
 // Parse G-code and render it in a Three.js scene
+function getConfiguredPrinterVolume() {
+    const fallback = {x: 220, y: 220, z: 270};
+    const configured = window.TRINETRA_SETTINGS && window.TRINETRA_SETTINGS.printer_volume
+        ? window.TRINETRA_SETTINGS.printer_volume
+        : {};
+
+    const x = Number(configured.x);
+    const y = Number(configured.y);
+    const z = Number(configured.z);
+
+    return {
+        x: Number.isFinite(x) && x > 0 ? x : fallback.x,
+        y: Number.isFinite(y) && y > 0 ? y : fallback.y,
+        z: Number.isFinite(z) && z > 0 ? z : fallback.z,
+    };
+}
+
 function parseGCode(text, scene, controls, camera) {
     var lines = text.split('\n');
     var currentPosition = {x: 0, y: 0, z: 0};
@@ -178,7 +195,7 @@ function parseGCode(text, scene, controls, camera) {
 
 // Create printer grid for visualization
 function createPrinterGrid(volume) {
-    const vol = volume || {x: 220, y: 220, z: 270};
+    const vol = volume || getConfiguredPrinterVolume();
     const maxX = Number.isFinite(vol.x) ? vol.x : 220;
     const maxY = Number.isFinite(vol.y) ? vol.y : 220;
     const maxZ = Number.isFinite(vol.z) ? vol.z : 270;
@@ -524,7 +541,7 @@ function loadSTLFromUrl(url, scene, controls, sizeElement, camera, options) {
             // Calculate the offset to place the bottom of the object at Z=0
             const zOffset = size.z / 2;
 
-            const defaultVolume = {x: 220, y: 220, z: 270};
+            const defaultVolume = getConfiguredPrinterVolume();
             const configuredVolume = renderOptions.printerVolume || defaultVolume;
             const gridVolume = {
                 x: Number.isFinite(configuredVolume.x) ? configuredVolume.x : defaultVolume.x,

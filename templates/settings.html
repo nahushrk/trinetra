@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - Trinetra 3D Model Manager{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-11">
+        <div class="settings-header mb-4">
+            <h1 class="mb-1">Settings</h1>
+            <p class="text-muted mb-0">Configure library behavior and hardware defaults. Settings persist to your config file.</p>
+        </div>
+
+        <div class="row">
+            <div class="col-md-3 mb-3">
+                <div class="settings-sidebar card">
+                    <div class="card-body p-2">
+                        <a class="settings-nav-item active" href="#section-printer">Printer</a>
+                        <a class="settings-nav-item disabled" href="#">Integrations (Coming Soon)</a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-9">
+                <div class="settings-section card mb-4" id="section-printer" data-test-id="settings-printer-section">
+                    <div class="card-header">
+                        <h5 class="mb-0">Printer Build Volume</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted">
+                            This controls the default printer border shown in 3D previews.
+                            You can pick a known printer or enter custom dimensions.
+                        </p>
+
+                        <div class="form-group">
+                            <label for="printer-preset">Popular Printer Presets</label>
+                            <select id="printer-preset" class="form-control" data-test-id="printer-preset-select">
+                                <option value="custom">Custom</option>
+                                {% for printer in popular_printers %}
+                                <option value="{{ printer.id }}" data-x="{{ printer.x }}" data-y="{{ printer.y }}" data-z="{{ printer.z }}">
+                                    {{ printer.name }} ({{ printer.x }} x {{ printer.y }} x {{ printer.z }} mm)
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group col-md-4">
+                                <label for="printer-x">X (mm)</label>
+                                <input id="printer-x" type="number" class="form-control" min="1" step="1" data-test-id="printer-x-input">
+                            </div>
+                            <div class="form-group col-md-4">
+                                <label for="printer-y">Y (mm)</label>
+                                <input id="printer-y" type="number" class="form-control" min="1" step="1" data-test-id="printer-y-input">
+                            </div>
+                            <div class="form-group col-md-4">
+                                <label for="printer-z">Z (mm)</label>
+                                <input id="printer-z" type="number" class="form-control" min="1" step="1" data-test-id="printer-z-input">
+                            </div>
+                        </div>
+
+                        <div class="settings-actions">
+                            <button id="save-printer-settings" class="btn btn-primary" data-test-id="save-printer-settings">Save Printer Settings</button>
+                            <button id="reset-printer-settings" class="btn btn-outline-secondary" data-test-id="reset-printer-settings">Reset to Default</button>
+                        </div>
+
+                        <div id="settings-status" class="settings-status mt-3" data-test-id="settings-status"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const initialPrinterVolume = {{ printer_volume | tojson }};
+    const popularPrinters = {{ popular_printers | tojson }};
+</script>
+<script src="{{ url_for('static', filename='js/settings.js') }}"></script>
+{% endblock %}

@@ -8,6 +8,7 @@ import tempfile
 import shutil
 import zipfile
 import json
+import yaml
 from unittest.mock import patch, MagicMock, mock_open
 from io import BytesIO
 
@@ -535,6 +536,70 @@ class TestAppRoutes:
                     response = self.client.get("/stats")
                     assert response.status_code == 200
 
+    def test_settings_route(self):
+        """Settings page should render successfully."""
+        response = self.client.get("/settings")
+        assert response.status_code == 200
+        assert b"Settings" in response.data
+
+    def test_api_settings_printer_volume_get(self):
+        """Settings API should return current/default printer volume."""
+        response = self.client.get("/api/settings/printer_volume")
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["success"] is True
+        assert "printer_volume" in data
+        assert "x" in data["printer_volume"]
+        assert "y" in data["printer_volume"]
+        assert "z" in data["printer_volume"]
+
+    def test_api_settings_printer_volume_post_updates_config_file(self):
+        """Settings updates should persist in the config file used to start the app."""
+        temp_config_path = os.path.join(self.temp_dir, "settings_config.yaml")
+        temp_base_path = os.path.join(self.temp_dir, "settings_data")
+        with open(temp_config_path, "w", encoding="utf-8") as f:
+            yaml.safe_dump(
+                {
+                    "base_path": temp_base_path,
+                    "moonraker_url": "",
+                    "log_level": "INFO",
+                    "mode": "DEV",
+                    "search_result_limit": 25,
+                },
+                f,
+                sort_keys=False,
+            )
+
+        settings_app = create_app(config_file=temp_config_path)
+        settings_client = settings_app.test_client()
+
+        response = settings_client.post(
+            "/api/settings/printer_volume", json={"preset_id": "bambu_x1_p1"}
+        )
+        assert response.status_code == 200
+        payload = json.loads(response.data)
+        assert payload["success"] is True
+        assert payload["printer_volume"]["x"] == 256.0
+        assert payload["printer_volume"]["y"] == 256.0
+        assert payload["printer_volume"]["z"] == 256.0
+
+        with open(temp_config_path, "r", encoding="utf-8") as f:
+            saved_config = yaml.safe_load(f) or {}
+        assert saved_config["printer_profile"] == "bambu_x1_p1"
+        assert saved_config["printer_volume"]["x"] == 256.0
+        assert saved_config["printer_volume"]["y"] == 256.0
+        assert saved_config["printer_volume"]["z"] == 256.0
+
+    def test_api_settings_printer_volume_post_invalid_values(self):
+        """Settings API should reject invalid manual volume values."""
+        response = self.client.post(
+            "/api/settings/printer_volume",
+            json={"x": -1, "y": 220, "z": 220},
+        )
+        assert response.status_code == 400
+        payload = json.loads(response.data)
+        assert payload["success"] is False
+
     def test_api_add_to_queue_success(self):
         # Patch add_to_queue in the app module's namespace
         with patch("app.add_to_queue", return_value=True):
@@ -590,6 +655,8 @@ class TestAppRoutes:
         """Test allowed_file function"""
         assert self.app.allowed_file("test.zip") is True
         assert self.app.allowed_file("test.ZIP") is True
+        assert self.app.allowed_file("test.3mf") is True
+        assert self.app.allowed_file("test.gcode") is True
         assert self.app.allowed_file("test.txt") is False
         assert self.app.allowed_file("test.stl") is False
 
