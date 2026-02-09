@@ -6,6 +6,7 @@ Handles all database operations and provides compatibility with existing app.py 
 import os
 import logging
 import re
+import json
 from datetime import datetime
 from typing import List, Dict, Any, Tuple, Optional
 from sqlalchemy.orm import Session
@@ -19,6 +20,8 @@ from trinetra.models import (
     PDFFile,
     GCodeFile,
     GCodeFileStats,
+    PrintHistoryEvent,
+    IntegrationSyncState,
     create_database_engine,
     init_database,
     create_session_factory,
@@ -1196,13 +1199,468 @@ class DatabaseManager:
         """Reload only Moonraker statistics without touching files."""
         return self.update_moonraker_stats(moonraker_url, moonraker_client)
 
+    def sync_print_history_events(
+        self,
+        integration_id: str,
+        events: List[Dict[str, Any]],
+        *,
+        integration_mode: Optional[str] = None,
+        ttl_days: Optional[int] = 180,
+        cleanup_expired: bool = False,
+    ) -> Dict[str, int]:
+        """
+        Persist normalized integration history events with id-based dedup.
+
+        Args:
+            integration_id: Integration identifier, e.g. 'bambu'
+            events: Normalized event dictionaries
+            integration_mode: Optional provider mode, e.g. 'cloud'
+            ttl_days: Retention in days; ignored when cleanup_expired is False
+            cleanup_expired: Whether to delete expired events in this run
+        """
+        counters = {
+            "fetched": len(events),
+            "inserted": 0,
+            "updated": 0,
+            "matched": 0,
+            "ambiguous": 0,
+            "unmatched": 0,
+            "skipped_missing_event_id": 0,
+            "expired_deleted": 0,
+        }
+        now = datetime.utcnow()
+        affected_gcode_file_ids: set[int] = set()
+
+        with self.get_session() as session:
+            try:
+                basename_to_ids: Dict[str, List[int]] = {}
+                for gcode_file in session.query(GCodeFile.id, GCodeFile.file_name).all():
+                    basename = self._normalize_basename(gcode_file.file_name)
+                    if basename:
+                        basename_to_ids.setdefault(basename, []).append(gcode_file.id)
+
+                for event in events:
+                    event_uid = str(event.get("event_uid") or "").strip()
+                    if not event_uid:
+                        counters["skipped_missing_event_id"] += 1
+                        continue
+
+                    printer_uid = str(event.get("printer_uid") or "").strip()
+                    file_name = str(event.get("file_name") or "").strip()
+                    file_path = str(event.get("file_path") or "").strip()
+                    normalized_basename = self._normalize_basename(file_name or file_path)
+
+                    gcode_file_id = None
+                    match_state = "unmatched"
+                    if normalized_basename:
+                        matching_ids = basename_to_ids.get(normalized_basename, [])
+                        if len(matching_ids) == 1:
+                            gcode_file_id = matching_ids[0]
+                            match_state = "matched"
+                            counters["matched"] += 1
+                            affected_gcode_file_ids.add(gcode_file_id)
+                        elif len(matching_ids) > 1:
+                            match_state = "ambiguous"
+                            counters["ambiguous"] += 1
+                        else:
+                            counters["unmatched"] += 1
+                    else:
+                        counters["unmatched"] += 1
+
+                    status = str(event.get("status") or "unknown").strip().lower()
+                    started_at = self._coerce_datetime(event.get("started_at"))
+                    ended_at = self._coerce_datetime(event.get("ended_at"))
+                    event_at = self._coerce_datetime(event.get("event_at")) or ended_at or started_at
+                    duration_seconds = self._coerce_float(event.get("duration_seconds"))
+                    filament_used_mm = self._coerce_float(event.get("filament_used_mm"))
+                    raw_payload = event.get("raw_payload") or event
+                    raw_payload_json = self._serialize_payload(raw_payload)
+                    job_uid = str(event.get("job_uid") or "").strip() or None
+
+                    existing = (
+                        session.query(PrintHistoryEvent)
+                        .filter(
+                            PrintHistoryEvent.integration_id == integration_id,
+                            PrintHistoryEvent.printer_uid == printer_uid,
+                            PrintHistoryEvent.event_uid == event_uid,
+                        )
+                        .first()
+                    )
+
+                    if existing:
+                        existing.integration_mode = integration_mode
+                        existing.job_uid = job_uid
+                        existing.file_name = file_name
+                        existing.file_path = file_path
+                        existing.normalized_basename = normalized_basename
+                        existing.status = status
+                        existing.started_at = started_at
+                        existing.ended_at = ended_at
+                        existing.event_at = event_at
+                        existing.duration_seconds = duration_seconds
+                        existing.filament_used_mm = filament_used_mm
+                        existing.gcode_file_id = gcode_file_id
+                        existing.match_state = match_state
+                        existing.raw_payload_json = raw_payload_json
+                        existing.last_seen_at = now
+                        counters["updated"] += 1
+                    else:
+                        session.add(
+                            PrintHistoryEvent(
+                                integration_id=integration_id,
+                                integration_mode=integration_mode,
+                                printer_uid=printer_uid,
+                                event_uid=event_uid,
+                                job_uid=job_uid,
+                                file_name=file_name,
+                                file_path=file_path,
+                                normalized_basename=normalized_basename,
+                                status=status,
+                                started_at=started_at,
+                                ended_at=ended_at,
+                                event_at=event_at,
+                                duration_seconds=duration_seconds,
+                                filament_used_mm=filament_used_mm,
+                                gcode_file_id=gcode_file_id,
+                                match_state=match_state,
+                                raw_payload_json=raw_payload_json,
+                                first_seen_at=now,
+                                last_seen_at=now,
+                            )
+                        )
+                        counters["inserted"] += 1
+
+                if cleanup_expired and ttl_days is not None and ttl_days > 0:
+                    from datetime import timedelta
+
+                    cutoff = now - timedelta(days=ttl_days)
+                    expired_rows = (
+                        session.query(PrintHistoryEvent.id, PrintHistoryEvent.gcode_file_id)
+                        .filter(PrintHistoryEvent.event_at.isnot(None), PrintHistoryEvent.event_at < cutoff)
+                        .all()
+                    )
+                    if expired_rows:
+                        for row in expired_rows:
+                            if row.gcode_file_id:
+                                affected_gcode_file_ids.add(row.gcode_file_id)
+                        expired_ids = [row.id for row in expired_rows]
+                        counters["expired_deleted"] = (
+                            session.query(PrintHistoryEvent)
+                            .filter(PrintHistoryEvent.id.in_(expired_ids))
+                            .delete(synchronize_session=False)
+                        )
+
+                self._rebuild_gcode_stats_from_history(session, affected_gcode_file_ids)
+                self._record_sync_success(
+                    session,
+                    integration_id=integration_id,
+                    integration_mode=integration_mode,
+                    synced_at=now,
+                )
+                session.commit()
+                return counters
+            except Exception as exc:
+                session.rollback()
+                logger.error("Error syncing history events for %s: %s", integration_id, exc)
+                self._record_sync_failure(
+                    integration_id=integration_id,
+                    integration_mode=integration_mode,
+                    error=str(exc),
+                    failed_at=now,
+                )
+                return counters
+
+    def _rebuild_gcode_stats_from_history(
+        self, session: Session, gcode_file_ids: set[int]
+    ) -> None:
+        """Recompute aggregated stats for a set of gcode file ids from history events."""
+        if not gcode_file_ids:
+            return
+
+        for gcode_file_id in gcode_file_ids:
+            events = (
+                session.query(PrintHistoryEvent)
+                .filter(
+                    PrintHistoryEvent.gcode_file_id == gcode_file_id,
+                    PrintHistoryEvent.match_state == "matched",
+                )
+                .all()
+            )
+
+            stats = (
+                session.query(GCodeFileStats)
+                .filter(GCodeFileStats.gcode_file_id == gcode_file_id)
+                .first()
+            )
+
+            if not events:
+                if stats:
+                    session.delete(stats)
+                continue
+
+            print_count = len(events)
+            successful_prints = sum(1 for event in events if event.status == "completed")
+            canceled_prints = sum(1 for event in events if event.status == "cancelled")
+            total_print_time = int(sum(event.duration_seconds or 0 for event in events))
+            total_filament_used = int(sum(event.filament_used_mm or 0 for event in events))
+
+            latest_event = max(
+                events,
+                key=lambda event: event.event_at
+                or event.ended_at
+                or event.started_at
+                or datetime.min,
+            )
+            last_print_date = latest_event.event_at or latest_event.ended_at or latest_event.started_at
+            success_rate = successful_prints / print_count if print_count > 0 else 0
+
+            if stats is None:
+                stats = GCodeFileStats(gcode_file_id=gcode_file_id)
+                session.add(stats)
+
+            stats.print_count = print_count
+            stats.successful_prints = successful_prints
+            stats.canceled_prints = canceled_prints
+            stats.total_print_time = total_print_time
+            stats.total_filament_used = total_filament_used
+            stats.last_print_date = last_print_date
+            stats.success_rate = success_rate
+            stats.job_id = latest_event.job_uid or latest_event.event_uid
+            stats.last_status = latest_event.status
+
+    def _record_sync_success(
+        self,
+        session: Session,
+        *,
+        integration_id: str,
+        integration_mode: Optional[str],
+        synced_at: datetime,
+    ) -> None:
+        state = (
+            session.query(IntegrationSyncState)
+            .filter(
+                IntegrationSyncState.integration_id == integration_id,
+                IntegrationSyncState.integration_mode == integration_mode,
+                IntegrationSyncState.printer_uid == "",
+            )
+            .first()
+        )
+        if state is None:
+            state = IntegrationSyncState(
+                integration_id=integration_id,
+                integration_mode=integration_mode,
+                printer_uid="",
+            )
+            session.add(state)
+
+        state.last_synced_at = synced_at
+        state.last_success_at = synced_at
+        state.last_error = None
+        state.last_error_at = None
+
+    def _record_sync_failure(
+        self,
+        *,
+        integration_id: str,
+        integration_mode: Optional[str],
+        error: str,
+        failed_at: datetime,
+    ) -> None:
+        with self.get_session() as session:
+            state = (
+                session.query(IntegrationSyncState)
+                .filter(
+                    IntegrationSyncState.integration_id == integration_id,
+                    IntegrationSyncState.integration_mode == integration_mode,
+                    IntegrationSyncState.printer_uid == "",
+                )
+                .first()
+            )
+            if state is None:
+                state = IntegrationSyncState(
+                    integration_id=integration_id,
+                    integration_mode=integration_mode,
+                    printer_uid="",
+                )
+                session.add(state)
+
+            state.last_synced_at = failed_at
+            state.last_error = error
+            state.last_error_at = failed_at
+            session.commit()
+
+    @staticmethod
+    def _normalize_basename(value: Optional[str]) -> str:
+        if not value:
+            return ""
+        basename = os.path.basename(str(value).strip().replace("\\", "/"))
+        return basename.lower()
+
+    @staticmethod
+    def _coerce_float(value: Any) -> float:
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return 0.0
+
+    @staticmethod
+    def _coerce_datetime(value: Any) -> Optional[datetime]:
+        if value is None:
+            return None
+        if isinstance(value, datetime):
+            return value
+        if isinstance(value, (int, float)):
+            numeric = float(value)
+            if abs(numeric) > 1e11:
+                numeric /= 1000.0
+            try:
+                return datetime.utcfromtimestamp(numeric)
+            except (TypeError, ValueError, OSError):
+                return None
+        if isinstance(value, str):
+            raw = value.strip()
+            if not raw:
+                return None
+            try:
+                numeric = float(raw)
+                if abs(numeric) > 1e11:
+                    numeric /= 1000.0
+                return datetime.utcfromtimestamp(numeric)
+            except (TypeError, ValueError, OSError):
+                pass
+            if raw.endswith("Z"):
+                raw = raw[:-1] + "+00:00"
+            try:
+                parsed = datetime.fromisoformat(raw)
+                if parsed.tzinfo:
+                    return parsed.astimezone(tz=None).replace(tzinfo=None)
+                return parsed
+            except ValueError:
+                return None
+        return None
+
+    @staticmethod
+    def _serialize_payload(value: Any) -> str:
+        try:
+            return json.dumps(value, default=str, ensure_ascii=False)
+        except TypeError:
+            return json.dumps({"payload_repr": str(value)}, ensure_ascii=False)
+
+    @staticmethod
+    def _is_success_status(value: Any) -> bool:
+        if value is None:
+            return False
+        normalized = str(value).strip().lower()
+        return normalized in {
+            "2",
+            "completed",
+            "complete",
+            "finished",
+            "success",
+            "succeeded",
+            "done",
+        }
+
+    @staticmethod
+    def _is_canceled_status(value: Any) -> bool:
+        if value is None:
+            return False
+        normalized = str(value).strip().lower()
+        return normalized in {
+            "3",
+            "4",
+            "cancelled",
+            "canceled",
+            "failed",
+            "failure",
+            "aborted",
+            "error",
+        }
+
+    @staticmethod
+    def _resolve_event_datetime(
+        event_at: Optional[datetime],
+        ended_at: Optional[datetime],
+        started_at: Optional[datetime],
+    ) -> Optional[datetime]:
+        return event_at or ended_at or started_at
+
+    @classmethod
+    def _extract_event_datetime_from_payload(cls, raw_payload_json: Optional[str]) -> Optional[datetime]:
+        if not raw_payload_json:
+            return None
+        try:
+            payload = json.loads(raw_payload_json)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return None
+        if not isinstance(payload, dict):
+            return None
+
+        for key in ("endTime", "end_time", "eventTime", "event_time", "startTime", "start_time"):
+            if key in payload:
+                parsed = cls._coerce_datetime(payload.get(key))
+                if parsed:
+                    return parsed
+        return None
+
     def get_printing_stats(self) -> Dict[str, Any]:
         """Get aggregated printing statistics from database."""
         with self.get_session() as session:
             try:
-                # Get all G-code file stats
-                all_stats = session.query(GCodeFileStats).all()
+                # Prefer normalized integration history as the primary source of truth.
+                history_rows = (
+                    session.query(
+                        PrintHistoryEvent.status,
+                        PrintHistoryEvent.duration_seconds,
+                        PrintHistoryEvent.filament_used_mm,
+                        PrintHistoryEvent.event_at,
+                        PrintHistoryEvent.ended_at,
+                        PrintHistoryEvent.started_at,
+                        PrintHistoryEvent.raw_payload_json,
+                    )
+                    .order_by(PrintHistoryEvent.id.asc())
+                    .all()
+                )
 
+                if history_rows:
+                    total_prints = len(history_rows)
+                    successful_prints = 0
+                    canceled_prints = 0
+                    total_print_time = 0.0
+                    total_filament = 0.0
+                    print_days = set()
+
+                    for row in history_rows:
+                        if self._is_success_status(row.status):
+                            successful_prints += 1
+                        elif self._is_canceled_status(row.status):
+                            canceled_prints += 1
+
+                        total_print_time += self._coerce_float(row.duration_seconds)
+                        total_filament += self._coerce_float(row.filament_used_mm)
+
+                        event_dt = self._resolve_event_datetime(
+                            row.event_at, row.ended_at, row.started_at
+                        )
+                        if not event_dt:
+                            event_dt = self._extract_event_datetime_from_payload(row.raw_payload_json)
+                        if event_dt:
+                            print_days.add(event_dt.strftime("%Y-%m-%d"))
+
+                    avg_print_time_hours = total_print_time / total_prints / 3600
+                    total_filament_meters = total_filament / 1000
+
+                    return {
+                        "total_prints": total_prints,
+                        "successful_prints": successful_prints,
+                        "canceled_prints": canceled_prints,
+                        "avg_print_time_hours": avg_print_time_hours,
+                        "total_filament_meters": total_filament_meters,
+                        "print_days": len(print_days),
+                    }
+
+                # Backward-compatible fallback for legacy datasets.
+                all_stats = session.query(GCodeFileStats).all()
                 if not all_stats:
                     return {
                         "total_prints": 0,
@@ -1263,20 +1721,41 @@ class DatabaseManager:
         """Get activity calendar data from database."""
         with self.get_session() as session:
             try:
-                # Get all G-code file stats with last print dates
+                history_rows = (
+                    session.query(
+                        PrintHistoryEvent.event_at,
+                        PrintHistoryEvent.ended_at,
+                        PrintHistoryEvent.started_at,
+                        PrintHistoryEvent.raw_payload_json,
+                    )
+                    .order_by(PrintHistoryEvent.id.asc())
+                    .all()
+                )
+
+                activity_calendar: Dict[str, int] = {}
+                if history_rows:
+                    for row in history_rows:
+                        event_dt = self._resolve_event_datetime(
+                            row.event_at, row.ended_at, row.started_at
+                        )
+                        if not event_dt:
+                            event_dt = self._extract_event_datetime_from_payload(row.raw_payload_json)
+                        if not event_dt:
+                            continue
+                        date_str = event_dt.strftime("%Y-%m-%d")
+                        activity_calendar[date_str] = activity_calendar.get(date_str, 0) + 1
+                    return activity_calendar
+
+                # Backward-compatible fallback for legacy datasets.
                 stats_with_dates = (
                     session.query(GCodeFileStats)
                     .filter(GCodeFileStats.last_print_date.isnot(None))
                     .all()
                 )
 
-                activity_calendar = {}
                 for stat in stats_with_dates:
                     date_str = stat.last_print_date.strftime("%Y-%m-%d")
-                    if date_str in activity_calendar:
-                        activity_calendar[date_str] += stat.print_count
-                    else:
-                        activity_calendar[date_str] = stat.print_count
+                    activity_calendar[date_str] = activity_calendar.get(date_str, 0) + stat.print_count
 
                 return activity_calendar
             except Exception as e:

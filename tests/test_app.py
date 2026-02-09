@@ -536,11 +536,26 @@ class TestAppRoutes:
                     response = self.client.get("/stats")
                     assert response.status_code == 200
 
+    def test_reload_index_stats_mode_skips_filesystem_reindex(self):
+        with patch.object(self.app.config["DB_MANAGER"], "reload_index") as mock_reload:
+            response = self.client.post("/reload_index?mode=stats")
+        assert response.status_code == 200
+        payload = json.loads(response.data)
+        assert payload["success"] is True
+        mock_reload.assert_not_called()
+
+    def test_reload_index_rejects_invalid_mode(self):
+        response = self.client.post("/reload_index?mode=invalid")
+        assert response.status_code == 400
+        payload = json.loads(response.data)
+        assert payload["success"] is False
+
     def test_settings_route(self):
         """Settings page should render successfully."""
         response = self.client.get("/settings")
         assert response.status_code == 200
         assert b"Settings" in response.data
+        assert b"Library History" in response.data
         assert b"Integrations" in response.data
 
     def test_api_settings_printer_volume_get(self):
@@ -600,6 +615,115 @@ class TestAppRoutes:
         assert response.status_code == 400
         payload = json.loads(response.data)
         assert payload["success"] is False
+
+    def test_api_settings_library_history_get_defaults(self):
+        response = self.client.get("/api/settings/library/history")
+        assert response.status_code == 200
+        payload = json.loads(response.data)
+        assert payload["success"] is True
+        assert payload["history"]["enabled"] is True
+        assert payload["history"]["ttl_days"] == 180
+
+    def test_api_settings_library_history_post_updates_config(self):
+        temp_config_path = os.path.join(self.temp_dir, "library_config.yaml")
+        temp_base_path = os.path.join(self.temp_dir, "library_data")
+        with open(temp_config_path, "w", encoding="utf-8") as f:
+            yaml.safe_dump(
+                {
+                    "base_path": temp_base_path,
+                    "log_level": "INFO",
+                    "mode": "DEV",
+                    "search_result_limit": 25,
+                },
+                f,
+                sort_keys=False,
+            )
+
+        library_app = create_app(config_file=temp_config_path)
+        library_client = library_app.test_client()
+
+        response = library_client.post(
+            "/api/settings/library/history",
+            json={"enabled": True, "ttl_days": 90, "cleanup_trigger": "refresh"},
+        )
+        assert response.status_code == 200
+        payload = json.loads(response.data)
+        assert payload["success"] is True
+        assert payload["history"]["ttl_days"] == 90
+
+        with open(temp_config_path, "r", encoding="utf-8") as f:
+            saved_config = yaml.safe_load(f) or {}
+        assert saved_config["library"]["history"]["enabled"] is True
+        assert saved_config["library"]["history"]["ttl_days"] == 90
+        assert saved_config["library"]["history"]["cleanup_trigger"] == "refresh"
+
+    def test_api_settings_bambu_get_default_disabled(self):
+        temp_config_path = os.path.join(self.temp_dir, "bambu_default_config.yaml")
+        temp_base_path = os.path.join(self.temp_dir, "bambu_default_data")
+        with open(temp_config_path, "w", encoding="utf-8") as f:
+            yaml.safe_dump(
+                {
+                    "base_path": temp_base_path,
+                    "log_level": "INFO",
+                    "mode": "DEV",
+                    "search_result_limit": 25,
+                },
+                f,
+                sort_keys=False,
+            )
+
+        default_app = create_app(config_file=temp_config_path)
+        default_client = default_app.test_client()
+
+        response = default_client.get("/api/settings/integrations/bambu")
+        assert response.status_code == 200
+        payload = json.loads(response.data)
+        assert payload["success"] is True
+        integration = payload["integration"]
+        assert integration["id"] == "bambu"
+        assert integration["enabled"] is False
+
+    def test_api_settings_bambu_post_updates_config(self):
+        temp_config_path = os.path.join(self.temp_dir, "bambu_integration_config.yaml")
+        temp_base_path = os.path.join(self.temp_dir, "bambu_integration_data")
+        with open(temp_config_path, "w", encoding="utf-8") as f:
+            yaml.safe_dump(
+                {
+                    "base_path": temp_base_path,
+                    "moonraker_url": "",
+                    "log_level": "INFO",
+                    "mode": "DEV",
+                    "search_result_limit": 25,
+                },
+                f,
+                sort_keys=False,
+            )
+
+        integration_app = create_app(config_file=temp_config_path)
+        integration_client = integration_app.test_client()
+
+        response = integration_client.post(
+            "/api/settings/integrations/bambu",
+            json={
+                "enabled": True,
+                "mode": "cloud",
+                "region": "global",
+                "access_token": "read-token",
+                "refresh_token": "refresh-token",
+            },
+        )
+        assert response.status_code == 200
+        payload = json.loads(response.data)
+        assert payload["success"] is True
+        assert payload["integration"]["enabled"] is True
+        assert payload["integration"]["settings"]["mode"] == "cloud"
+
+        with open(temp_config_path, "r", encoding="utf-8") as f:
+            saved_config = yaml.safe_load(f) or {}
+        assert saved_config["integrations"]["bambu"]["enabled"] is True
+        assert saved_config["integrations"]["bambu"]["mode"] == "cloud"
+        assert saved_config["integrations"]["bambu"]["cloud"]["access_token"] == "read-token"
+        assert saved_config["integrations"]["bambu"]["cloud"]["refresh_token"] == "refresh-token"
 
     def test_api_settings_moonraker_get_default_disabled(self):
         response = self.client.get("/api/settings/integrations/moonraker")

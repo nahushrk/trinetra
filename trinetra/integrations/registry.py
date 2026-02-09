@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional
 
+from trinetra.integrations.bambu.plugin import BambuIntegration
 from trinetra.integrations.moonraker.plugin import MoonrakerIntegration
 from trinetra.integrations.protocol import (
     IntegrationUIState,
@@ -13,6 +14,7 @@ from trinetra.integrations.protocol import (
 
 
 _INTEGRATIONS: Dict[str, PrinterIntegration[object]] = {
+    "bambu": BambuIntegration(),
     "moonraker": MoonrakerIntegration(),
 }
 

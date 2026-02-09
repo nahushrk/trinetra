@@ -15,6 +15,7 @@
                 <div class="settings-sidebar card">
                     <div class="card-body p-2">
                         <a class="settings-nav-item active" href="#section-printer">Printer</a>
+                        <a class="settings-nav-item" href="#section-library">Library</a>
                         <a class="settings-nav-item" href="#section-integrations">Integrations</a>
                     </div>
                 </div>
@@ -67,11 +68,87 @@
                     </div>
                 </div>
 
+                <div class="settings-section card mb-4" id="section-library" data-test-id="settings-library-section">
+                    <div class="card-header">
+                        <h5 class="mb-0">Library History</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted">
+                            Control local retention for synchronized integration print history.
+                            Cleanup runs during refresh operations.
+                        </p>
+
+                        <div class="custom-control custom-switch mb-3">
+                            <input type="checkbox" class="custom-control-input" id="library-history-enabled" data-test-id="library-history-enabled-toggle">
+                            <label class="custom-control-label" for="library-history-enabled">Enable local history storage</label>
+                        </div>
+
+                        <div class="form-group mb-2">
+                            <label for="library-history-ttl">History TTL (days)</label>
+                            <input id="library-history-ttl" type="number" class="form-control" min="0" step="1" data-test-id="library-history-ttl-input">
+                            <div class="small text-muted mt-1">
+                                Set to 0 for unlimited retention.
+                            </div>
+                        </div>
+
+                        <div class="settings-actions">
+                            <button id="save-library-history-settings" class="btn btn-primary" data-test-id="save-library-history-settings">Save Library Settings</button>
+                        </div>
+                        <div id="library-history-status" class="settings-status mt-3" data-test-id="library-history-status"></div>
+                    </div>
+                </div>
+
                 <div class="settings-section card mb-4" id="section-integrations" data-test-id="settings-integrations-section">
                     <div class="card-header">
                         <h5 class="mb-0">Integrations</h5>
                     </div>
                     <div class="card-body">
+                        <div class="integration-card mb-3">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <div>
+                                    <div class="integration-title">Bambu Lab</div>
+                                    <div class="text-muted small">Cloud mode (read-only telemetry/history).</div>
+                                </div>
+                                <div class="custom-control custom-switch">
+                                    <input type="checkbox" class="custom-control-input" id="bambu-enabled" data-test-id="bambu-enabled-toggle">
+                                    <label class="custom-control-label" for="bambu-enabled">Enabled</label>
+                                </div>
+                            </div>
+
+                            <div class="form-group mb-2">
+                                <label for="bambu-mode">Mode</label>
+                                <select id="bambu-mode" class="form-control" data-test-id="bambu-mode-select">
+                                    <option value="cloud">Cloud (history sync)</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group mb-2">
+                                <label for="bambu-region">Region</label>
+                                <select id="bambu-region" class="form-control" data-test-id="bambu-region-select">
+                                    <option value="global">Global</option>
+                                    <option value="cn">China</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group mb-2">
+                                <label for="bambu-access-token">Access Token</label>
+                                <input id="bambu-access-token" type="text" class="form-control" data-test-id="bambu-access-token-input">
+                            </div>
+
+                            <div class="form-group mb-2">
+                                <label for="bambu-refresh-token">Refresh Token (optional)</label>
+                                <input id="bambu-refresh-token" type="text" class="form-control" data-test-id="bambu-refresh-token-input">
+                            </div>
+                            <div class="small text-muted mb-3">
+                                Cloud mode is telemetry-only in this release. Commands will be added in local mode next.
+                            </div>
+
+                            <div class="settings-actions">
+                                <button id="save-bambu-settings" class="btn btn-primary" data-test-id="save-bambu-settings">Save Integration</button>
+                            </div>
+                            <div id="bambu-settings-status" class="settings-status mt-3" data-test-id="bambu-settings-status"></div>
+                        </div>
+
                         <div class="integration-card">
                             <div class="d-flex justify-content-between align-items-center mb-2">
                                 <div>
@@ -109,6 +186,8 @@
 <script>
     const initialPrinterVolume = {{ printer_volume | tojson }};
     const popularPrinters = {{ popular_printers | tojson }};
+    const initialLibraryHistorySettings = {{ library_history_settings | tojson }};
+    const initialBambuIntegration = {{ bambu_integration | tojson }};
     const initialMoonrakerIntegration = {{ moonraker_integration | tojson }};
 </script>
 <script src="{{ url_for('static', filename='js/settings.js') }}"></script>

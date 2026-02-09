@@ -30,6 +30,11 @@ from trinetra.logger import get_logger, configure_logging
 logger = None
 
 DEFAULT_PRINTER_VOLUME = {"x": 220.0, "y": 220.0, "z": 270.0}
+DEFAULT_LIBRARY_HISTORY_SETTINGS = {
+    "enabled": True,
+    "ttl_days": 180,
+    "cleanup_trigger": "refresh",
+}
 POPULAR_PRINTERS = [
     {"id": "bambu_a1_mini", "name": "Bambu Lab A1 mini", "x": 180, "y": 180, "z": 180},
     {"id": "bambu_a1", "name": "Bambu Lab A1", "x": 256, "y": 256, "z": 256},
@@ -117,6 +122,15 @@ def create_app(config_file=None, config_overrides=None):
         except (TypeError, ValueError):
             return None
 
+    def _coerce_non_negative_int(value):
+        try:
+            parsed = int(value)
+            if parsed < 0:
+                return None
+            return parsed
+        except (TypeError, ValueError):
+            return None
+
     def get_current_printer_volume():
         raw = app.config.get("PRINTER_VOLUME", {})
         if not isinstance(raw, dict):
@@ -145,6 +159,28 @@ def create_app(config_file=None, config_overrides=None):
         for key, value in updates.items():
             app.config[key.upper()] = value
 
+    def get_library_history_settings() -> dict:
+        raw_library = app.config.get("LIBRARY", {})
+        if not isinstance(raw_library, dict):
+            raw_library = {}
+        raw_history = raw_library.get("history", {})
+        if not isinstance(raw_history, dict):
+            raw_history = {}
+
+        enabled = bool(raw_history.get("enabled", DEFAULT_LIBRARY_HISTORY_SETTINGS["enabled"]))
+        ttl_days = _coerce_non_negative_int(raw_history.get("ttl_days"))
+        if ttl_days is None:
+            ttl_days = DEFAULT_LIBRARY_HISTORY_SETTINGS["ttl_days"]
+        cleanup_trigger = str(
+            raw_history.get("cleanup_trigger", DEFAULT_LIBRARY_HISTORY_SETTINGS["cleanup_trigger"])
+        ).strip().lower() or DEFAULT_LIBRARY_HISTORY_SETTINGS["cleanup_trigger"]
+
+        return {
+            "enabled": enabled,
+            "ttl_days": ttl_days,
+            "cleanup_trigger": cleanup_trigger,
+        }
+
     def get_runtime_integration_config() -> dict:
         integrations = app.config.get("INTEGRATIONS", {})
         if not isinstance(integrations, dict):
@@ -152,6 +188,7 @@ def create_app(config_file=None, config_overrides=None):
         return {
             "integrations": integrations,
             "moonraker_url": app.config.get("MOONRAKER_URL", ""),
+            "library": {"history": get_library_history_settings()},
         }
 
     def get_moonraker_integration_state() -> dict:
@@ -182,11 +219,53 @@ def create_app(config_file=None, config_overrides=None):
             return None
         return integration.create_client(get_runtime_integration_config())
 
+    def get_bambu_integration_state() -> dict:
+        integration = get_printer_integration("bambu")
+        if integration is None:
+            return {
+                "id": "bambu",
+                "name": "Bambu Lab",
+                "description": "Unavailable",
+                "enabled": False,
+                "configured": False,
+                "settings": {"mode": "cloud", "access_token": "", "refresh_token": "", "region": "global"},
+            }
+        return integration.get_ui_state(get_runtime_integration_config())
+
+    def sync_bambu_history(*, cleanup_expired: bool) -> dict:
+        runtime_config = get_runtime_integration_config()
+        history_settings = get_library_history_settings()
+        if not history_settings.get("enabled"):
+            return {"skipped": 1, "reason": "history disabled"}
+
+        integration = get_printer_integration("bambu")
+        if integration is None or not integration.is_enabled(runtime_config):
+            return {"skipped": 1, "reason": "bambu disabled"}
+        if not integration.is_configured(runtime_config):
+            return {"skipped": 1, "reason": "bambu not configured"}
+
+        fetch_history_events = getattr(integration, "fetch_history_events", None)
+        if not callable(fetch_history_events):
+            return {"skipped": 1, "reason": "integration does not expose history fetch"}
+
+        events = fetch_history_events(runtime_config, limit=500)
+        settings = integration.get_settings(runtime_config)
+        mode = getattr(settings, "mode", "cloud")
+        ttl_days = history_settings.get("ttl_days")
+        return db_manager.sync_print_history_events(
+            "bambu",
+            events,
+            integration_mode=mode,
+            ttl_days=ttl_days,
+            cleanup_expired=cleanup_expired and history_settings.get("cleanup_trigger") == "refresh",
+        )
+
     @app.context_processor
     def inject_global_settings():
         return {
             "trinetra_settings": {
                 "printer_volume": get_current_printer_volume(),
+                "library_history": get_library_history_settings(),
                 "integrations": list_printer_integrations(get_runtime_integration_config()),
             }
         }
@@ -576,6 +655,8 @@ def create_app(config_file=None, config_overrides=None):
                 moonraker_url,
                 moonraker_client,
             )
+            bambu_sync = sync_bambu_history(cleanup_expired=True)
+            counts["bambu_history_synced"] = bambu_sync
             index_refresh = {"success": True, "counts": counts}
         except Exception as e:
             app.logger.error(f"Error refreshing index after upload: {e}")
@@ -811,6 +892,8 @@ def create_app(config_file=None, config_overrides=None):
             "settings.html",
             printer_volume=get_current_printer_volume(),
             popular_printers=POPULAR_PRINTERS,
+            library_history_settings=get_library_history_settings(),
+            bambu_integration=get_bambu_integration_state(),
             moonraker_integration=get_moonraker_integration_state(),
         )
 
@@ -866,6 +949,89 @@ def create_app(config_file=None, config_overrides=None):
             app.logger.error(f"Error saving printer volume settings: {e}")
             return jsonify({"success": False, "error": str(e)}), 500
 
+    @app.route("/api/settings/library/history", methods=["GET", "POST"])
+    def api_settings_library_history():
+        if request.method == "GET":
+            return jsonify({"success": True, "history": get_library_history_settings()})
+
+        payload = request.get_json(silent=True) or {}
+        enabled = bool(payload.get("enabled", True))
+        ttl_days = _coerce_non_negative_int(payload.get("ttl_days"))
+        if ttl_days is None:
+            return jsonify({"success": False, "error": "Invalid TTL value"}), 400
+
+        cleanup_trigger = str(payload.get("cleanup_trigger", "refresh")).strip().lower() or "refresh"
+        if cleanup_trigger not in {"refresh"}:
+            return jsonify({"success": False, "error": "Unsupported cleanup trigger"}), 400
+
+        try:
+            current_config = load_config(app.config["CONFIG_FILE_PATH"])
+            library_cfg = current_config.get("library", {})
+            if not isinstance(library_cfg, dict):
+                library_cfg = {}
+            history_cfg = library_cfg.get("history", {})
+            if not isinstance(history_cfg, dict):
+                history_cfg = {}
+
+            history_cfg["enabled"] = enabled
+            history_cfg["ttl_days"] = ttl_days
+            history_cfg["cleanup_trigger"] = cleanup_trigger
+            library_cfg["history"] = history_cfg
+
+            write_config_updates({"library": library_cfg})
+            return jsonify({"success": True, "history": get_library_history_settings()})
+        except Exception as e:
+            app.logger.error(f"Error saving library history settings: {e}")
+            return jsonify({"success": False, "error": str(e)}), 500
+
+    @app.route("/api/settings/integrations/bambu", methods=["GET", "POST"])
+    def api_settings_bambu_integration():
+        if request.method == "GET":
+            return jsonify({"success": True, "integration": get_bambu_integration_state()})
+
+        payload = request.get_json(silent=True) or {}
+        enabled = bool(payload.get("enabled", False))
+        mode = str(payload.get("mode", "cloud")).strip().lower() or "cloud"
+        access_token = str(payload.get("access_token", "")).strip()
+        refresh_token = str(payload.get("refresh_token", "")).strip()
+        region = str(payload.get("region", "global")).strip().lower() or "global"
+
+        if mode != "cloud":
+            return jsonify(
+                {
+                    "success": False,
+                    "error": "Only cloud mode is available right now. Local mode will be added next.",
+                }
+            ), 400
+
+        if enabled and not access_token:
+            return jsonify({"success": False, "error": "Bambu access token is required when enabled"}), 400
+
+        try:
+            current_config = load_config(app.config["CONFIG_FILE_PATH"])
+            integrations = current_config.get("integrations", {})
+            if not isinstance(integrations, dict):
+                integrations = {}
+
+            bambu_cfg = integrations.get("bambu", {})
+            if not isinstance(bambu_cfg, dict):
+                bambu_cfg = {}
+
+            bambu_cfg["enabled"] = enabled
+            bambu_cfg["mode"] = mode
+            bambu_cfg["cloud"] = {
+                "access_token": access_token,
+                "refresh_token": refresh_token,
+                "region": region,
+            }
+            integrations["bambu"] = bambu_cfg
+
+            write_config_updates({"integrations": integrations})
+            return jsonify({"success": True, "integration": get_bambu_integration_state()})
+        except Exception as e:
+            app.logger.error(f"Error saving bambu integration settings: {e}")
+            return jsonify({"success": False, "error": str(e)}), 500
+
     @app.route("/api/settings/integrations/moonraker", methods=["GET", "POST"])
     def api_settings_moonraker_integration():
         if request.method == "GET":
@@ -918,14 +1084,31 @@ def create_app(config_file=None, config_overrides=None):
     def reload_index():
         """Reload the entire index from filesystem."""
         try:
-            stl_base_path = app.config["STL_FILES_PATH"]
-            gcode_base_path = app.config["GCODE_FILES_PATH"]
+            mode = request.args.get("mode", "all").strip().lower() or "all"
+            if mode not in {"all", "stats"}:
+                return jsonify({"success": False, "error": "Invalid reload mode"}), 400
 
-            moonraker_url = get_enabled_moonraker_url()
-            moonraker_client = get_enabled_moonraker_client()
-            counts = db_manager.reload_index(
-                stl_base_path, gcode_base_path, moonraker_url, moonraker_client
-            )
+            counts = {}
+            if mode == "all":
+                stl_base_path = app.config["STL_FILES_PATH"]
+                gcode_base_path = app.config["GCODE_FILES_PATH"]
+
+                moonraker_url = get_enabled_moonraker_url()
+                moonraker_client = get_enabled_moonraker_client()
+                counts = db_manager.reload_index(
+                    stl_base_path, gcode_base_path, moonraker_url, moonraker_client
+                )
+            else:
+                moonraker_url = get_enabled_moonraker_url()
+                moonraker_client = get_enabled_moonraker_client()
+                if moonraker_url:
+                    moonraker_counts = db_manager.reload_moonraker_only(
+                        moonraker_url, moonraker_client
+                    )
+                    counts["moonraker_stats_updated"] = moonraker_counts.get("updated", 0)
+                    counts["moonraker_stats_failed"] = moonraker_counts.get("failed", 0)
+
+            counts["bambu_history_synced"] = sync_bambu_history(cleanup_expired=True)
 
             return jsonify(
                 {"success": True, "message": "Index reloaded successfully", "counts": counts}
@@ -968,6 +1151,8 @@ def create_app(config_file=None, config_overrides=None):
     app.get_folder_three_mf_projects = get_folder_three_mf_projects
     app.get_moonraker_printing_stats = get_moonraker_printing_stats
     app.get_current_printer_volume = get_current_printer_volume
+    app.get_library_history_settings = get_library_history_settings
+    app.get_bambu_integration_state = get_bambu_integration_state
     app.get_moonraker_integration_state = get_moonraker_integration_state
     app.allowed_file = allowed_file
     app.safe_extract = safe_extract

@@ -7,6 +7,7 @@ from datetime import datetime
 from sqlalchemy import (
     Column,
     Integer,
+    Float,
     String,
     Text,
     DateTime,
@@ -203,6 +204,88 @@ class GCodeFileStats(Base):
 
     def __repr__(self):
         return f"<GCodeFileStats(file_id={self.gcode_file_id}, prints={self.print_count})>"
+
+
+class PrintHistoryEvent(Base):
+    """Normalized print history events synchronized from integrations."""
+
+    __tablename__ = "print_history_events"
+
+    id = Column(Integer, primary_key=True)
+    integration_id = Column(String(64), nullable=False)
+    integration_mode = Column(String(32), nullable=True)
+    printer_uid = Column(String(255), nullable=False, default="")
+    event_uid = Column(String(255), nullable=False)
+    job_uid = Column(String(255), nullable=True)
+
+    file_name = Column(String(500), nullable=True)
+    file_path = Column(String(1000), nullable=True)
+    normalized_basename = Column(String(255), nullable=True)
+
+    status = Column(String(64), nullable=True)
+    started_at = Column(DateTime, nullable=True)
+    ended_at = Column(DateTime, nullable=True)
+    event_at = Column(DateTime, nullable=True)
+    duration_seconds = Column(Float, nullable=True)
+    filament_used_mm = Column(Float, nullable=True)
+
+    gcode_file_id = Column(Integer, ForeignKey("gcode_files.id"), nullable=True)
+    match_state = Column(String(32), nullable=False, default="unmatched")
+    raw_payload_json = Column(Text, nullable=True)
+
+    first_seen_at = Column(DateTime, default=datetime.utcnow)
+    last_seen_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    gcode_file = relationship("GCodeFile")
+
+    __table_args__ = (
+        UniqueConstraint(
+            "integration_id",
+            "printer_uid",
+            "event_uid",
+            name="uq_history_event_provider_printer_event",
+        ),
+        Index("idx_history_event_event_at", "event_at"),
+        Index("idx_history_event_file_id", "gcode_file_id"),
+        Index("idx_history_event_basename", "normalized_basename"),
+    )
+
+    def __repr__(self):
+        return f"<PrintHistoryEvent(provider='{self.integration_id}', event_uid='{self.event_uid}')>"
+
+
+class IntegrationSyncState(Base):
+    """Persisted synchronization state per integration scope."""
+
+    __tablename__ = "integration_sync_state"
+
+    id = Column(Integer, primary_key=True)
+    integration_id = Column(String(64), nullable=False)
+    integration_mode = Column(String(32), nullable=True)
+    printer_uid = Column(String(255), nullable=False, default="")
+    cursor = Column(Text, nullable=True)
+    last_synced_at = Column(DateTime, nullable=True)
+    last_success_at = Column(DateTime, nullable=True)
+    last_error = Column(Text, nullable=True)
+    last_error_at = Column(DateTime, nullable=True)
+    last_event_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "integration_id",
+            "integration_mode",
+            "printer_uid",
+            name="uq_sync_state_provider_mode_printer",
+        ),
+        Index("idx_sync_state_provider", "integration_id"),
+    )
+
+    def __repr__(self):
+        return f"<IntegrationSyncState(provider='{self.integration_id}', printer='{self.printer_uid}')>"
 
 
 def create_database_engine(db_path="trinetra.db"):

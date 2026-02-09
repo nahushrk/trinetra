@@ -24,6 +24,18 @@ function setStatus(message, level) {
     status.textContent = message;
 }
 
+function setLibraryStatus(message, level) {
+    const status = document.getElementById("library-history-status");
+    status.className = `settings-status ${level}`;
+    status.textContent = message;
+}
+
+function setBambuStatus(message, level) {
+    const status = document.getElementById("bambu-settings-status");
+    status.className = `settings-status ${level}`;
+    status.textContent = message;
+}
+
 function setMoonrakerStatus(message, level) {
     const status = document.getElementById("moonraker-settings-status");
     status.className = `settings-status ${level}`;
@@ -42,10 +54,30 @@ function isValidVolume(volume) {
         && volume.x > 0 && volume.y > 0 && volume.z > 0;
 }
 
+function toNonNegativeInteger(value) {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < 0) {
+        return null;
+    }
+    return parsed;
+}
+
 document.addEventListener("DOMContentLoaded", () => {
     const presetSelect = document.getElementById("printer-preset");
     const saveButton = document.getElementById("save-printer-settings");
     const resetButton = document.getElementById("reset-printer-settings");
+
+    const historyEnabled = document.getElementById("library-history-enabled");
+    const historyTtl = document.getElementById("library-history-ttl");
+    const saveLibraryButton = document.getElementById("save-library-history-settings");
+
+    const bambuEnabled = document.getElementById("bambu-enabled");
+    const bambuMode = document.getElementById("bambu-mode");
+    const bambuRegion = document.getElementById("bambu-region");
+    const bambuAccessToken = document.getElementById("bambu-access-token");
+    const bambuRefreshToken = document.getElementById("bambu-refresh-token");
+    const bambuSaveButton = document.getElementById("save-bambu-settings");
+
     const moonrakerEnabled = document.getElementById("moonraker-enabled");
     const moonrakerBaseUrl = document.getElementById("moonraker-base-url");
     const moonrakerSaveButton = document.getElementById("save-moonraker-settings");
@@ -108,6 +140,115 @@ document.addEventListener("DOMContentLoaded", () => {
             setStatus(`Failed to save settings: ${error.message}`, "error");
         } finally {
             saveButton.disabled = false;
+        }
+    });
+
+    historyEnabled.checked = Boolean(initialLibraryHistorySettings && initialLibraryHistorySettings.enabled);
+    historyTtl.value = Number(initialLibraryHistorySettings && initialLibraryHistorySettings.ttl_days || 180);
+
+    saveLibraryButton.addEventListener("click", async () => {
+        const ttlValue = toNonNegativeInteger(historyTtl.value);
+        if (ttlValue === null) {
+            setLibraryStatus("TTL must be a non-negative integer.", "error");
+            return;
+        }
+
+        saveLibraryButton.disabled = true;
+        setLibraryStatus("Saving library settings...", "info");
+        try {
+            const response = await fetch("/api/settings/library/history", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    enabled: historyEnabled.checked,
+                    ttl_days: ttlValue,
+                    cleanup_trigger: "refresh",
+                }),
+            });
+            const data = await response.json();
+            if (!response.ok || !data.success) {
+                throw new Error(data.error || "Failed to save library settings");
+            }
+
+            const history = data.history || {};
+            historyEnabled.checked = Boolean(history.enabled);
+            historyTtl.value = Number(history.ttl_days || 0);
+            setLibraryStatus("Library settings saved.", "success");
+        } catch (error) {
+            setLibraryStatus(`Failed to save settings: ${error.message}`, "error");
+        } finally {
+            saveLibraryButton.disabled = false;
+        }
+    });
+
+    const initialBambuSettings = (initialBambuIntegration && initialBambuIntegration.settings)
+        ? initialBambuIntegration.settings
+        : {};
+    bambuEnabled.checked = Boolean(initialBambuIntegration && initialBambuIntegration.enabled);
+    bambuMode.value = initialBambuSettings.mode || "cloud";
+    bambuRegion.value = initialBambuSettings.region || "global";
+    bambuAccessToken.value = initialBambuSettings.access_token || "";
+    bambuRefreshToken.value = initialBambuSettings.refresh_token || "";
+
+    const toggleBambuFields = () => {
+        const disabled = !bambuEnabled.checked;
+        bambuMode.disabled = disabled;
+        bambuRegion.disabled = disabled;
+        bambuAccessToken.disabled = disabled;
+        bambuRefreshToken.disabled = disabled;
+    };
+    toggleBambuFields();
+
+    bambuEnabled.addEventListener("change", toggleBambuFields);
+
+    bambuSaveButton.addEventListener("click", async () => {
+        const enabled = bambuEnabled.checked;
+        const mode = (bambuMode.value || "cloud").trim().toLowerCase();
+        const region = (bambuRegion.value || "global").trim().toLowerCase();
+        const accessToken = bambuAccessToken.value.trim();
+        const refreshToken = bambuRefreshToken.value.trim();
+
+        if (mode !== "cloud") {
+            setBambuStatus("Only cloud mode is available right now.", "error");
+            return;
+        }
+        if (enabled && !accessToken) {
+            setBambuStatus("Bambu access token is required when enabled.", "error");
+            return;
+        }
+
+        bambuSaveButton.disabled = true;
+        setBambuStatus("Saving integration settings...", "info");
+        try {
+            const response = await fetch("/api/settings/integrations/bambu", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    enabled,
+                    mode,
+                    region,
+                    access_token: accessToken,
+                    refresh_token: refreshToken,
+                }),
+            });
+            const data = await response.json();
+            if (!response.ok || !data.success) {
+                throw new Error(data.error || "Failed to save bambu integration");
+            }
+
+            const integration = data.integration || {};
+            const settings = integration.settings || {};
+            bambuEnabled.checked = Boolean(integration.enabled);
+            bambuMode.value = settings.mode || "cloud";
+            bambuRegion.value = settings.region || "global";
+            bambuAccessToken.value = settings.access_token || "";
+            bambuRefreshToken.value = settings.refresh_token || "";
+            toggleBambuFields();
+            setBambuStatus("Integration settings saved.", "success");
+        } catch (error) {
+            setBambuStatus(`Failed to save integration: ${error.message}`, "error");
+        } finally {
+            bambuSaveButton.disabled = false;
         }
     });
 
