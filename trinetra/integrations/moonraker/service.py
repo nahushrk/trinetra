@@ -1,14 +1,13 @@
-"""Modular service for querying moonraker and managing file statistics."""
+"""Service for querying Moonraker and syncing file statistics."""
 
 import logging
 import time
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List, Optional
 from datetime import datetime
 from sqlalchemy.orm import Session
-from sqlalchemy import and_
 
-from .models import GCodeFile, GCodeFileStats
-from .moonraker import MoonrakerAPI
+from trinetra.integrations.protocol import PrinterServiceClient
+from trinetra.models import GCodeFile, GCodeFileStats
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +15,7 @@ logger = logging.getLogger(__name__)
 class MoonrakerService:
     """Service for handling moonraker queries and file statistics management."""
 
-    def __init__(self, moonraker_client: MoonrakerAPI):
+    def __init__(self, moonraker_client: PrinterServiceClient):
         self.client = moonraker_client
 
     def fetch_all_file_statistics(self) -> Dict[str, Dict[str, Any]]:

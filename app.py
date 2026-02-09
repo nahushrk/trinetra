@@ -17,11 +17,11 @@ from flask import (
 from flask_compress import Compress
 from werkzeug.utils import secure_filename
 
-from trinetra import gcode_handler, search, moonraker
+from trinetra import gcode_handler, search
 from trinetra import three_mf
-from trinetra.moonraker import MoonrakerAPI, add_to_queue
 from trinetra.database import DatabaseManager
 from trinetra.config_paths import resolve_storage_paths
+from trinetra.integrations.registry import get_printer_integration, list_printer_integrations
 
 # Import logging configuration from trinetra package
 from trinetra.logger import get_logger, configure_logging
@@ -145,9 +145,51 @@ def create_app(config_file=None, config_overrides=None):
         for key, value in updates.items():
             app.config[key.upper()] = value
 
+    def get_runtime_integration_config() -> dict:
+        integrations = app.config.get("INTEGRATIONS", {})
+        if not isinstance(integrations, dict):
+            integrations = {}
+        return {
+            "integrations": integrations,
+            "moonraker_url": app.config.get("MOONRAKER_URL", ""),
+        }
+
+    def get_moonraker_integration_state() -> dict:
+        integration = get_printer_integration("moonraker")
+        if integration is None:
+            return {
+                "id": "moonraker",
+                "name": "Moonraker",
+                "description": "Unavailable",
+                "enabled": False,
+                "configured": False,
+                "settings": {"base_url": ""},
+            }
+        return integration.get_ui_state(get_runtime_integration_config())
+
+    def get_enabled_moonraker_url() -> str | None:
+        state = get_moonraker_integration_state()
+        if not state.get("enabled"):
+            return None
+        base_url = (state.get("settings") or {}).get("base_url", "")
+        if not base_url:
+            return None
+        return str(base_url)
+
+    def get_enabled_moonraker_client():
+        integration = get_printer_integration("moonraker")
+        if integration is None:
+            return None
+        return integration.create_client(get_runtime_integration_config())
+
     @app.context_processor
     def inject_global_settings():
-        return {"trinetra_settings": {"printer_volume": get_current_printer_volume()}}
+        return {
+            "trinetra_settings": {
+                "printer_volume": get_current_printer_volume(),
+                "integrations": list_printer_integrations(get_runtime_integration_config()),
+            }
+        }
 
     def get_stl_files(base_path):
         """Get STL files from database instead of filesystem."""
@@ -526,11 +568,13 @@ def create_app(config_file=None, config_overrides=None):
         # Refresh DB index once after all upload processing is complete.
         index_refresh = {"success": False}
         try:
-            moonraker_url = app.config.get("MOONRAKER_URL")
+            moonraker_url = get_enabled_moonraker_url()
+            moonraker_client = get_enabled_moonraker_client()
             counts = db_manager.reload_index(
                 app.config["STL_FILES_PATH"],
                 app.config["GCODE_FILES_PATH"],
                 moonraker_url,
+                moonraker_client,
             )
             index_refresh = {"success": True, "counts": counts}
         except Exception as e:
@@ -767,6 +811,7 @@ def create_app(config_file=None, config_overrides=None):
             "settings.html",
             printer_volume=get_current_printer_volume(),
             popular_printers=POPULAR_PRINTERS,
+            moonraker_integration=get_moonraker_integration_state(),
         )
 
     @app.route("/api/settings/printer_volume", methods=["GET", "POST"])
@@ -821,6 +866,39 @@ def create_app(config_file=None, config_overrides=None):
             app.logger.error(f"Error saving printer volume settings: {e}")
             return jsonify({"success": False, "error": str(e)}), 500
 
+    @app.route("/api/settings/integrations/moonraker", methods=["GET", "POST"])
+    def api_settings_moonraker_integration():
+        if request.method == "GET":
+            return jsonify({"success": True, "integration": get_moonraker_integration_state()})
+
+        payload = request.get_json(silent=True) or {}
+        enabled = bool(payload.get("enabled", False))
+        base_url = str(payload.get("base_url", "")).strip()
+
+        if enabled and not base_url:
+            return jsonify({"success": False, "error": "Moonraker URL is required when enabled"}), 400
+
+        try:
+            current_config = load_config(app.config["CONFIG_FILE_PATH"])
+            integrations = current_config.get("integrations", {})
+            if not isinstance(integrations, dict):
+                integrations = {}
+
+            moonraker_cfg = integrations.get("moonraker", {})
+            if not isinstance(moonraker_cfg, dict):
+                moonraker_cfg = {}
+
+            moonraker_cfg["enabled"] = enabled
+            moonraker_cfg["base_url"] = base_url
+            integrations["moonraker"] = moonraker_cfg
+
+            write_config_updates({"integrations": integrations, "moonraker_url": base_url})
+
+            return jsonify({"success": True, "integration": get_moonraker_integration_state()})
+        except Exception as e:
+            app.logger.error(f"Error saving moonraker integration settings: {e}")
+            return jsonify({"success": False, "error": str(e)}), 500
+
     def get_moonraker_printing_stats():
         """Get aggregated printing statistics from database."""
         try:
@@ -843,8 +921,11 @@ def create_app(config_file=None, config_overrides=None):
             stl_base_path = app.config["STL_FILES_PATH"]
             gcode_base_path = app.config["GCODE_FILES_PATH"]
 
-            moonraker_url = app.config.get("MOONRAKER_URL")
-            counts = db_manager.reload_index(stl_base_path, gcode_base_path, moonraker_url)
+            moonraker_url = get_enabled_moonraker_url()
+            moonraker_client = get_enabled_moonraker_client()
+            counts = db_manager.reload_index(
+                stl_base_path, gcode_base_path, moonraker_url, moonraker_client
+            )
 
             return jsonify(
                 {"success": True, "message": "Index reloaded successfully", "counts": counts}
@@ -861,12 +942,21 @@ def create_app(config_file=None, config_overrides=None):
         if not isinstance(filenames, list) or not all(isinstance(f, str) for f in filenames):
             app.logger.error(f"Invalid filenames payload: {filenames}")
             return jsonify({"error": "Invalid filenames payload"}), 400
-        moonraker_url = app.config.get("MOONRAKER_URL", "http://localhost:7125")
+        integration = get_printer_integration("moonraker")
+        if integration is None:
+            return jsonify({"error": "Moonraker integration is unavailable"}), 500
+
+        runtime_config = get_runtime_integration_config()
+        if not integration.is_enabled(runtime_config):
+            return jsonify({"error": "Moonraker integration is disabled in Settings"}), 400
+        if not integration.is_configured(runtime_config):
+            return jsonify({"error": "Moonraker integration is not configured"}), 400
+
         app.logger.debug(
-            f"Calling Moonraker add_to_queue with: filenames={filenames}, reset={reset}"
+            f"Calling Moonraker integration queue with: filenames={filenames}, reset={reset}"
         )
-        success = add_to_queue(filenames, reset, moonraker_url)
-        app.logger.debug(f"Moonraker add_to_queue result: {success}")
+        success = integration.queue_jobs(runtime_config, filenames, reset)
+        app.logger.debug(f"Moonraker integration queue result: {success}")
         if not success:
             return jsonify({"error": "Failed to add files to Moonraker queue"}), 502
         return jsonify({"result": "ok"})
@@ -878,6 +968,7 @@ def create_app(config_file=None, config_overrides=None):
     app.get_folder_three_mf_projects = get_folder_three_mf_projects
     app.get_moonraker_printing_stats = get_moonraker_printing_stats
     app.get_current_printer_volume = get_current_printer_volume
+    app.get_moonraker_integration_state = get_moonraker_integration_state
     app.allowed_file = allowed_file
     app.safe_extract = safe_extract
     app.safe_join = safe_join

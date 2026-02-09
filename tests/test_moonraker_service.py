@@ -17,8 +17,8 @@ test_config = {"log_level": "INFO", "log_file": "test.log"}
 configure_logging(test_config)
 logger = get_logger(__name__)
 
-from trinetra.moonraker_service import MoonrakerService
-from trinetra.moonraker import MoonrakerAPI
+from trinetra.integrations.moonraker.service import MoonrakerService
+from trinetra.integrations.moonraker.api import MoonrakerAPI
 from trinetra.models import GCodeFile, GCodeFileStats
 from trinetra.database import DatabaseManager
 
@@ -54,7 +54,7 @@ class TestMoonrakerService(unittest.TestCase):
         service = MoonrakerService(self.mock_moonraker_client)
         self.assertEqual(service.client, self.mock_moonraker_client)
 
-    @patch("trinetra.moonraker_service.datetime")
+    @patch("trinetra.integrations.moonraker.service.datetime")
     def test_fetch_all_file_statistics_success(self, mock_datetime):
         """Test successful fetching of all file statistics"""
         # Mock datetime for consistent timestamps

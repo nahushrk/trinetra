@@ -9,7 +9,7 @@ import shutil
 import zipfile
 import json
 import yaml
-from unittest.mock import patch, MagicMock, mock_open
+from unittest.mock import patch, MagicMock, mock_open, Mock
 from io import BytesIO
 
 import pytest
@@ -541,6 +541,7 @@ class TestAppRoutes:
         response = self.client.get("/settings")
         assert response.status_code == 200
         assert b"Settings" in response.data
+        assert b"Integrations" in response.data
 
     def test_api_settings_printer_volume_get(self):
         """Settings API should return current/default printer volume."""
@@ -600,9 +601,57 @@ class TestAppRoutes:
         payload = json.loads(response.data)
         assert payload["success"] is False
 
+    def test_api_settings_moonraker_get_default_disabled(self):
+        response = self.client.get("/api/settings/integrations/moonraker")
+        assert response.status_code == 200
+        payload = json.loads(response.data)
+        assert payload["success"] is True
+        integration = payload["integration"]
+        assert integration["id"] == "moonraker"
+        assert integration["enabled"] is False
+
+    def test_api_settings_moonraker_post_updates_config(self):
+        temp_config_path = os.path.join(self.temp_dir, "integration_config.yaml")
+        temp_base_path = os.path.join(self.temp_dir, "integration_data")
+        with open(temp_config_path, "w", encoding="utf-8") as f:
+            yaml.safe_dump(
+                {
+                    "base_path": temp_base_path,
+                    "moonraker_url": "",
+                    "log_level": "INFO",
+                    "mode": "DEV",
+                    "search_result_limit": 25,
+                },
+                f,
+                sort_keys=False,
+            )
+
+        integration_app = create_app(config_file=temp_config_path)
+        integration_client = integration_app.test_client()
+
+        response = integration_client.post(
+            "/api/settings/integrations/moonraker",
+            json={"enabled": True, "base_url": "http://localhost:7125"},
+        )
+        assert response.status_code == 200
+        payload = json.loads(response.data)
+        assert payload["success"] is True
+        assert payload["integration"]["enabled"] is True
+        assert payload["integration"]["settings"]["base_url"] == "http://localhost:7125"
+
+        with open(temp_config_path, "r", encoding="utf-8") as f:
+            saved_config = yaml.safe_load(f) or {}
+        assert saved_config["moonraker_url"] == "http://localhost:7125"
+        assert saved_config["integrations"]["moonraker"]["enabled"] is True
+        assert saved_config["integrations"]["moonraker"]["base_url"] == "http://localhost:7125"
+
     def test_api_add_to_queue_success(self):
-        # Patch add_to_queue in the app module's namespace
-        with patch("app.add_to_queue", return_value=True):
+        mock_integration = Mock()
+        mock_integration.is_enabled.return_value = True
+        mock_integration.is_configured.return_value = True
+        mock_integration.queue_jobs.return_value = True
+
+        with patch("app.get_printer_integration", return_value=mock_integration):
             response = self.client.post(
                 "/api/add_to_queue", json={"filenames": ["test.gcode"], "reset": False}
             )
@@ -611,14 +660,31 @@ class TestAppRoutes:
             assert data["result"] == "ok"
 
     def test_api_add_to_queue_failure(self):
-        # Patch add_to_queue in the app module's namespace
-        with patch("app.add_to_queue", return_value=False):
+        mock_integration = Mock()
+        mock_integration.is_enabled.return_value = True
+        mock_integration.is_configured.return_value = True
+        mock_integration.queue_jobs.return_value = False
+
+        with patch("app.get_printer_integration", return_value=mock_integration):
             response = self.client.post(
                 "/api/add_to_queue", json={"filenames": ["test.gcode"], "reset": False}
             )
             assert response.status_code == 502
             data = json.loads(response.data)
             assert "error" in data
+
+    def test_api_add_to_queue_disabled_integration(self):
+        mock_integration = Mock()
+        mock_integration.is_enabled.return_value = False
+        mock_integration.is_configured.return_value = True
+
+        with patch("app.get_printer_integration", return_value=mock_integration):
+            response = self.client.post(
+                "/api/add_to_queue", json={"filenames": ["test.gcode"], "reset": False}
+            )
+            assert response.status_code == 400
+            data = json.loads(response.data)
+            assert "disabled" in data["error"].lower()
 
     def test_api_add_to_queue_invalid_payload(self):
         """Test API add to queue with invalid payload"""

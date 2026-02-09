@@ -1019,6 +1019,18 @@ button {
     background: #f8fafc;
 }
 
+.integration-card {
+    border: 1px solid #e7ebf0;
+    border-radius: 0.5rem;
+    padding: 0.9rem;
+    background: #fff;
+}
+
+.integration-title {
+    font-weight: 600;
+    font-size: 1rem;
+}
+
 .settings-actions {
     display: flex;
     gap: 0.75rem;

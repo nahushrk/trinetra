@@ -12,7 +12,7 @@ from typing import Dict, Any
 # Add the project root to the path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from trinetra.moonraker import MoonrakerAPI
+from trinetra.integrations.moonraker.api import MoonrakerAPI
 from trinetra.database import DatabaseManager
 from trinetra.logger import configure_logging
 

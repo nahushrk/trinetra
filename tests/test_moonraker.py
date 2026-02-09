@@ -18,7 +18,7 @@ test_config = {"log_level": "INFO", "log_file": "test.log"}
 configure_logging(test_config)
 logger = get_logger(__name__)
 
-from trinetra.moonraker import (
+from trinetra.integrations.moonraker.api import (
     MoonrakerAPI,
     get_moonraker_history,
     get_moonraker_stats,
@@ -275,7 +275,7 @@ class TestMoonrakerFunctions(unittest.TestCase):
         """Test successful history retrieval via convenience function"""
         mock_response = self.mock_server.get_response("/server/history/list")
 
-        with patch("trinetra.moonraker.MoonrakerAPI") as mock_api_class:
+        with patch("trinetra.integrations.moonraker.api.MoonrakerAPI") as mock_api_class:
             mock_api = Mock()
             mock_api.get_history.return_value = mock_response["result"]
             mock_api_class.return_value = mock_api
@@ -287,7 +287,7 @@ class TestMoonrakerFunctions(unittest.TestCase):
         """Test successful stats retrieval via convenience function"""
         mock_stats = {"filename": "test.gcode", "total_prints": 1}
 
-        with patch("trinetra.moonraker.MoonrakerAPI") as mock_api_class:
+        with patch("trinetra.integrations.moonraker.api.MoonrakerAPI") as mock_api_class:
             mock_api = Mock()
             mock_api.get_print_stats_for_file.return_value = mock_stats
             mock_api_class.return_value = mock_api
@@ -297,13 +297,13 @@ class TestMoonrakerFunctions(unittest.TestCase):
 
     def test_get_moonraker_stats_exception(self):
         """Test stats retrieval with exception handling"""
-        with patch("trinetra.moonraker.MoonrakerAPI", side_effect=Exception("API Error")):
+        with patch("trinetra.integrations.moonraker.api.MoonrakerAPI", side_effect=Exception("API Error")):
             result = get_moonraker_stats("test.gcode", "http://localhost:7125")
             self.assertIsNone(result)
 
     def test_add_to_queue_success(self):
         """Test successful queue addition via convenience function"""
-        with patch("trinetra.moonraker.MoonrakerAPI") as mock_api_class:
+        with patch("trinetra.integrations.moonraker.api.MoonrakerAPI") as mock_api_class:
             mock_api = Mock()
             mock_api.queue_job.return_value = True
             mock_api_class.return_value = mock_api
@@ -315,7 +315,7 @@ class TestMoonrakerFunctions(unittest.TestCase):
 
     def test_add_to_queue_exception(self):
         """Test queue addition with exception handling"""
-        with patch("trinetra.moonraker.MoonrakerAPI", side_effect=Exception("API Error")):
+        with patch("trinetra.integrations.moonraker.api.MoonrakerAPI", side_effect=Exception("API Error")):
             result = add_to_queue(
                 ["test.gcode"], reset=False, moonraker_url="http://localhost:7125"
             )

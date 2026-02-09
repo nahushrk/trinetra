@@ -24,10 +24,11 @@ from trinetra.models import (
     create_session_factory,
 )
 from trinetra import gcode_handler, search, three_mf
-from trinetra.logger import get_logger
-from trinetra.moonraker import MoonrakerAPI
-from trinetra.moonraker_service import MoonrakerService
 from trinetra.config_paths import resolve_storage_paths
+from trinetra.integrations.moonraker.service import MoonrakerService
+from trinetra.integrations.protocol import PrinterServiceClient
+from trinetra.integrations.registry import get_printer_integration
+from trinetra.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -52,7 +53,7 @@ class DatabaseManager:
         stl_base_path: str,
         gcode_base_path: str,
         moonraker_url: Optional[str] = None,
-        moonraker_client: Optional[MoonrakerAPI] = None,
+        moonraker_client: Optional[PrinterServiceClient] = None,
     ) -> Dict[str, int]:
         """
         Reload the entire index from filesystem.
@@ -1161,13 +1162,24 @@ class DatabaseManager:
             return stl_file
 
     def update_moonraker_stats(
-        self, moonraker_url: str, moonraker_client: Optional[MoonrakerAPI] = None
+        self, moonraker_url: str, moonraker_client: Optional[PrinterServiceClient] = None
     ) -> Dict[str, int]:
         """Update Moonraker statistics for all G-code files."""
         try:
-            # Initialize Moonraker service
+            # Build a client through the integration protocol when a client was not injected.
             if moonraker_client is None:
-                moonraker_client = MoonrakerAPI(moonraker_url)
+                integration = get_printer_integration("moonraker")
+                if integration is not None:
+                    runtime_config = {
+                        "integrations": {"moonraker": {"enabled": True, "base_url": moonraker_url}},
+                        "moonraker_url": moonraker_url,
+                    }
+                    moonraker_client = integration.create_client(runtime_config)
+
+            if moonraker_client is None:
+                logger.warning("Skipping Moonraker stats update: integration client unavailable")
+                return {"updated": 0, "failed": 0}
+
             moonraker_service = MoonrakerService(moonraker_client)
 
             # Update stats
@@ -1179,7 +1191,7 @@ class DatabaseManager:
             return {"updated": 0, "failed": 0}
 
     def reload_moonraker_only(
-        self, moonraker_url: str, moonraker_client: Optional[MoonrakerAPI] = None
+        self, moonraker_url: str, moonraker_client: Optional[PrinterServiceClient] = None
     ) -> Dict[str, int]:
         """Reload only Moonraker statistics without touching files."""
         return self.update_moonraker_stats(moonraker_url, moonraker_client)

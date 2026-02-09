@@ -15,7 +15,7 @@
                 <div class="settings-sidebar card">
                     <div class="card-body p-2">
                         <a class="settings-nav-item active" href="#section-printer">Printer</a>
-                        <a class="settings-nav-item disabled" href="#">Integrations (Coming Soon)</a>
+                        <a class="settings-nav-item" href="#section-integrations">Integrations</a>
                     </div>
                 </div>
             </div>
@@ -66,6 +66,39 @@
                         <div id="settings-status" class="settings-status mt-3" data-test-id="settings-status"></div>
                     </div>
                 </div>
+
+                <div class="settings-section card mb-4" id="section-integrations" data-test-id="settings-integrations-section">
+                    <div class="card-header">
+                        <h5 class="mb-0">Integrations</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="integration-card">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <div>
+                                    <div class="integration-title">Moonraker</div>
+                                    <div class="text-muted small">Klipper/Moonraker print stats and queue integration.</div>
+                                </div>
+                                <div class="custom-control custom-switch">
+                                    <input type="checkbox" class="custom-control-input" id="moonraker-enabled" data-test-id="moonraker-enabled-toggle">
+                                    <label class="custom-control-label" for="moonraker-enabled">Enabled</label>
+                                </div>
+                            </div>
+
+                            <div class="form-group mb-2">
+                                <label for="moonraker-base-url">Moonraker Base URL</label>
+                                <input id="moonraker-base-url" type="url" class="form-control" placeholder="http://localhost:7125" data-test-id="moonraker-base-url-input">
+                            </div>
+                            <div class="small text-muted mb-3">
+                                Disabled by default. Enable this only if you want Trinetra to sync printer history and queue print jobs.
+                            </div>
+
+                            <div class="settings-actions">
+                                <button id="save-moonraker-settings" class="btn btn-primary" data-test-id="save-moonraker-settings">Save Integration</button>
+                            </div>
+                            <div id="moonraker-settings-status" class="settings-status mt-3" data-test-id="moonraker-settings-status"></div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -76,6 +109,7 @@
 <script>
     const initialPrinterVolume = {{ printer_volume | tojson }};
     const popularPrinters = {{ popular_printers | tojson }};
+    const initialMoonrakerIntegration = {{ moonraker_integration | tojson }};
 </script>
 <script src="{{ url_for('static', filename='js/settings.js') }}"></script>
 {% endblock %}

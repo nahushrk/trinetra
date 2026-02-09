@@ -1,0 +1,1 @@
+"""Printer integration plugin package."""

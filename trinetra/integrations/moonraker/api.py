@@ -3,9 +3,8 @@ Moonraker API integration module for Trinetra
 Handles communication with Moonraker API to get print history and other information
 """
 
-import json
 import requests
-from typing import Dict, List, Optional, Any, Union
+from typing import Any, Dict, List, Optional
 from urllib.parse import urljoin
 
 from trinetra.logger import get_logger

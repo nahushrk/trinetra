@@ -24,6 +24,12 @@ function setStatus(message, level) {
     status.textContent = message;
 }
 
+function setMoonrakerStatus(message, level) {
+    const status = document.getElementById("moonraker-settings-status");
+    status.className = `settings-status ${level}`;
+    status.textContent = message;
+}
+
 function readVolumeInputs() {
     const x = Number(document.getElementById("printer-x").value);
     const y = Number(document.getElementById("printer-y").value);
@@ -40,6 +46,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const presetSelect = document.getElementById("printer-preset");
     const saveButton = document.getElementById("save-printer-settings");
     const resetButton = document.getElementById("reset-printer-settings");
+    const moonrakerEnabled = document.getElementById("moonraker-enabled");
+    const moonrakerBaseUrl = document.getElementById("moonraker-base-url");
+    const moonrakerSaveButton = document.getElementById("save-moonraker-settings");
 
     setVolumeInputs(initialPrinterVolume);
     presetSelect.value = findMatchingPresetId(initialPrinterVolume);
@@ -99,6 +108,52 @@ document.addEventListener("DOMContentLoaded", () => {
             setStatus(`Failed to save settings: ${error.message}`, "error");
         } finally {
             saveButton.disabled = false;
+        }
+    });
+
+    const initialMoonrakerSettings = (initialMoonrakerIntegration && initialMoonrakerIntegration.settings)
+        ? initialMoonrakerIntegration.settings
+        : {};
+    moonrakerEnabled.checked = Boolean(initialMoonrakerIntegration && initialMoonrakerIntegration.enabled);
+    moonrakerBaseUrl.value = initialMoonrakerSettings.base_url || "";
+    moonrakerBaseUrl.disabled = !moonrakerEnabled.checked;
+
+    moonrakerEnabled.addEventListener("change", () => {
+        moonrakerBaseUrl.disabled = !moonrakerEnabled.checked;
+    });
+
+    moonrakerSaveButton.addEventListener("click", async () => {
+        const enabled = moonrakerEnabled.checked;
+        const baseUrl = moonrakerBaseUrl.value.trim();
+
+        if (enabled && !baseUrl) {
+            setMoonrakerStatus("Moonraker URL is required when integration is enabled.", "error");
+            return;
+        }
+
+        moonrakerSaveButton.disabled = true;
+        setMoonrakerStatus("Saving integration settings...", "info");
+        try {
+            const response = await fetch("/api/settings/integrations/moonraker", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ enabled: enabled, base_url: baseUrl }),
+            });
+            const data = await response.json();
+            if (!response.ok || !data.success) {
+                throw new Error(data.error || "Failed to save moonraker integration");
+            }
+
+            const integration = data.integration || {};
+            const settings = integration.settings || {};
+            moonrakerEnabled.checked = Boolean(integration.enabled);
+            moonrakerBaseUrl.value = settings.base_url || "";
+            moonrakerBaseUrl.disabled = !moonrakerEnabled.checked;
+            setMoonrakerStatus("Integration settings saved.", "success");
+        } catch (error) {
+            setMoonrakerStatus(`Failed to save integration: ${error.message}`, "error");
+        } finally {
+            moonrakerSaveButton.disabled = false;
         }
     });
 });

@@ -11,8 +11,8 @@ from unittest.mock import Mock, patch
 import json
 
 from trinetra.database import DatabaseManager
-from trinetra.moonraker import MoonrakerAPI
-from trinetra.moonraker_service import MoonrakerService
+from trinetra.integrations.moonraker.api import MoonrakerAPI
+from trinetra.integrations.moonraker.service import MoonrakerService
 
 # Setup logging for tests
 from trinetra.logger import get_logger, configure_logging
@@ -72,7 +72,7 @@ G1 X10 Y10 Z0.2
         """Clean up test fixtures"""
         shutil.rmtree(self.test_dir)
 
-    @patch("trinetra.moonraker.MoonrakerAPI")
+    @patch("trinetra.integrations.moonraker.api.MoonrakerAPI")
     def test_reload_index_with_moonraker_stats(self, mock_moonraker_api_class):
         """Test end-to-end reload index with Moonraker stats"""
         # Mock Moonraker API response
@@ -197,7 +197,7 @@ G1 X10 Y10 Z0.2
         self.assertEqual(len(three_mf_projects), 1)
         self.assertEqual(three_mf_projects[0]["file_name"], "swirl_root.3mf")
 
-    @patch("trinetra.moonraker.MoonrakerAPI")
+    @patch("trinetra.integrations.moonraker.api.MoonrakerAPI")
     def test_reload_moonraker_only(self, mock_moonraker_api_class):
         """Test end-to-end reload Moonraker only functionality"""
         # First reload index without Moonraker stats
@@ -253,7 +253,7 @@ G1 X10 Y10 Z0.2
             self.assertIsNone(gcode_file.get("stats"))
 
         # Mock Moonraker API and update stats
-        with patch("trinetra.moonraker.MoonrakerAPI") as mock_moonraker_api_class:
+        with patch("trinetra.integrations.moonraker.api.MoonrakerAPI") as mock_moonraker_api_class:
             mock_moonraker_api = Mock()
             mock_moonraker_api_class.return_value = mock_moonraker_api
 
@@ -282,7 +282,7 @@ G1 X10 Y10 Z0.2
         files_with_stats = [f for f in gcode_files if f.get("stats") is not None]
         self.assertGreater(len(files_with_stats), 0)
 
-    @patch("trinetra.moonraker.MoonrakerAPI")
+    @patch("trinetra.integrations.moonraker.api.MoonrakerAPI")
     def test_reload_index_with_test_data(self, mock_moonraker_api_class):
         """Test end-to-end reload index with our test data"""
         # Use our actual test data directories
