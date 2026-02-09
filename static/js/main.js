@@ -150,10 +150,11 @@ async function checkFolderExists(folderName) {
 }
 
 async function uploadFiles(files) {
-    // Validate files are zip files
+    // Validate files are supported upload types
     for (const file of files) {
-        if (!file.name.toLowerCase().endsWith('.zip')) {
-            updateUploadProgress(0, 'Upload failed', 'error', 'Only ZIP files are allowed.');
+        const name = file.name.toLowerCase();
+        if (!name.endsWith('.zip') && !name.endsWith('.3mf') && !name.endsWith('.gcode')) {
+            updateUploadProgress(0, 'Upload failed', 'error', 'Only ZIP, 3MF, and GCODE files are allowed.');
             return;
         }
     }
@@ -164,7 +165,7 @@ async function uploadFiles(files) {
         formData.append('file', file);
     }
     formData.append('conflict_action', 'check');
-    updateUploadProgress(10, 'Checking for conflicts...', 'info', 'Checking for folder conflicts...');
+    updateUploadProgress(10, 'Checking for conflicts...', 'info', 'Checking for file/folder conflicts...');
     // Send the check request
     const response = await fetch('/upload', {
         method: 'POST',
@@ -178,7 +179,7 @@ async function uploadFiles(files) {
         document.getElementById('upload-modal-close').style.pointerEvents = 'none';
         // Show the list of conflicts as a <ul>
         const conflictList = data.conflicts.map(f => `<li>${f}</li>`).join('');
-        conflictDialog.querySelector('strong').innerHTML = `Folder Conflict:<br>Conflicting folders:<ul style='color:#dc3545; margin: 0 0 0 1em;'>${conflictList}</ul>`;
+        conflictDialog.querySelector('strong').innerHTML = `Name Conflict:<br>Conflicting items:<ul style='color:#dc3545; margin: 0 0 0 1em;'>${conflictList}</ul>`;
         return new Promise((resolve) => {
             const stopBtn = document.getElementById('upload-stop-btn');
             const skipBtn = document.getElementById('upload-skip-btn');

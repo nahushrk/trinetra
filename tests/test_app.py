@@ -244,7 +244,7 @@ class TestAppRoutes:
         response = self.client.post("/upload", data=data)
         assert response.status_code == 400
         data = json.loads(response.data)
-        assert data["error"] == "Only ZIP files are allowed"
+        assert data["error"] == "Only ZIP, 3MF, and GCODE files are allowed"
 
     def test_upload_route_invalid_file_type(self):
         """Test upload route with invalid file type"""
@@ -252,7 +252,7 @@ class TestAppRoutes:
         response = self.client.post("/upload", data=data)
         assert response.status_code == 400
         data = json.loads(response.data)
-        assert data["error"] == "Only ZIP files are allowed"
+        assert data["error"] == "Only ZIP, 3MF, and GCODE files are allowed"
 
     def test_upload_route_success(self):
         """Test successful file upload"""
@@ -267,6 +267,86 @@ class TestAppRoutes:
         assert response.status_code == 200
         data = json.loads(response.data)
         assert data["success"] is True
+
+    def test_upload_route_success_3mf(self):
+        """Test successful direct 3MF file upload."""
+        data = {"file": (BytesIO(b"dummy 3mf bytes"), "single_model.3mf")}
+        response = self.client.post("/upload", data=data)
+        assert response.status_code == 200
+        payload = json.loads(response.data)
+        assert payload["success"] is True
+        assert payload["results"][0]["status"] == "success"
+        assert os.path.exists(os.path.join(self.stl_path, "single_model.3mf"))
+
+    def test_upload_route_success_gcode(self):
+        """Test successful direct G-code file upload."""
+        gcode_bytes = BytesIO(b";FLAVOR:Marlin\nG28 ;Home\n")
+        data = {"file": (gcode_bytes, "single_job.gcode")}
+        response = self.client.post("/upload", data=data)
+        assert response.status_code == 200
+        payload = json.loads(response.data)
+        assert payload["success"] is True
+        assert payload["results"][0]["status"] == "success"
+        assert os.path.exists(os.path.join(self.gcode_path, "single_job.gcode"))
+
+    def test_upload_route_conflict_check_for_3mf(self):
+        """Conflict check should detect existing 3MF file names."""
+        existing = os.path.join(self.stl_path, "existing_model.3mf")
+        with open(existing, "wb") as f:
+            f.write(b"dummy")
+
+        data = {
+            "file": (BytesIO(b"new dummy"), "existing_model.3mf"),
+            "conflict_action": "check",
+        }
+        response = self.client.post("/upload", data=data)
+        assert response.status_code == 200
+        payload = json.loads(response.data)
+        assert payload.get("ask_user") is True
+        assert "existing_model.3mf" in payload.get("conflicts", [])
+
+    def test_upload_route_triggers_single_reload_after_mixed_batch(self):
+        """A mixed upload batch should trigger one DB reload after all processing."""
+        zip_data = BytesIO()
+        with zipfile.ZipFile(zip_data, "w") as zipf:
+            zipf.writestr("inside.stl", "solid test\nendsolid test\n")
+        zip_data.seek(0)
+
+        data = {
+            "file": [
+                (zip_data, "mixed_pack.zip"),
+                (BytesIO(b"dummy 3mf"), "mixed_model.3mf"),
+                (BytesIO(b";FLAVOR:Marlin\nG28 ;Home\n"), "mixed_job.gcode"),
+            ]
+        }
+
+        with patch.object(
+            self.app.config["DB_MANAGER"],
+            "reload_index",
+            return_value={"folders": 1, "stl_files": 1, "gcode_files": 1},
+        ) as mock_reload:
+            response = self.client.post("/upload", data=data)
+
+        assert response.status_code == 200
+        payload = json.loads(response.data)
+        assert payload["success"] is True
+        assert payload.get("index_refresh", {}).get("success") is True
+        mock_reload.assert_called_once()
+
+    def test_upload_route_reload_failure_does_not_fail_upload(self):
+        """Upload result should still return success even if post-upload reload fails."""
+        data = {"file": (BytesIO(b"dummy 3mf bytes"), "reload_fail.3mf")}
+        with patch.object(
+            self.app.config["DB_MANAGER"], "reload_index", side_effect=RuntimeError("reload failed")
+        ) as mock_reload:
+            response = self.client.post("/upload", data=data)
+
+        assert response.status_code == 200
+        payload = json.loads(response.data)
+        assert payload["success"] is True
+        assert payload.get("index_refresh", {}).get("success") is False
+        assert "reload failed" in payload.get("index_refresh", {}).get("error", "")
+        mock_reload.assert_called_once()
 
     def test_delete_folder_route_no_folder_name(self):
         """Test delete folder route with no folder name"""

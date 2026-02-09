@@ -290,16 +290,33 @@ def create_app(config_file=None, config_overrides=None):
 
     @app.route("/upload", methods=["POST"])
     def upload():
+        allowed_extensions = {".zip", ".3mf", ".gcode"}
+
+        def get_extension(filename: str) -> str:
+            return os.path.splitext(filename)[1].lower()
+
+        def upload_target_for(filename: str) -> tuple[str, str]:
+            ext = get_extension(filename)
+            if ext == ".zip":
+                folder_name = os.path.splitext(filename)[0]
+                return "zip", os.path.join(app.config["STL_FILES_PATH"], folder_name)
+            if ext == ".3mf":
+                return "3mf", os.path.join(app.config["STL_FILES_PATH"], filename)
+            if ext == ".gcode":
+                return "gcode", os.path.join(app.config["GCODE_FILES_PATH"], filename)
+            return "unknown", ""
+
         conflict_action = request.form.get("conflict_action", "check")
         if "file" not in request.files:
             return jsonify({"error": "No file part"}), 400
         files = request.files.getlist("file")
         if not files:
             return jsonify({"error": "No files selected"}), 400
-        # Only accept zip files
+        # Only accept supported file types
         for file in files:
-            if not file.filename.lower().endswith(".zip"):
-                return jsonify({"error": "Only ZIP files are allowed"}), 400
+            ext = get_extension(file.filename or "")
+            if ext not in allowed_extensions:
+                return jsonify({"error": "Only ZIP, 3MF, and GCODE files are allowed"}), 400
         # Step 1: Check for conflicts if conflict_action is missing or 'check'
         if conflict_action == "check":
             conflicts = []
@@ -307,10 +324,12 @@ def create_app(config_file=None, config_overrides=None):
                 filename = secure_filename(file.filename)
                 if not filename:
                     continue
-                folder_name = os.path.splitext(filename)[0]
-                extract_to = os.path.join(app.config["STL_FILES_PATH"], folder_name)
-                if os.path.exists(extract_to):
-                    conflicts.append(folder_name)
+                upload_kind, target_path = upload_target_for(filename)
+                if target_path and os.path.exists(target_path):
+                    if upload_kind == "zip":
+                        conflicts.append(os.path.splitext(filename)[0])
+                    else:
+                        conflicts.append(filename)
             if conflicts:
                 return jsonify({"ask_user": True, "conflicts": conflicts}), 200
             # If no conflicts, proceed as normal (fall through)
@@ -320,105 +339,156 @@ def create_app(config_file=None, config_overrides=None):
             filename = secure_filename(file.filename)
             if not filename:
                 continue
-            folder_name = os.path.splitext(filename)[0]
-            extract_to = os.path.join(app.config["STL_FILES_PATH"], folder_name)
-            folder_exists = os.path.exists(extract_to)
-            # If skipping, skip files whose folders exist
-            if conflict_action == "skip" and folder_exists:
+            ext = get_extension(filename)
+            upload_kind, target_path = upload_target_for(filename)
+            item_name = os.path.splitext(filename)[0] if upload_kind == "zip" else filename
+            item_exists = target_path and os.path.exists(target_path)
+
+            # If skipping, skip existing conflicting items
+            if conflict_action == "skip" and item_exists:
                 results.append(
                     {
                         "filename": filename,
-                        "folder_name": folder_name,
+                        "folder_name": item_name,
                         "status": "skipped",
                         "folder_existed": True,
-                        "error": "Folder already exists, skipped as per user choice.",
+                        "error": "Item already exists, skipped as per user choice.",
                     }
                 )
                 continue
-            # Save the zip file temporarily
-            temp_zip_path = os.path.join(app.config["STL_FILES_PATH"], filename)
-            file.save(temp_zip_path)
-            try:
-                with zipfile.ZipFile(temp_zip_path, "r") as zip_ref:
-                    if folder_exists:
-                        import shutil
+            if upload_kind == "zip":
+                # Save the zip file temporarily
+                temp_zip_path = os.path.join(app.config["STL_FILES_PATH"], filename)
+                file.save(temp_zip_path)
+                folder_name = os.path.splitext(filename)[0]
+                extract_to = os.path.join(app.config["STL_FILES_PATH"], folder_name)
+                folder_exists = os.path.exists(extract_to)
+                try:
+                    with zipfile.ZipFile(temp_zip_path, "r") as zip_ref:
+                        if folder_exists:
+                            import shutil
 
-                        shutil.rmtree(extract_to)
-                    os.makedirs(extract_to, exist_ok=True)
+                            shutil.rmtree(extract_to)
+                        os.makedirs(extract_to, exist_ok=True)
 
-                    # Extract to a temporary location first to handle folder duplication
-                    import tempfile
+                        # Extract to a temporary location first to handle folder duplication
+                        import tempfile
 
-                    with tempfile.TemporaryDirectory() as temp_dir:
-                        safe_extract(zip_ref, temp_dir)
+                        with tempfile.TemporaryDirectory() as temp_dir:
+                            safe_extract(zip_ref, temp_dir)
 
-                        # Check if the extracted content has a folder with the same name as the zip
-                        temp_contents = os.listdir(temp_dir)
-                        if (
-                            len(temp_contents) == 1
-                            and os.path.isdir(os.path.join(temp_dir, temp_contents[0]))
-                            and temp_contents[0] == folder_name
-                        ):
-                            # The zip contains a folder with the same name as the zip file
-                            # Move contents from temp_dir/folder_name to extract_to
-                            source_folder = os.path.join(temp_dir, folder_name)
-                            for item in os.listdir(source_folder):
-                                source_path = os.path.join(source_folder, item)
-                                dest_path = os.path.join(extract_to, item)
-                                if os.path.isdir(source_path):
-                                    import shutil
+                            # Check if the extracted content has a folder with the same name as the zip
+                            temp_contents = os.listdir(temp_dir)
+                            if (
+                                len(temp_contents) == 1
+                                and os.path.isdir(os.path.join(temp_dir, temp_contents[0]))
+                                and temp_contents[0] == folder_name
+                            ):
+                                # The zip contains a folder with the same name as the zip file
+                                # Move contents from temp_dir/folder_name to extract_to
+                                source_folder = os.path.join(temp_dir, folder_name)
+                                for item in os.listdir(source_folder):
+                                    source_path = os.path.join(source_folder, item)
+                                    dest_path = os.path.join(extract_to, item)
+                                    if os.path.isdir(source_path):
+                                        import shutil
 
-                                    shutil.move(source_path, dest_path)
-                                else:
-                                    import shutil
+                                        shutil.move(source_path, dest_path)
+                                    else:
+                                        import shutil
 
-                                    shutil.move(source_path, dest_path)
-                        else:
-                            # Normal case: move all contents from temp_dir to extract_to
-                            for item in os.listdir(temp_dir):
-                                source_path = os.path.join(temp_dir, item)
-                                dest_path = os.path.join(extract_to, item)
-                                if os.path.isdir(source_path):
-                                    import shutil
+                                        shutil.move(source_path, dest_path)
+                            else:
+                                # Normal case: move all contents from temp_dir to extract_to
+                                for item in os.listdir(temp_dir):
+                                    source_path = os.path.join(temp_dir, item)
+                                    dest_path = os.path.join(extract_to, item)
+                                    if os.path.isdir(source_path):
+                                        import shutil
 
-                                    shutil.move(source_path, dest_path)
-                                else:
-                                    import shutil
+                                        shutil.move(source_path, dest_path)
+                                    else:
+                                        import shutil
 
-                                    shutil.move(source_path, dest_path)
+                                        shutil.move(source_path, dest_path)
 
-                    # Remove __MACOSX folder if present
-                    macosx_path = os.path.join(extract_to, "__MACOSX")
-                    if os.path.exists(macosx_path):
-                        import shutil
+                        # Remove __MACOSX folder if present
+                        macosx_path = os.path.join(extract_to, "__MACOSX")
+                        if os.path.exists(macosx_path):
+                            import shutil
 
-                        shutil.rmtree(macosx_path, ignore_errors=True)
+                            shutil.rmtree(macosx_path, ignore_errors=True)
+                    results.append(
+                        {
+                            "filename": filename,
+                            "folder_name": folder_name,
+                            "status": "success",
+                            "folder_existed": folder_exists,
+                        }
+                    )
+                except Exception as e:
+                    app.logger.error(f"Error extracting zip file {filename}: {e}")
+                    results.append(
+                        {
+                            "filename": filename,
+                            "folder_name": folder_name,
+                            "status": "error",
+                            "error": str(e),
+                        }
+                    )
+                finally:
+                    if os.path.exists(temp_zip_path):
+                        os.remove(temp_zip_path)
+            elif upload_kind in {"3mf", "gcode"} and target_path:
+                try:
+                    target_dir = os.path.dirname(target_path)
+                    os.makedirs(target_dir, exist_ok=True)
+                    file.save(target_path)
+                    results.append(
+                        {
+                            "filename": filename,
+                            "folder_name": item_name,
+                            "status": "success",
+                            "folder_existed": bool(item_exists),
+                        }
+                    )
+                except Exception as e:
+                    app.logger.error(f"Error saving file {filename}: {e}")
+                    results.append(
+                        {
+                            "filename": filename,
+                            "folder_name": item_name,
+                            "status": "error",
+                            "error": str(e),
+                        }
+                    )
+            else:
                 results.append(
                     {
                         "filename": filename,
-                        "folder_name": folder_name,
-                        "status": "success",
-                        "folder_existed": folder_exists,
-                    }
-                )
-            except Exception as e:
-                app.logger.error(f"Error extracting zip file {filename}: {e}")
-                results.append(
-                    {
-                        "filename": filename,
-                        "folder_name": folder_name,
+                        "folder_name": item_name,
                         "status": "error",
-                        "error": str(e),
+                        "error": f"Unsupported file type: {ext}",
                     }
                 )
-            finally:
-                if os.path.exists(temp_zip_path):
-                    os.remove(temp_zip_path)
-        return jsonify({"success": True, "results": results}), 200
+        # Refresh DB index once after all upload processing is complete.
+        index_refresh = {"success": False}
+        try:
+            moonraker_url = app.config.get("MOONRAKER_URL")
+            counts = db_manager.reload_index(
+                app.config["STL_FILES_PATH"],
+                app.config["GCODE_FILES_PATH"],
+                moonraker_url,
+            )
+            index_refresh = {"success": True, "counts": counts}
+        except Exception as e:
+            app.logger.error(f"Error refreshing index after upload: {e}")
+            index_refresh = {"success": False, "error": str(e)}
+
+        return jsonify({"success": True, "results": results, "index_refresh": index_refresh}), 200
 
     def allowed_file(filename):
-        # Only allow zip files now
-        return filename.lower().endswith(".zip")
+        return filename.lower().endswith((".zip", ".3mf", ".gcode"))
 
     def safe_extract(zip_file, path):
         """Safely extract zip files to prevent zip slip vulnerabilities."""

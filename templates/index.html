@@ -41,9 +41,9 @@
         
         <!-- Upload Button -->
         <div class="upload-container">
-            <button id="upload-button" class="btn btn-outline-secondary" data-test-id="upload-btn">
-                <i class="bi bi-upload"></i> Import ZIP Package
-            </button>
+                <button id="upload-button" class="btn btn-outline-secondary" data-test-id="upload-btn">
+                    <i class="bi bi-upload"></i> Import Files
+                </button>
         </div>
         <div id="metadata" class="text-center text-muted"></div>
         
@@ -59,7 +59,7 @@
 </div>
 
 <!-- Hidden file input for uploads -->
-<input type="file" id="file-input" style="display: none;" multiple accept=".zip" data-test-id="file-input">
+<input type="file" id="file-input" style="display: none;" multiple accept=".zip,.3mf,.gcode" data-test-id="file-input">
 
 <!-- Upload Progress Modal -->
 <div id="upload-modal" class="upload-modal" data-test-id="upload-modal">
@@ -81,7 +81,7 @@
             Ready to upload
         </div>
         <div id="upload-conflict-dialog" class="upload-conflict-dialog" style="display: none;" data-test-id="upload-conflict-dialog">
-            <strong>Folder Conflict:</strong> One or more folders with the same name already exist.<br>
+            <strong>Name Conflict:</strong> One or more files/folders with the same name already exist.<br>
             What would you like to do?
             <div class="upload-conflict-buttons">
                 <button class="upload-conflict-btn stop" id="upload-stop-btn" data-test-id="upload-stop-btn">Stop All</button>
