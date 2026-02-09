@@ -1085,7 +1085,7 @@ def create_app(config_file=None, config_overrides=None):
         """Reload the entire index from filesystem."""
         try:
             mode = request.args.get("mode", "all").strip().lower() or "all"
-            if mode not in {"all", "stats"}:
+            if mode not in {"all", "files", "stats"}:
                 return jsonify({"success": False, "error": "Invalid reload mode"}), 400
 
             counts = {}
@@ -1098,6 +1098,11 @@ def create_app(config_file=None, config_overrides=None):
                 counts = db_manager.reload_index(
                     stl_base_path, gcode_base_path, moonraker_url, moonraker_client
                 )
+                counts["bambu_history_synced"] = sync_bambu_history(cleanup_expired=True)
+            elif mode == "files":
+                stl_base_path = app.config["STL_FILES_PATH"]
+                gcode_base_path = app.config["GCODE_FILES_PATH"]
+                counts = db_manager.reload_index(stl_base_path, gcode_base_path)
             else:
                 moonraker_url = get_enabled_moonraker_url()
                 moonraker_client = get_enabled_moonraker_client()
@@ -1107,8 +1112,7 @@ def create_app(config_file=None, config_overrides=None):
                     )
                     counts["moonraker_stats_updated"] = moonraker_counts.get("updated", 0)
                     counts["moonraker_stats_failed"] = moonraker_counts.get("failed", 0)
-
-            counts["bambu_history_synced"] = sync_bambu_history(cleanup_expired=True)
+                counts["bambu_history_synced"] = sync_bambu_history(cleanup_expired=True)
 
             return jsonify(
                 {"success": True, "message": "Index reloaded successfully", "counts": counts}

@@ -544,6 +544,21 @@ class TestAppRoutes:
         assert payload["success"] is True
         mock_reload.assert_not_called()
 
+    def test_reload_index_files_mode_skips_integration_stats(self):
+        with patch.object(self.app.config["DB_MANAGER"], "reload_index", return_value={}) as mock_reload:
+            with patch.object(
+                self.app.config["DB_MANAGER"], "reload_moonraker_only"
+            ) as mock_moonraker_reload:
+                response = self.client.post("/reload_index?mode=files")
+
+        assert response.status_code == 200
+        payload = json.loads(response.data)
+        assert payload["success"] is True
+        mock_reload.assert_called_once_with(
+            self.app.config["STL_FILES_PATH"], self.app.config["GCODE_FILES_PATH"]
+        )
+        mock_moonraker_reload.assert_not_called()
+
     def test_reload_index_rejects_invalid_mode(self):
         response = self.client.post("/reload_index?mode=invalid")
         assert response.status_code == 400

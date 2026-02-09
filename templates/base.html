@@ -52,8 +52,9 @@
                             <i class="fas fa-sync-alt"></i> Refresh Library
                           </button>
                           <div class="dropdown-menu dropdown-menu-right" aria-labelledby="reload-dropdown">
-                            <a class="dropdown-item reload-option" href="#" data-mode="all">Refresh All (Files + Integration Stats)</a>
-                            <a class="dropdown-item reload-option" href="#" data-mode="stats">Refresh Integration Stats Only</a>
+                            <a class="dropdown-item reload-option" href="#" data-mode="all">All</a>
+                            <a class="dropdown-item reload-option" href="#" data-mode="files">Files</a>
+                            <a class="dropdown-item reload-option" href="#" data-mode="stats">Integration Stats</a>
                           </div>
                         </div>
                     </nav>
@@ -101,9 +102,12 @@
                 option.addEventListener('click', function(e) {
                     e.preventDefault();
                     const mode = this.dataset.mode;
-                    const action = mode === 'stats' ?
-                        'This will only refresh integration statistics. Continue?' :
-                        'This will refresh all library data from your filesystem and configured integrations. This may take a while. Continue?';
+                    let action = 'This will refresh all library data from your filesystem and configured integrations. This may take a while. Continue?';
+                    if (mode === 'files') {
+                        action = 'This will only refresh library files from your filesystem. Continue?';
+                    } else if (mode === 'stats') {
+                        action = 'This will only refresh integration statistics. Continue?';
+                    }
                     
                     if (confirm(action)) {
                         const dropdown = document.getElementById('reload-dropdown');
@@ -118,9 +122,12 @@
                         .then(response => response.json())
                         .then(data => {
                             if (data.success) {
-                                const successMsg = mode === 'stats' ?
-                                    'Integration stats refreshed successfully!' :
-                                    'Library refreshed successfully!';
+                                let successMsg = 'Library refreshed successfully!';
+                                if (mode === 'files') {
+                                    successMsg = 'Library files refreshed successfully!';
+                                } else if (mode === 'stats') {
+                                    successMsg = 'Integration stats refreshed successfully!';
+                                }
                                 const counts = Object.entries(data.counts)
                                     .map(([key, value]) => `${key}: ${value}`)
                                     .join('\n');
