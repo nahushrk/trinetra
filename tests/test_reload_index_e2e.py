@@ -159,6 +159,44 @@ G1 X10 Y10 Z0.2
         for gcode_file in gcode_files:
             self.assertIsNone(gcode_file.get("stats"))
 
+    def test_reload_index_with_root_level_three_mf_virtual_folder(self):
+        """Root-level 3MF files should appear as virtual folders."""
+        root_three_mf = os.path.join(self.stl_dir, "swirl_root.3mf")
+        model_xml = """<?xml version="1.0" encoding="UTF-8"?>
+<model xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <object id="1" type="model">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="10" y="0" z="0"/>
+          <vertex x="0" y="10" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="1"/>
+  </build>
+</model>
+"""
+        import zipfile
+
+        with zipfile.ZipFile(root_three_mf, "w") as archive:
+            archive.writestr("3D/3dmodel.model", model_xml)
+
+        self.db_manager.reload_index(self.stl_dir, self.gcode_dir)
+        folders = self.db_manager.get_stl_files()
+        folder_names = {folder["folder_name"] for folder in folders}
+
+        self.assertIn("swirl_root", folder_names)
+        three_mf_projects = self.db_manager.get_folder_three_mf_projects("swirl_root")
+        self.assertEqual(len(three_mf_projects), 1)
+        self.assertEqual(three_mf_projects[0]["file_name"], "swirl_root.3mf")
+
     @patch("trinetra.moonraker.MoonrakerAPI")
     def test_reload_moonraker_only(self, mock_moonraker_api_class):
         """Test end-to-end reload Moonraker only functionality"""
@@ -248,7 +286,7 @@ G1 X10 Y10 Z0.2
     def test_reload_index_with_test_data(self, mock_moonraker_api_class):
         """Test end-to-end reload index with our test data"""
         # Use our actual test data directories
-        stl_base_path = os.path.join(os.path.dirname(__file__), "test_data", "3dfiles")
+        stl_base_path = os.path.join(os.path.dirname(__file__), "test_data", "models")
         gcode_base_path = os.path.join(os.path.dirname(__file__), "test_data", "gcodes")
 
         # Load our mock Moonraker API response

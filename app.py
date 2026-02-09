@@ -18,6 +18,7 @@ from flask_compress import Compress
 from werkzeug.utils import secure_filename
 
 from trinetra import gcode_handler, search, moonraker
+from trinetra import three_mf
 from trinetra.moonraker import MoonrakerAPI, add_to_queue
 from trinetra.database import DatabaseManager
 from trinetra.config_paths import resolve_storage_paths
@@ -92,6 +93,8 @@ def create_app(config_file=None, config_overrides=None):
     # Initialize database manager
     app.config["DATABASE_PATH"] = db_path
     db_manager = DatabaseManager(db_path)
+    db_manager.stl_base_path = stl_files_path
+    db_manager.gcode_base_path = gcode_files_path
     app.config["DB_MANAGER"] = db_manager
 
     def get_stl_files(base_path):
@@ -144,6 +147,10 @@ def create_app(config_file=None, config_overrides=None):
     def get_folder_contents(folder_name):
         """Get folder contents from database instead of filesystem."""
         return db_manager.get_folder_contents(folder_name)
+
+    def get_folder_three_mf_projects(folder_name):
+        """Get parsed 3MF project data for folder."""
+        return db_manager.get_folder_three_mf_projects(folder_name)
 
     # --- All routes below, using app.config for paths ---
     @app.route("/")
@@ -202,6 +209,7 @@ def create_app(config_file=None, config_overrides=None):
     def folder_view(folder_name):
         folder_name = folder_name.split("/")[0]
         stl_files, image_files, pdf_files, gcode_files = get_folder_contents(folder_name)
+        three_mf_projects = get_folder_three_mf_projects(folder_name)
         return render_template(
             "folder_view.html",
             folder_name=folder_name,
@@ -209,7 +217,43 @@ def create_app(config_file=None, config_overrides=None):
             image_files=image_files,
             pdf_files=pdf_files,
             gcode_files=gcode_files,
+            three_mf_projects=three_mf_projects,
         )
+
+    @app.route("/3mf_plate")
+    def serve_3mf_plate():
+        filename = request.args.get("file", "")
+        plate_index = request.args.get("plate", type=int)
+
+        if not filename or plate_index is None:
+            return "Missing required parameters", 400
+        if not filename.lower().endswith(".3mf"):
+            return "Invalid file type", 400
+
+        try:
+            abs_path = safe_join(app.config["STL_FILES_PATH"], filename)
+            if not os.path.isfile(abs_path):
+                return "File not found", 404
+
+            parsed = three_mf.load_3mf_project(abs_path)
+            triangles = three_mf.get_plate_triangles(parsed, plate_index)
+            if not triangles:
+                return "Plate not found or empty", 404
+
+            stl_bytes = three_mf.build_plate_stl_bytes(
+                parsed,
+                plate_index,
+                header_text=f"{os.path.basename(filename)} plate {plate_index}",
+            )
+            return send_file(
+                io.BytesIO(stl_bytes),
+                mimetype="model/stl",
+                as_attachment=False,
+                download_name=f"{os.path.splitext(os.path.basename(filename))[0]}_plate_{plate_index}.stl",
+            )
+        except Exception as e:
+            app.logger.error(f"Error serving 3MF plate for {filename}: {e}")
+            return "Failed to parse 3MF project", 500
 
     @app.route("/stl/<path:filename>")
     def serve_stl(filename):
@@ -649,6 +693,7 @@ def create_app(config_file=None, config_overrides=None):
     app.get_stl_files = get_stl_files
     app.extract_gcode_metadata_from_file = extract_gcode_metadata_from_file
     app.get_folder_contents = get_folder_contents
+    app.get_folder_three_mf_projects = get_folder_three_mf_projects
     app.get_moonraker_printing_stats = get_moonraker_printing_stats
     app.allowed_file = allowed_file
     app.safe_extract = safe_extract

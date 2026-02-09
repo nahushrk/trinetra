@@ -36,6 +36,14 @@
 </div>
 {% endif %}
 
+<!-- 3MF Projects Section -->
+{% if three_mf_projects %}
+<div class="section" data-test-id="three-mf-section">
+    <h3>3MF Projects (Plates)</h3>
+    <div id="three-mf-content" class="mt-4" data-test-id="three-mf-content"></div>
+</div>
+{% endif %}
+
 <!-- G-code Files Section -->
 {% if gcode_files %}
 <div class="section" data-test-id="gcode-section">
@@ -75,6 +83,7 @@
     const imageFiles = {{ image_files|tojson }};
     const pdfFiles = {{ pdf_files|tojson }};
     const gcodeFiles = {{ gcode_files|tojson }};
+    const threeMfProjects = {{ three_mf_projects|default([])|tojson }};
     const folderName = "{{ folder_name }}";
 </script>
 <script src="{{ url_for('static', filename='js/shared_3d_renderer.js') }}"></script>

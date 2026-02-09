@@ -118,6 +118,83 @@ class TestAppRoutes:
         response = self.client.get("/stl/nonexistent.stl")
         assert response.status_code == 404
 
+    def test_serve_3mf_plate_route(self):
+        """Test serving a generated STL for a plate inside a 3MF project."""
+        model_xml = """<?xml version="1.0" encoding="UTF-8"?>
+<model xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <object id="1" type="model">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="10" y="0" z="0"/>
+          <vertex x="0" y="10" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="1"/>
+  </build>
+</model>
+"""
+
+        three_mf_file = os.path.join(self.stl_path, "simple.3mf")
+        with zipfile.ZipFile(three_mf_file, "w") as archive:
+            archive.writestr("3D/3dmodel.model", model_xml)
+
+        response = self.client.get("/3mf_plate?file=simple.3mf&plate=1")
+        assert response.status_code == 200
+        assert response.mimetype == "model/stl"
+        # Binary STL header (80 bytes + 4-byte face count)
+        assert len(response.data) > 84
+
+    def test_api_stl_files_includes_three_mf_projects(self):
+        """Home API should include 3MF project previews for virtual/root projects."""
+        model_xml = """<?xml version="1.0" encoding="UTF-8"?>
+<model xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <object id="1" type="model">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="10" y="0" z="0"/>
+          <vertex x="0" y="10" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="1"/>
+  </build>
+</model>
+"""
+        root_three_mf = os.path.join(self.stl_path, "home_preview.3mf")
+        with zipfile.ZipFile(root_three_mf, "w") as archive:
+            archive.writestr("3D/3dmodel.model", model_xml)
+
+        self.client.post("/reload_index")
+        response = self.client.get("/api/stl_files")
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        folders = data.get("folders", [])
+
+        target_folder = None
+        for folder in folders:
+            if folder.get("folder_name") == "home_preview":
+                target_folder = folder
+                break
+
+        assert target_folder is not None
+        assert "three_mf_projects" in target_folder
+        assert len(target_folder["three_mf_projects"]) == 1
+
     def test_serve_file_route(self):
         """Test serving general files"""
         # Create a test file

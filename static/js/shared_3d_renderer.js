@@ -177,48 +177,52 @@ function parseGCode(text, scene, controls, camera) {
 }
 
 // Create printer grid for visualization
-function createPrinterGrid() {
+function createPrinterGrid(volume) {
+    const vol = volume || {x: 220, y: 220, z: 270};
+    const maxX = Number.isFinite(vol.x) ? vol.x : 220;
+    const maxY = Number.isFinite(vol.y) ? vol.y : 220;
+    const maxZ = Number.isFinite(vol.z) ? vol.z : 270;
     var geometry = new THREE.Geometry();
 
     var vertices = [
         // Bottom face
         new THREE.Vector3(0, 0, 0),
-        new THREE.Vector3(220, 0, 0),
+        new THREE.Vector3(maxX, 0, 0),
 
-        new THREE.Vector3(220, 0, 0),
-        new THREE.Vector3(220, 220, 0),
+        new THREE.Vector3(maxX, 0, 0),
+        new THREE.Vector3(maxX, maxY, 0),
 
-        new THREE.Vector3(220, 220, 0),
-        new THREE.Vector3(0, 220, 0),
+        new THREE.Vector3(maxX, maxY, 0),
+        new THREE.Vector3(0, maxY, 0),
 
-        new THREE.Vector3(0, 220, 0),
+        new THREE.Vector3(0, maxY, 0),
         new THREE.Vector3(0, 0, 0),
 
         // Top face
-        new THREE.Vector3(0, 0, 270),
-        new THREE.Vector3(220, 0, 270),
+        new THREE.Vector3(0, 0, maxZ),
+        new THREE.Vector3(maxX, 0, maxZ),
 
-        new THREE.Vector3(220, 0, 270),
-        new THREE.Vector3(220, 220, 270),
+        new THREE.Vector3(maxX, 0, maxZ),
+        new THREE.Vector3(maxX, maxY, maxZ),
 
-        new THREE.Vector3(220, 220, 270),
-        new THREE.Vector3(0, 220, 270),
+        new THREE.Vector3(maxX, maxY, maxZ),
+        new THREE.Vector3(0, maxY, maxZ),
 
-        new THREE.Vector3(0, 220, 270),
-        new THREE.Vector3(0, 0, 270),
+        new THREE.Vector3(0, maxY, maxZ),
+        new THREE.Vector3(0, 0, maxZ),
 
         // Vertical edges
         new THREE.Vector3(0, 0, 0),
-        new THREE.Vector3(0, 0, 270),
+        new THREE.Vector3(0, 0, maxZ),
 
-        new THREE.Vector3(220, 0, 0),
-        new THREE.Vector3(220, 0, 270),
+        new THREE.Vector3(maxX, 0, 0),
+        new THREE.Vector3(maxX, 0, maxZ),
 
-        new THREE.Vector3(220, 220, 0),
-        new THREE.Vector3(220, 220, 270),
+        new THREE.Vector3(maxX, maxY, 0),
+        new THREE.Vector3(maxX, maxY, maxZ),
 
-        new THREE.Vector3(0, 220, 0),
-        new THREE.Vector3(0, 220, 270),
+        new THREE.Vector3(0, maxY, 0),
+        new THREE.Vector3(0, maxY, maxZ),
     ];
 
     geometry.vertices.push(...vertices);
@@ -497,63 +501,96 @@ function createSTLItem(file, containerElement, scene, rowContainer) {
     return { scene, controls, camera, relPath };
 }
 
-function loadSTLFile(stlFile, scene, controls, sizeElement, camera) {
+function loadSTLFromUrl(url, scene, controls, sizeElement, camera, options) {
+    const renderOptions = options || {};
     const loader = new THREE.STLLoader();
-    loader.load(`/stl/${encodeURIComponent(stlFile)}`, function (geometry) {
-        const material = new THREE.MeshNormalMaterial({flatShading: true});
-        const mesh = new THREE.Mesh(geometry, material);
+    if (sizeElement) {
+        sizeElement.innerText = 'Loading 3D model...';
+        sizeElement.style.fontSize = '0.875rem';
+        sizeElement.style.color = '#888';
+    }
+    loader.load(
+        url,
+        function (geometry) {
+            const material = new THREE.MeshNormalMaterial({flatShading: true});
+            const mesh = new THREE.Mesh(geometry, material);
 
-        // Center the geometry and compute its bounding box
-        geometry.center();
-        geometry.computeBoundingBox();
-        const bbox = geometry.boundingBox;
-        const size = bbox.getSize(new THREE.Vector3());
+            // Center the geometry and compute its bounding box
+            geometry.center();
+            geometry.computeBoundingBox();
+            const bbox = geometry.boundingBox;
+            const size = bbox.getSize(new THREE.Vector3());
 
-        // Calculate the offset to place the bottom of the object at Z=0
-        const zOffset = size.z / 2;
+            // Calculate the offset to place the bottom of the object at Z=0
+            const zOffset = size.z / 2;
 
-        // Position the mesh at (110, 110) in the XY plane and adjust Z position
-        mesh.position.set(110, 110, zOffset);
-        scene.add(mesh);
+            const defaultVolume = {x: 220, y: 220, z: 270};
+            const configuredVolume = renderOptions.printerVolume || defaultVolume;
+            const gridVolume = {
+                x: Number.isFinite(configuredVolume.x) ? configuredVolume.x : defaultVolume.x,
+                y: Number.isFinite(configuredVolume.y) ? configuredVolume.y : defaultVolume.y,
+                z: Number.isFinite(configuredVolume.z) ? configuredVolume.z : defaultVolume.z,
+            };
 
-        // Add grid
-        var grid = createPrinterGrid();
-        scene.add(grid);
+            // Position the mesh centered on the virtual bed and adjust Z position.
+            const bedCenterX = gridVolume.x / 2;
+            const bedCenterY = gridVolume.y / 2;
+            mesh.position.set(bedCenterX, bedCenterY, zOffset);
+            scene.add(mesh);
 
-        // Set up camera and controls
-        const center = new THREE.Vector3(110, 110, zOffset);
-        const radius = Math.max(size.x, size.y, size.z) / 2;
+            // Add grid
+            var grid = createPrinterGrid(gridVolume);
+            scene.add(grid);
 
-        const fov = camera.fov * (Math.PI / 180);
-        let distance = radius / Math.sin(fov / 2);
-        distance *= 1.5;
+            // Set up camera and controls
+            const center = new THREE.Vector3(bedCenterX, bedCenterY, zOffset);
+            const radius = Math.max(size.x, size.y, size.z) / 2;
 
-        // Calculate tilt angle in radians
-        const tiltAngle = THREE.Math.degToRad(30);
+            const fov = camera.fov * (Math.PI / 180);
+            let distance = radius / Math.sin(fov / 2);
+            distance *= 1.5;
 
-        // Position camera with a 30-degree tilt around the X-axis
-        const cameraY = center.y - distance * Math.cos(tiltAngle);
-        const cameraZ = center.z + distance * Math.sin(tiltAngle);
-        camera.position.set(center.x, cameraY, cameraZ);
+            // Calculate tilt angle in radians
+            const tiltAngle = THREE.Math.degToRad(30);
 
-        camera.lookAt(center);
+            // Position camera with a 30-degree tilt around the X-axis
+            const cameraY = center.y - distance * Math.cos(tiltAngle);
+            const cameraZ = center.z + distance * Math.sin(tiltAngle);
+            camera.position.set(center.x, cameraY, cameraZ);
 
-        controls.target.copy(center);
-        controls.update();
+            camera.lookAt(center);
 
-        const sizeText = `(${size.x.toFixed(2)} x ${size.y.toFixed(2)} x ${size.z.toFixed(2)}) mm`;
-        sizeElement.innerText = sizeText;
-        sizeElement.style.fontSize = '0.875rem'; // Match file name size
-        sizeElement.style.color = '#888'; // Match file name color
-        sizeElement.style.fontFamily = 'sans-serif'; // Match file name font
-        sizeElement.style.textAlign = 'center'; // Match file name alignment
-        sizeElement.style.marginTop = '0.5em'; // Match file name margin
-        sizeElement.style.wordWrap = 'break-word'; // Match file name word wrap
-        sizeElement.style.overflowWrap = 'break-word'; // Match file name overflow wrap
-        sizeElement.style.hyphens = 'auto'; // Match file name hyphens
-        sizeElement.style.maxWidth = '100%'; // Match file name max width
-        sizeElement.style.padding = '0 5px'; // Match file name padding
-    });
+            controls.target.copy(center);
+            controls.update();
+
+            const sizeText = `(${size.x.toFixed(2)} x ${size.y.toFixed(2)} x ${size.z.toFixed(2)}) mm`;
+            sizeElement.innerText = sizeText;
+            sizeElement.style.fontSize = '0.875rem'; // Match file name size
+            sizeElement.style.color = '#888'; // Match file name color
+            sizeElement.style.fontFamily = 'sans-serif'; // Match file name font
+            sizeElement.style.textAlign = 'center'; // Match file name alignment
+            sizeElement.style.marginTop = '0.5em'; // Match file name margin
+            sizeElement.style.wordWrap = 'break-word'; // Match file name word wrap
+            sizeElement.style.overflowWrap = 'break-word'; // Match file name overflow wrap
+            sizeElement.style.hyphens = 'auto'; // Match file name hyphens
+            sizeElement.style.maxWidth = '100%'; // Match file name max width
+            sizeElement.style.padding = '0 5px'; // Match file name padding
+        },
+        undefined,
+        function (error) {
+            console.error('Failed to load STL from URL:', url, error);
+            if (sizeElement) {
+                sizeElement.innerText = 'Failed to load 3D model';
+                sizeElement.style.fontSize = '0.875rem';
+                sizeElement.style.color = '#c62828';
+            }
+        }
+    );
+}
+
+function loadSTLFile(stlFile, scene, controls, sizeElement, camera) {
+    const url = `/stl/${encodeURIComponent(stlFile)}`;
+    loadSTLFromUrl(url, scene, controls, sizeElement, camera);
 }
 
 // Shared animation and utility functions
@@ -620,6 +657,7 @@ window.createPrinterGrid = createPrinterGrid;
 window.createSTLItem = createSTLItem;
 window.createGCodeItem = createGCodeItem;
 window.createFileActionButtons = createFileActionButtons;
+window.loadSTLFromUrl = loadSTLFromUrl;
 window.loadSTLFile = loadSTLFile;
 window.loadGCodeFile = loadGCodeFile;
 window.loadMoonrakerStats = loadMoonrakerStats;

@@ -23,7 +23,7 @@ from trinetra.models import (
     init_database,
     create_session_factory,
 )
-from trinetra import gcode_handler, search
+from trinetra import gcode_handler, search, three_mf
 from trinetra.logger import get_logger
 from trinetra.moonraker import MoonrakerAPI
 from trinetra.moonraker_service import MoonrakerService
@@ -298,6 +298,40 @@ class DatabaseManager:
                 if folder_updated_at is not None:
                     folder.updated_at = folder_updated_at
 
+        # Also support standalone top-level 3MF files as virtual projects.
+        # Example: <base>/swirl_lamp.3mf -> folder entry "swirl_lamp"
+        for entry in os.scandir(stl_base_path):
+            if not entry.is_file():
+                continue
+            if not entry.name.lower().endswith(".3mf"):
+                continue
+
+            virtual_folder_name = os.path.splitext(entry.name)[0]
+            colliding_dir = os.path.join(stl_base_path, virtual_folder_name)
+            if os.path.isdir(colliding_dir):
+                # Real folder of same name takes precedence.
+                continue
+
+            existing_folder = (
+                session.query(Folder).filter(Folder.name == virtual_folder_name).first()
+            )
+            if existing_folder:
+                continue
+
+            try:
+                ctime = os.path.getctime(entry.path)
+                mtime = os.path.getmtime(entry.path)
+                created_at = datetime.fromtimestamp(ctime)
+                updated_at = datetime.fromtimestamp(mtime)
+            except OSError:
+                created_at = datetime.utcnow()
+                updated_at = datetime.utcnow()
+
+            session.add(
+                Folder(name=virtual_folder_name, created_at=created_at, updated_at=updated_at)
+            )
+            counts["folders"] += 1
+
         logger.debug(
             f"Total G-code files processed in _process_stl_base_path: {counts.get('gcode_files', 0)}"
         )
@@ -445,18 +479,21 @@ class DatabaseManager:
 
             for folder in folders:
                 stl_files = session.query(STLFile).filter(STLFile.folder_id == folder.id).all()
-                if stl_files:
-                    folder_files = []
-                    for stl_file in stl_files:
-                        folder_files.append(
-                            {"file_name": stl_file.file_name, "rel_path": stl_file.rel_path}
-                        )
+                three_mf_projects = self.get_folder_three_mf_projects(folder.name)
+                folder_files = []
+                for stl_file in stl_files:
+                    folder_files.append(
+                        {"file_name": stl_file.file_name, "rel_path": stl_file.rel_path}
+                    )
 
+                has_three_mf = bool(three_mf_projects)
+                if folder_files or has_three_mf:
                     result.append(
                         {
                             "folder_name": folder.name,
                             "top_level_folder": folder.name,
                             "files": folder_files,
+                            "three_mf_projects": three_mf_projects,
                         }
                     )
 
@@ -567,21 +604,23 @@ class DatabaseManager:
                         stl_query = stl_query.order_by(STLFile.updated_at.asc())
 
                 stl_files = stl_query.all()
+                three_mf_projects = self.get_folder_three_mf_projects(folder.name)
 
-                if stl_files:
-                    folder_files = []
-                    for stl_file in stl_files:
-                        folder_files.append(
-                            {"file_name": stl_file.file_name, "rel_path": stl_file.rel_path}
-                        )
+                folder_files = []
+                for stl_file in stl_files:
+                    folder_files.append(
+                        {"file_name": stl_file.file_name, "rel_path": stl_file.rel_path}
+                    )
 
+                has_three_mf = bool(three_mf_projects)
+                if folder_files or has_three_mf:
                     total_files += len(folder_files)
-
                     result.append(
                         {
                             "folder_name": folder.name,
                             "top_level_folder": folder.name,
                             "files": folder_files,
+                            "three_mf_projects": three_mf_projects,
                         }
                     )
 
@@ -736,6 +775,67 @@ class DatabaseManager:
                     seen.add(key)
 
             return stl_files, image_files, pdf_files, deduped_gcode_files
+
+    def get_folder_three_mf_projects(self, folder_name: str) -> List[Dict[str, Any]]:
+        """Get parsed 3MF project data for a folder."""
+        if not self.stl_base_path:
+            return []
+
+        folder_path = os.path.join(self.stl_base_path, folder_name)
+
+        results: List[Dict[str, Any]] = []
+        candidate_paths: List[str] = []
+
+        if os.path.isdir(folder_path):
+            for root, _dirs, files in os.walk(folder_path):
+                for file_name in files:
+                    if file_name.lower().endswith(".3mf"):
+                        candidate_paths.append(os.path.join(root, file_name))
+        else:
+            # Virtual folder support for top-level 3MF files:
+            # <base>/<folder_name>.3mf
+            root_three_mf = os.path.join(self.stl_base_path, f"{folder_name}.3mf")
+            if os.path.isfile(root_three_mf):
+                candidate_paths.append(root_three_mf)
+
+        for abs_path in candidate_paths:
+            file_name = os.path.basename(abs_path)
+            rel_path = os.path.relpath(abs_path, self.stl_base_path)
+
+            try:
+                parsed = three_mf.load_3mf_project(abs_path)
+                summary = three_mf.project_to_summary(parsed)
+                settings = three_mf.summarize_settings(
+                    summary.get("project_settings", {}), max_items=10
+                )
+                model_metadata = three_mf.summarize_model_metadata(
+                    summary.get("model_metadata", {}), max_items=4
+                )
+
+                results.append(
+                    {
+                        "file_name": file_name,
+                        "rel_path": rel_path,
+                        "model_metadata": model_metadata,
+                        "project_settings": settings,
+                        "plates": summary.get("plates", []),
+                    }
+                )
+            except Exception as e:
+                logger.warning(f"Failed to parse 3MF project {abs_path}: {e}")
+                results.append(
+                    {
+                        "file_name": file_name,
+                        "rel_path": rel_path,
+                        "model_metadata": {},
+                        "project_settings": {},
+                        "plates": [],
+                        "error": str(e),
+                    }
+                )
+
+        results.sort(key=lambda project: project["rel_path"])
+        return results
 
     def get_all_gcode_files(self) -> List[Dict[str, Any]]:
         """Get all G-code files with folder associations and stats."""

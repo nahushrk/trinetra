@@ -308,6 +308,7 @@ function loadSTLFiles(folders) {
         const folderName = folder['folder_name'];
         const topLevelFolder = folder['top_level_folder'];
         const files = folder['files'];
+        const threeMfProjects = folder['three_mf_projects'] || [];
 
         const folderContainer = document.createElement('div');
         folderContainer.className = 'folder-container';
@@ -363,6 +364,103 @@ function loadSTLFiles(folders) {
             observer.observe(containerElement);
         });
 
+        // Render 3MF plates in the same folder grid as STL files.
+        threeMfProjects.forEach(project => {
+            const plates = project['plates'] || [];
+            plates.forEach(plate => {
+                const scene = new THREE.Scene();
+                const containerElement = document.createElement('div');
+                containerElement.className = 'list-item col-md-4';
+
+                const sceneElement = document.createElement('div');
+                sceneElement.className = 'rendering';
+                containerElement.appendChild(sceneElement);
+
+                const descriptionElement = document.createElement('div');
+                descriptionElement.className = 'file-name';
+                const plateName = (plate.metadata || {}).plater_name || `Plate ${plate.index}`;
+                descriptionElement.innerText = `${project.file_name} - ${plateName}`;
+                descriptionElement.style.fontSize = '0.875rem';
+                descriptionElement.style.color = '#888';
+                containerElement.appendChild(descriptionElement);
+
+                const sizeElement = document.createElement('div');
+                containerElement.appendChild(sizeElement);
+
+                const detailsElement = document.createElement('div');
+                detailsElement.className = 'three-mf-key-values';
+
+                const filamentType = ((plate.filaments || [])[0] || {}).type || '';
+                const layerHeight = (project.project_settings || {}).layer_height || '';
+                const sparseInfillDensity = (project.project_settings || {}).sparse_infill_density || '';
+                const usageInfo = extractPlateUsageInfo(plate);
+
+                const details = [];
+                if (filamentType) details.push(`Material: ${filamentType}`);
+                if (layerHeight) details.push(`Layer Height: ${layerHeight}`);
+                if (sparseInfillDensity) details.push(`Infill: ${sparseInfillDensity}`);
+                if (plate.instance_count !== null && plate.instance_count !== undefined) details.push(`Instances: ${plate.instance_count}`);
+                if (usageInfo.printTime) details.push(`Time: ${usageInfo.printTime}`);
+                if (usageInfo.weight) details.push(`Weight: ${usageInfo.weight}`);
+                if (usageInfo.filamentUsed) details.push(`Filament: ${usageInfo.filamentUsed}`);
+                if (details.length > 0) {
+                    detailsElement.innerText = details.join(' | ');
+                }
+                containerElement.appendChild(detailsElement);
+
+                const buttonContainer = document.createElement('div');
+                buttonContainer.className = 'file-action-buttons';
+
+                const openFolderBtn = document.createElement('button');
+                openFolderBtn.className = 'file-action-btn download-stl';
+                openFolderBtn.innerText = 'Open Folder';
+                openFolderBtn.onclick = function () {
+                    window.location.href = `/folder/${encodeURIComponent(topLevelFolder)}`;
+                };
+                buttonContainer.appendChild(openFolderBtn);
+
+                containerElement.appendChild(buttonContainer);
+
+                scene.userData.element = sceneElement;
+                rowContainer.appendChild(containerElement);
+                scenes.push(scene);
+
+                const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 1000);
+                scene.userData.camera = camera;
+
+                const controls = new THREE.OrbitControls(camera, sceneElement);
+                controls.minDistance = 0.1;
+                controls.maxDistance = 1000;
+                controls.enablePan = true;
+                controls.enableZoom = true;
+                scene.userData.controls = controls;
+
+                scene.add(new THREE.HemisphereLight(0xaaaaaa, 0x444444, 1.5));
+                const light = new THREE.DirectionalLight(0xffffff, 1);
+                light.position.set(1, 1, 1).normalize();
+                scene.add(light);
+
+                const observer = new IntersectionObserver((entries) => {
+                    entries.forEach(entry => {
+                        if (!entry.isIntersecting) {
+                            return;
+                        }
+                        const plateUrl = `/3mf_plate?file=${encodeURIComponent(project.rel_path)}&plate=${encodeURIComponent(plate.index)}`;
+                        loadSTLFromUrl(
+                            plateUrl,
+                            scene,
+                            controls,
+                            sizeElement,
+                            camera
+                        );
+                        observer.unobserve(containerElement);
+                    });
+                }, observerOptions);
+
+                observer.observe(containerElement);
+            });
+        });
+
         folderContainer.appendChild(rowContainer);
         content.appendChild(folderContainer);
     });
@@ -372,6 +470,46 @@ function loadSTLFiles(folders) {
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setAnimationLoop(animate);
+}
+
+function extractPlateUsageInfo(plate) {
+    const sliceInfo = plate.slice_info || {};
+    const filaments = plate.filaments || [];
+
+    const printTime = sliceInfo.prediction || sliceInfo.estimated_time || sliceInfo.time || '';
+    let weight = sliceInfo.weight || sliceInfo.total_weight || sliceInfo.filament_weight || '';
+
+    let totalUsedG = 0;
+    let totalUsedM = 0;
+    filaments.forEach(filament => {
+        const g = parseFloat(filament.used_g);
+        const m = parseFloat(filament.used_m);
+        if (!Number.isNaN(g)) {
+            totalUsedG += g;
+        }
+        if (!Number.isNaN(m)) {
+            totalUsedM += m;
+        }
+    });
+
+    let filamentUsed = '';
+    if (totalUsedG > 0 && totalUsedM > 0) {
+        filamentUsed = `${totalUsedG.toFixed(2)}g / ${totalUsedM.toFixed(2)}m`;
+    } else if (totalUsedG > 0) {
+        filamentUsed = `${totalUsedG.toFixed(2)}g`;
+    } else if (totalUsedM > 0) {
+        filamentUsed = `${totalUsedM.toFixed(2)}m`;
+    }
+
+    if (!weight && totalUsedG > 0) {
+        weight = `${totalUsedG.toFixed(2)}g`;
+    }
+
+    return {
+        printTime: printTime,
+        weight: weight,
+        filamentUsed: filamentUsed,
+    };
 }
 
 function performSearch(searchTerm) {
