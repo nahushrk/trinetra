@@ -5,6 +5,8 @@ data/
 data*/
 .idea/
 .vscode/
+.cursor/
+.roo/
 
 .DS_Store
 trinetra-data*
@@ -175,3 +177,46 @@ cython_debug/
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
+
+# Security/privacy hardening for public repositories
+# Local env/config overrides
+.env.*
+!.env.example
+!.env.sample
+*.env.local
+*.local.env
+*.local.yaml
+*.local.yml
+*.local.json
+config.local.yaml
+config.local.yml
+config.dev.yaml
+tests/test_data/config.yaml
+
+# Secrets, keys, and certificates
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.crt
+*.cer
+*.der
+id_rsa
+id_rsa.*
+id_ed25519
+id_ed25519.*
+known_hosts
+authorized_keys
+
+# Local database/state artifacts
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.sqlite3-*
+*.pid
+
+# Generated reports
+report.html
