@@ -403,6 +403,58 @@ class TestSearchFunctions(unittest.TestCase):
             msg=f"Expected folder '18v_Overhead_Hanger_for_newer_w_led' in results for query '18v', got {folder_names}",
         )
 
+    def test_tokenize_text_handles_mixed_separators(self):
+        tokens = search.tokenize_text("Pegboard-hooks_us/model.files v2")
+        self.assertIn("pegboard", tokens)
+        self.assertIn("hooks", tokens)
+        self.assertIn("us", tokens)
+        self.assertIn("model", tokens)
+        self.assertIn("files", tokens)
+        self.assertIn("v", tokens)
+        self.assertIn("2", tokens)
+
+    def test_search_with_ranking_handles_separator_variants(self):
+        choices = ["pegboard-hooks-us-model_files", "drawer organizer", "dragon model"]
+        results = search.search_with_ranking("pegboard hooks", choices, limit=5)
+        self.assertGreater(len(results), 0)
+        self.assertEqual(results[0][0], "pegboard-hooks-us-model_files")
+
+    def test_search_with_ranking_handles_typos(self):
+        choices = ["pegboard", "benchy", "organizer"]
+        results = search.search_with_ranking("pegbord", choices, limit=5)
+        self.assertGreater(len(results), 0)
+        top_items = [item[0] for item in results[:3]]
+        self.assertIn("pegboard", top_items)
+
+    def test_build_fts_query_tokenizes_and_prefixes_terms(self):
+        built = search.build_fts_query("Pegboard-hooks/us")
+        assert built == "pegboard* AND hooks* AND us*"
+
+    def test_rank_search_documents_prefers_relevant_candidates(self):
+        documents = [
+            {
+                "entity_type": "folder",
+                "folder_id": 1,
+                "file_id": None,
+                "folder_name": "pegboard_hooks",
+                "file_name": "",
+                "rel_path": "pegboard_hooks",
+                "bm25": 0.3,
+            },
+            {
+                "entity_type": "folder",
+                "folder_id": 2,
+                "file_id": None,
+                "folder_name": "random_models",
+                "file_name": "",
+                "rel_path": "random_models",
+                "bm25": 0.1,
+            },
+        ]
+        ranked = search.rank_search_documents("pegboard hooks", documents, limit=10)
+        assert len(ranked) >= 1
+        assert ranked[0]["folder_name"] == "pegboard_hooks"
+
 
 @pytest.mark.parametrize(
     "query,expected_positives,expected_negatives",

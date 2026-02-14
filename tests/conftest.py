@@ -8,7 +8,10 @@ def playwright():
 
 @pytest.fixture
 def browser(playwright):
-    browser = playwright.chromium.launch(headless=True)
+    try:
+        browser = playwright.chromium.launch(headless=True)
+    except Exception as exc:  # pragma: no cover - environment-dependent
+        pytest.skip(f"Playwright browser unavailable in this environment: {exc}")
     yield browser
     browser.close()
 

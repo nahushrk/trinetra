@@ -1,82 +1,320 @@
-"""
-Advanced fuzzy search using hybrid scoring (Jaccard + Edit Distance)
-"""
+"""Robust search and ranking utilities for STL/G-code discovery."""
+
+from __future__ import annotations
 
 import re
-from typing import List, Tuple, Dict, Any
+import unicodedata
+from typing import Any, Dict, List, Tuple
+
 import Levenshtein
 
 from trinetra.logger import get_logger
 
-# Get logger for this module
 logger = get_logger(__name__)
 
 RANKING_THRESHOLD = 50
+_TOKEN_RE = re.compile(r"[a-z0-9]+")
+_ALNUM_SPLIT_RE = re.compile(r"(?<=[a-z])(?=\d)|(?<=\d)(?=[a-z])")
+
+
+def normalize_text(value: str) -> str:
+    """Normalize text for robust matching across separators and casing."""
+    lowered = unicodedata.normalize("NFKD", value or "").lower()
+    no_accents = "".join(ch for ch in lowered if not unicodedata.combining(ch))
+    # Unify separators so phrase and token matching can work consistently.
+    return re.sub(r"[^a-z0-9]+", " ", no_accents).strip()
+
+
+def tokenize_text(value: str) -> List[str]:
+    """Tokenize search text while handling mixed alpha-numeric segments."""
+    normalized = normalize_text(value)
+    if not normalized:
+        return []
+
+    tokens: List[str] = []
+    for token in _TOKEN_RE.findall(normalized):
+        if not token:
+            continue
+        tokens.append(token)
+        if any(ch.isdigit() for ch in token) and any(ch.isalpha() for ch in token):
+            parts = [part for part in _ALNUM_SPLIT_RE.split(token) if part]
+            tokens.extend(parts)
+
+    # Preserve order but drop duplicates.
+    seen = set()
+    deduped: List[str] = []
+    for token in tokens:
+        if token not in seen:
+            deduped.append(token)
+            seen.add(token)
+    return deduped
+
+
+def _trigrams(value: str) -> set[str]:
+    compact = normalize_text(value).replace(" ", "")
+    if len(compact) < 3:
+        return {compact} if compact else set()
+    return {compact[i : i + 3] for i in range(len(compact) - 2)}
 
 
 def jaccard_similarity(a: str, b: str) -> float:
-    """Compute Jaccard similarity between two strings"""
-    set_a = set(a.lower().split())
-    set_b = set(b.lower().split())
-    intersection = set_a & set_b
+    """Compute token Jaccard similarity."""
+    set_a = set(tokenize_text(a))
+    set_b = set(tokenize_text(b))
     union = set_a | set_b
-    return len(intersection) / len(union) if union else 0.0
+    return (len(set_a & set_b) / len(union)) if union else 0.0
 
 
 def normalized_edit_score(a: str, b: str) -> float:
-    """Compute normalized edit distance similarity score"""
-    dist = Levenshtein.distance(a.lower(), b.lower())
-    max_len = max(len(a), len(b))
-    return 1 - (dist / max_len) if max_len > 0 else 0.0
+    """Compute normalized edit-distance similarity score."""
+    a_norm = normalize_text(a)
+    b_norm = normalize_text(b)
+    max_len = max(len(a_norm), len(b_norm))
+    if max_len == 0:
+        return 0.0
+    dist = Levenshtein.distance(a_norm, b_norm)
+    return 1 - (dist / max_len)
 
 
-def compute_match_score(query: str, target: str) -> int:
+def _partial_ratio(query: str, target: str) -> float:
+    query_norm = normalize_text(query)
+    target_norm = normalize_text(target)
+    if not query_norm or not target_norm:
+        return 0.0
+    if query_norm in target_norm:
+        return 1.0
+
+    target_tokens = tokenize_text(target_norm)
+    if not target_tokens:
+        return 0.0
+    return max(Levenshtein.ratio(query_norm, token) for token in target_tokens)
+
+
+def _prefix_ratio(query_tokens: List[str], target_tokens: List[str]) -> float:
+    if not query_tokens or not target_tokens:
+        return 0.0
+    matched = 0
+    for query_token in query_tokens:
+        if any(target_token.startswith(query_token) for target_token in target_tokens):
+            matched += 1
+    return matched / len(query_tokens)
+
+
+def _token_typo_ratio(query_tokens: List[str], target_tokens: List[str]) -> float:
+    if not query_tokens or not target_tokens:
+        return 0.0
+    similarities = []
+    for query_token in query_tokens:
+        similarities.append(max(Levenshtein.ratio(query_token, t) for t in target_tokens))
+    return sum(similarities) / len(similarities)
+
+
+def _trigram_jaccard(query: str, target: str) -> float:
+    query_ngrams = _trigrams(query)
+    target_ngrams = _trigrams(target)
+    union = query_ngrams | target_ngrams
+    return (len(query_ngrams & target_ngrams) / len(union)) if union else 0.0
+
+
+def _adaptive_threshold(query: str) -> int:
+    compact = normalize_text(query).replace(" ", "")
+    size = len(compact)
+    if size <= 2:
+        return 82
+    if size <= 3:
+        return 75
+    if size <= 4:
+        return 63
+    if size <= 7:
+        return 38
+    return 35
+
+
+def _effective_threshold(query: str, threshold: int) -> int:
+    # Respect explicit custom thresholds but improve defaults for real-world fuzzy matching.
+    if threshold != RANKING_THRESHOLD:
+        return threshold
+    return _adaptive_threshold(query)
+
+
+def compute_match_score(query: str, target: str, bm25_norm: float = 0.0) -> int:
     """
-    Compute hybrid match score (0-100) using:
-    - Jaccard similarity (token-based)
-    - Normalized edit distance (character-based)
-    - Substring boost
+    Compute a robust hybrid score (0-100).
+    Features:
+    - exact/prefix token matching
+    - token overlap
+    - typo-tolerant token similarity
+    - partial/substring match
+    - trigram similarity
+    - optional FTS BM25 normalization
     """
-    jaccard = jaccard_similarity(query, target)
-    edit_sim = normalized_edit_score(query, target)
-    substring_boost = 1.0 if query.lower() in target.lower() else 0.0
-    # New weights: substring 0.5, jaccard 0.3, edit_sim 0.2
-    score = (0.2 * edit_sim + 0.3 * jaccard + 0.5 * substring_boost) * 100
-    return round(score)
+    query_norm = normalize_text(query)
+    target_norm = normalize_text(target)
+    if not query_norm or not target_norm:
+        return 0
+
+    query_tokens = tokenize_text(query_norm)
+    target_tokens = tokenize_text(target_norm)
+
+    token_overlap = jaccard_similarity(query_norm, target_norm)
+    prefix_ratio = _prefix_ratio(query_tokens, target_tokens)
+    typo_ratio = _token_typo_ratio(query_tokens, target_tokens)
+    partial_ratio = _partial_ratio(query_norm, target_norm)
+    trigram_ratio = _trigram_jaccard(query_norm, target_norm)
+    phrase_boost = 1.0 if query_norm in target_norm else 0.0
+    query_size = len(query_norm.replace(" ", ""))
+    if query_size <= 3:
+        # Short tokens are noisy; emphasize exact-prefix and phrase/partial matches.
+        score = (
+            0.45 * prefix_ratio
+            + 0.10 * token_overlap
+            + 0.20 * partial_ratio
+            + 0.15 * phrase_boost
+            + 0.10 * trigram_ratio
+        )
+    elif query_size <= 5:
+        score = (
+            0.27 * prefix_ratio
+            + 0.16 * token_overlap
+            + 0.20 * typo_ratio
+            + 0.13 * partial_ratio
+            + 0.14 * trigram_ratio
+            + 0.05 * phrase_boost
+            + 0.05 * max(0.0, min(1.0, bm25_norm))
+        )
+    else:
+        score = (
+            0.17 * prefix_ratio
+            + 0.18 * token_overlap
+            + 0.32 * typo_ratio
+            + 0.10 * partial_ratio
+            + 0.13 * trigram_ratio
+            + 0.05 * phrase_boost
+            + 0.05 * max(0.0, min(1.0, bm25_norm))
+        )
+    return round(max(0.0, min(1.0, score)) * 100)
 
 
 def search_with_ranking(
     query: str, choices: List[str], limit: int = 25, threshold: int = RANKING_THRESHOLD
 ) -> List[Tuple[str, int]]:
-    """
-    Search with hybrid fuzzy matching using Jaccard + Edit Distance
-    Args:
-        query: Search query string
-        choices: List of strings to search in
-        limit: Maximum number of results to return
-        threshold: Minimum similarity score (0-100) to include in results
-    Returns:
-        List of tuples (choice, score) sorted by score descending
-    """
+    """Search arbitrary choices and return ranked matches."""
     if not query.strip() or not choices:
-        logger.debug(f"Empty query or choices, returning empty results")
+        logger.debug("Empty query or choices, returning empty results")
         return []
 
+    effective_threshold = _effective_threshold(query, threshold)
     logger.debug(
-        f"[search_with_ranking] Searching for '{query}' in {len(choices)} choices with limit={limit}, threshold={threshold}"
+        "[search_with_ranking] Searching '%s' in %s choices (limit=%s threshold=%s effective=%s)",
+        query,
+        len(choices),
+        limit,
+        threshold,
+        effective_threshold,
     )
 
-    results = []
-    for item in choices:
-        score = compute_match_score(query, item)
-        logger.debug(f"[search_with_ranking] Query='{query}' vs Item='{item}' => Score={score}")
-        if score >= threshold:
-            results.append((item, score))
+    scored = [(choice, compute_match_score(query, choice)) for choice in choices]
+    results = [item for item in scored if item[1] >= effective_threshold]
+    if not results:
+        # Fallback: return top-scored candidates even if below threshold.
+        results = sorted(scored, key=lambda item: item[1], reverse=True)[:limit]
+        return [item for item in results if item[1] > 0]
 
-    # Sort by score descending
-    results.sort(key=lambda x: x[1], reverse=True)
-    logger.debug(f"[search_with_ranking] Results: {results[:5]} (top 5)")
+    results.sort(key=lambda item: item[1], reverse=True)
     return results[:limit]
+
+
+def build_fts_query(query: str, max_terms: int = 8) -> str:
+    """Build a prefix-query expression for SQLite FTS5 retrieval."""
+    tokens = [token for token in tokenize_text(query) if len(token) >= 2][:max_terms]
+    if not tokens:
+        return ""
+    unique_tokens = list(dict.fromkeys(tokens))
+    # Require all query terms but allow token-prefix matching.
+    return " AND ".join(f"{token}*" for token in unique_tokens)
+
+
+def rank_search_documents(
+    query: str,
+    documents: List[Dict[str, Any]],
+    limit: int = 250,
+    threshold: int = RANKING_THRESHOLD,
+) -> List[Dict[str, Any]]:
+    """
+    Rank structured search documents.
+    Expected document fields:
+    - folder_name (str)
+    - file_name (str, optional)
+    - rel_path (str, optional)
+    - bm25 (float, optional)
+    """
+    if not query.strip() or not documents:
+        return []
+
+    bm25_values = [doc.get("bm25") for doc in documents if isinstance(doc.get("bm25"), (int, float))]
+    bm25_min = min(bm25_values) if bm25_values else None
+    bm25_max = max(bm25_values) if bm25_values else None
+
+    effective_threshold = _effective_threshold(query, threshold)
+    scored_documents: List[Dict[str, Any]] = []
+
+    for document in documents:
+        target_parts = [
+            str(document.get("folder_name") or ""),
+            str(document.get("file_name") or ""),
+            str(document.get("rel_path") or ""),
+        ]
+        target_text = " ".join(part for part in target_parts if part).strip()
+        if not target_text:
+            continue
+
+        bm25_norm = 0.0
+        raw_bm25 = document.get("bm25")
+        if (
+            bm25_min is not None
+            and bm25_max is not None
+            and isinstance(raw_bm25, (int, float))
+            and bm25_max > bm25_min
+        ):
+            # Lower BM25 rank is better; invert to [0,1].
+            bm25_norm = (bm25_max - float(raw_bm25)) / (bm25_max - bm25_min)
+
+        score = compute_match_score(query, target_text, bm25_norm=bm25_norm)
+        if score >= effective_threshold:
+            ranked = dict(document)
+            ranked["score"] = score
+            scored_documents.append(ranked)
+
+    if not scored_documents:
+        # If threshold removed everything, return best positive-score docs.
+        fallback_ranked = []
+        for document in documents:
+            target_text = " ".join(
+                part
+                for part in [
+                    str(document.get("folder_name") or ""),
+                    str(document.get("file_name") or ""),
+                    str(document.get("rel_path") or ""),
+                ]
+                if part
+            )
+            score = compute_match_score(query, target_text)
+            if score > 0:
+                ranked = dict(document)
+                ranked["score"] = score
+                fallback_ranked.append(ranked)
+        fallback_ranked.sort(key=lambda item: item["score"], reverse=True)
+        return fallback_ranked[:limit]
+
+    scored_documents.sort(
+        key=lambda item: (
+            item.get("score", 0),
+            item.get("folder_name", ""),
+            item.get("file_name", ""),
+        ),
+        reverse=True,
+    )
+    return scored_documents[:limit]
 
 
 def search_files_and_folders(
@@ -85,127 +323,75 @@ def search_files_and_folders(
     limit: int = 25,
     threshold: int = RANKING_THRESHOLD,
 ) -> List[Dict[str, Any]]:
-    """
-    Search through STL files and folders, returning ranked results.
-    Args:
-        query: Search query string
-        stl_folders: List of folder dictionaries with files
-        limit: Maximum number of results to return
-        threshold: Minimum similarity score (0-100) to include in results
-    Returns:
-        List of folder dictionaries with matching files, ranked by relevance
-    """
-    logger.debug(
-        f"[search_files_and_folders] Query='{query}', limit={limit}, threshold={threshold}"
-    )
+    """Search STL folders/files and return ranked folder-level results."""
     if not query.strip():
-        logger.debug("Empty query, returning all folders")
         return stl_folders
 
-    logger.debug(f"Searching files and folders for '{query}' in {len(stl_folders)} folders")
-
-    # Collect all searchable strings (folder names and file names)
-    searchable_items = []
-    folder_mapping = {}  # Map searchable item to its folder
+    effective_threshold = _effective_threshold(query, threshold)
+    ranked_folders: List[Dict[str, Any]] = []
 
     for folder in stl_folders:
-        folder_name = folder["folder_name"]
-        searchable_items.append(folder_name)
-        folder_mapping[folder_name] = folder
+        folder_name = str(folder.get("folder_name", ""))
+        folder_score = compute_match_score(query, folder_name)
+        files = list(folder.get("files", []))
 
-        for file_info in folder["files"]:
-            file_name = file_info["file_name"]
-            searchable_items.append(file_name)
-            folder_mapping[file_name] = folder
+        matched_files: List[Tuple[Dict[str, Any], int]] = []
+        for file_info in files:
+            file_name = str(file_info.get("file_name", ""))
+            rel_path = str(file_info.get("rel_path", ""))
+            score = compute_match_score(query, f"{file_name} {rel_path}")
+            if score >= effective_threshold:
+                matched_files.append((file_info, score))
 
-    logger.debug(f"Created searchable index with {len(searchable_items)} items")
+        top_file_score = max((score for _, score in matched_files), default=0)
+        top_folder_score = max(folder_score, top_file_score)
+        if top_folder_score < effective_threshold:
+            continue
 
-    # Perform fuzzy search
-    search_results = search_with_ranking(query, searchable_items, limit=limit, threshold=threshold)
-    logger.debug(f"[search_files_and_folders] search_results: {search_results}")
-
-    # Group results by folder and calculate folder scores
-    folder_scores = {}
-    for item, score in search_results:
-        folder = folder_mapping[item]
-        folder_name = folder["folder_name"]
-
-        if folder_name not in folder_scores:
-            folder_scores[folder_name] = {"folder": folder.copy(), "score": 0, "matches": []}
-
-        # Use the highest score for the folder
-        folder_scores[folder_name]["score"] = max(folder_scores[folder_name]["score"], score)
-        folder_scores[folder_name]["matches"].append((item, score))
-
-    # Sort folders by total score and limit results
-    sorted_folders = sorted(folder_scores.values(), key=lambda x: x["score"], reverse=True)[:limit]
-
-    logger.debug(f"Returning {len(sorted_folders)} matching folders")
-
-    # Return folders with their files
-    result_folders = []
-    for folder_data in sorted_folders:
-        folder = folder_data["folder"]
-        matches = folder_data["matches"]
-
-        # If folder name matches, include all files
-        # If only file names match, filter to matching files
-        folder_name_matches = any(item == folder["folder_name"] for item, _ in matches)
-
-        if folder_name_matches:
-            result_folders.append(folder)
+        result_folder = dict(folder)
+        if folder_score >= effective_threshold:
+            # Strong folder-name hit keeps all files.
+            pass
         else:
-            # Only include files that matched
-            matching_files = []
-            for file_info in folder["files"]:
-                if any(item == file_info["file_name"] for item, _ in matches):
-                    matching_files.append(file_info)
+            matched_files.sort(key=lambda item: item[1], reverse=True)
+            result_folder["files"] = [file_info for file_info, _score in matched_files]
 
-            if matching_files:
-                result_folder = folder.copy()
-                result_folder["files"] = matching_files
-                result_folders.append(result_folder)
+        result_folder["_score"] = top_folder_score
+        ranked_folders.append(result_folder)
 
-    logger.debug(
-        f"[search_files_and_folders] Final result_folders: {[f['folder_name'] for f in result_folders]}"
+    ranked_folders.sort(
+        key=lambda item: (item.get("_score", 0), item.get("folder_name", "")), reverse=True
     )
-    return result_folders
+    output = ranked_folders[:limit]
+    for folder in output:
+        folder.pop("_score", None)
+    return output
 
 
 def search_gcode_files(
     query: str, gcode_files: List[Dict[str, Any]], limit: int = 25
 ) -> List[Dict[str, Any]]:
-    """
-    Search through G-code files with fuzzy matching.
-
-    Args:
-        query: Search query string
-        gcode_files: List of G-code file dictionaries
-        limit: Maximum number of results to return
-
-    Returns:
-        List of matching G-code file dictionaries, ranked by relevance
-    """
+    """Search G-code files with robust fuzzy matching."""
     if not query.strip():
-        logger.debug("Empty query, returning all G-code files")
         return gcode_files
 
-    logger.debug(f"Searching G-code files for '{query}' in {len(gcode_files)} files")
+    ranked: List[Tuple[int, Dict[str, Any]]] = []
+    threshold = _effective_threshold(query, RANKING_THRESHOLD)
+    for file_info in gcode_files:
+        file_name = str(file_info.get("file_name", ""))
+        rel_path = str(file_info.get("rel_path", ""))
+        folder_name = str(file_info.get("folder_name", ""))
+        score = compute_match_score(query, f"{folder_name} {file_name} {rel_path}")
+        if score >= threshold:
+            ranked.append((score, file_info))
 
-    # Extract file names for search
-    file_names = [file_info["file_name"] for file_info in gcode_files]
-
-    # Perform fuzzy search
-    search_results = search_with_ranking(query, file_names, limit=limit)
-
-    # Map results back to file dictionaries
-    result_files = []
-    for file_name, score in search_results:
-        # Find the corresponding file dictionary
+    if not ranked:
+        # Fallback to best effort for very noisy query shapes.
         for file_info in gcode_files:
-            if file_info["file_name"] == file_name:
-                result_files.append(file_info)
-                break
+            file_name = str(file_info.get("file_name", ""))
+            score = compute_match_score(query, file_name)
+            if score > 0:
+                ranked.append((score, file_info))
 
-    logger.debug(f"Found {len(result_files)} matching G-code files")
-    return result_files
+    ranked.sort(key=lambda item: item[0], reverse=True)
+    return [file_info for _score, file_info in ranked[:limit]]

@@ -7,10 +7,10 @@ import os
 import logging
 import re
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Dict, Any, Tuple, Optional
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, or_, text
 
 from trinetra.models import (
     Base,
@@ -46,10 +46,272 @@ class DatabaseManager:
         logger.info(f"Database initialized at {db_path}")
         self.stl_base_path = None
         self.gcode_base_path = None
+        self._search_index_available = False
+        self._ensure_search_index()
+        self.rebuild_search_index()
 
     def get_session(self) -> Session:
         """Get a new database session."""
         return self.SessionFactory()
+
+    def _ensure_search_index(self) -> None:
+        """Initialize SQLite FTS5 search index for STL discovery."""
+        try:
+            with self.engine.begin() as connection:
+                connection.execute(
+                    text(
+                        """
+                        CREATE VIRTUAL TABLE IF NOT EXISTS stl_search_index
+                        USING fts5(
+                            entity_type UNINDEXED,
+                            folder_id UNINDEXED,
+                            file_id UNINDEXED,
+                            folder_name,
+                            file_name,
+                            rel_path,
+                            tokenize='unicode61'
+                        )
+                        """
+                    )
+                )
+            self._search_index_available = True
+        except Exception as exc:
+            self._search_index_available = False
+            logger.warning("FTS5 index unavailable; search will use Python fallback: %s", exc)
+
+    def rebuild_search_index(self) -> None:
+        """Rebuild search index from current database rows."""
+        if not self._search_index_available:
+            return
+        with self.get_session() as session:
+            self._rebuild_search_index_locked(session)
+            session.commit()
+
+    def _rebuild_search_index_locked(self, session: Session) -> None:
+        """Rebuild FTS table inside an existing session."""
+        if not self._search_index_available:
+            return
+        session.execute(text("DELETE FROM stl_search_index"))
+        session.execute(
+            text(
+                """
+                INSERT INTO stl_search_index(
+                    entity_type, folder_id, file_id, folder_name, file_name, rel_path
+                )
+                SELECT
+                    'folder',
+                    CAST(f.id AS TEXT),
+                    '',
+                    f.name,
+                    '',
+                    f.name
+                FROM folders AS f
+                """
+            )
+        )
+        session.execute(
+            text(
+                """
+                INSERT INTO stl_search_index(
+                    entity_type, folder_id, file_id, folder_name, file_name, rel_path
+                )
+                SELECT
+                    'file',
+                    CAST(f.id AS TEXT),
+                    CAST(s.id AS TEXT),
+                    f.name,
+                    s.file_name,
+                    s.rel_path
+                FROM stl_files AS s
+                INNER JOIN folders AS f ON f.id = s.folder_id
+                """
+            )
+        )
+
+    def _parse_int(self, value: Any) -> Optional[int]:
+        try:
+            if value in (None, "", "None"):
+                return None
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+
+    def _filter_cutoff(self, filter_type: str) -> Optional[datetime]:
+        if filter_type == "today":
+            return datetime.utcnow() - timedelta(hours=24)
+        if filter_type == "week":
+            return datetime.utcnow() - timedelta(days=7)
+        return None
+
+    def _apply_stl_sorting(self, query, sort_by: str, sort_order: str):
+        descending = sort_order.lower() == "desc"
+        if sort_by == "file_name":
+            order_column = STLFile.file_name
+        elif sort_by == "created_at":
+            order_column = STLFile.created_at
+        elif sort_by == "updated_at":
+            order_column = STLFile.updated_at
+        else:
+            order_column = STLFile.file_name
+        return query.order_by(order_column.desc() if descending else order_column.asc())
+
+    def _fetch_fts_candidates(self, session: Session, query_text: str, limit: int) -> List[Dict[str, Any]]:
+        if not self._search_index_available:
+            return []
+        fts_query = search.build_fts_query(query_text)
+        if not fts_query:
+            return []
+
+        try:
+            rows = session.execute(
+                text(
+                    """
+                    SELECT
+                        entity_type,
+                        folder_id,
+                        file_id,
+                        folder_name,
+                        file_name,
+                        rel_path,
+                        bm25(stl_search_index) AS bm25
+                    FROM stl_search_index
+                    WHERE stl_search_index MATCH :fts_query
+                    ORDER BY bm25(stl_search_index)
+                    LIMIT :limit
+                    """
+                ),
+                {"fts_query": fts_query, "limit": int(limit)},
+            ).mappings()
+            return [
+                {
+                    "entity_type": row.get("entity_type") or "",
+                    "folder_id": self._parse_int(row.get("folder_id")),
+                    "file_id": self._parse_int(row.get("file_id")),
+                    "folder_name": row.get("folder_name") or "",
+                    "file_name": row.get("file_name") or "",
+                    "rel_path": row.get("rel_path") or "",
+                    "bm25": float(row.get("bm25", 0.0)),
+                }
+                for row in rows
+            ]
+        except Exception as exc:
+            logger.warning("FTS candidate query failed, using fallback: %s", exc)
+            return []
+
+    def _fetch_fallback_candidates(self, session: Session) -> List[Dict[str, Any]]:
+        folders = session.query(Folder.id, Folder.name).all()
+        files = (
+            session.query(STLFile.id, STLFile.folder_id, STLFile.file_name, STLFile.rel_path, Folder.name)
+            .join(Folder, Folder.id == STLFile.folder_id)
+            .all()
+        )
+
+        candidates: List[Dict[str, Any]] = []
+        for folder_id, folder_name in folders:
+            candidates.append(
+                {
+                    "entity_type": "folder",
+                    "folder_id": folder_id,
+                    "file_id": None,
+                    "folder_name": folder_name or "",
+                    "file_name": "",
+                    "rel_path": folder_name or "",
+                }
+            )
+
+        for file_id, folder_id, file_name, rel_path, folder_name in files:
+            candidates.append(
+                {
+                    "entity_type": "file",
+                    "folder_id": folder_id,
+                    "file_id": file_id,
+                    "folder_name": folder_name or "",
+                    "file_name": file_name or "",
+                    "rel_path": rel_path or "",
+                }
+            )
+        return candidates
+
+    def _search_folder_matches(
+        self,
+        session: Session,
+        query_text: str,
+        filter_type: str,
+        limit: int = 400,
+    ) -> List[Dict[str, Any]]:
+        candidates = self._fetch_fts_candidates(session, query_text, max(limit, 200))
+        if len(candidates) < 40:
+            fallback_candidates = self._fetch_fallback_candidates(session)
+            seen = {
+                (item.get("entity_type"), item.get("folder_id"), item.get("file_id"))
+                for item in candidates
+            }
+            for candidate in fallback_candidates:
+                key = (
+                    candidate.get("entity_type"),
+                    candidate.get("folder_id"),
+                    candidate.get("file_id"),
+                )
+                if key not in seen:
+                    candidates.append(candidate)
+                    seen.add(key)
+
+        ranked = search.rank_search_documents(query_text, candidates, limit=max(limit, 300))
+        if not ranked:
+            return []
+
+        cutoff = self._filter_cutoff(filter_type)
+        allowed_folder_ids = None
+        allowed_file_ids = None
+        if cutoff is not None:
+            allowed_folder_ids = {
+                folder_id
+                for (folder_id,) in session.query(Folder.id).filter(Folder.created_at >= cutoff).all()
+            }
+            allowed_file_ids = {
+                file_id
+                for (file_id,) in session.query(STLFile.id).filter(STLFile.created_at >= cutoff).all()
+            }
+
+        folder_matches: Dict[int, Dict[str, Any]] = {}
+        for match in ranked:
+            folder_id = self._parse_int(match.get("folder_id"))
+            if folder_id is None:
+                continue
+
+            entity_type = str(match.get("entity_type", ""))
+            file_id = self._parse_int(match.get("file_id"))
+
+            if cutoff is not None:
+                if entity_type == "folder":
+                    if folder_id not in allowed_folder_ids:
+                        continue
+                elif entity_type == "file":
+                    if file_id is None or file_id not in allowed_file_ids:
+                        continue
+
+            bucket = folder_matches.setdefault(
+                folder_id,
+                {
+                    "folder_id": folder_id,
+                    "folder_name": match.get("folder_name", ""),
+                    "score": 0,
+                    "folder_name_matched": False,
+                    "matched_file_ids": set(),
+                },
+            )
+            score = int(match.get("score", 0))
+            if score > bucket["score"]:
+                bucket["score"] = score
+
+            if entity_type == "folder":
+                bucket["folder_name_matched"] = True
+            elif entity_type == "file" and file_id is not None:
+                bucket["matched_file_ids"].add(file_id)
+
+        ordered = list(folder_matches.values())
+        ordered.sort(key=lambda item: (item["score"], item["folder_name"]), reverse=True)
+        return ordered
 
     def reload_index(
         self,
@@ -119,6 +381,7 @@ class DatabaseManager:
                     else:
                         counts[key] = value
 
+            self._rebuild_search_index_locked(session)
             session.commit()
 
             # Update Moonraker stats if URL is provided
@@ -522,27 +785,93 @@ class DatabaseManager:
             filter_text: Text to filter folders/files by
             filter_type: Type of filter to apply ('all', 'today')
         """
+        page = max(1, int(page or 1))
+        per_page = int(per_page or 15)
+        if per_page <= 0:
+            per_page = 15
+        per_page = min(per_page, 200)
+
         with self.get_session() as session:
+            if (filter_text or "").strip():
+                folder_matches = self._search_folder_matches(
+                    session,
+                    query_text=filter_text,
+                    filter_type=filter_type,
+                    limit=max(500, per_page * 40),
+                )
+                total_folders = len(folder_matches)
+                paged_matches = folder_matches[(page - 1) * per_page : page * per_page]
+                folder_ids = [match["folder_id"] for match in paged_matches]
+                folders_map = {}
+                if folder_ids:
+                    folders = session.query(Folder).filter(Folder.id.in_(folder_ids)).all()
+                    folders_map = {folder.id: folder for folder in folders}
+
+                cutoff = self._filter_cutoff(filter_type)
+                result: List[Dict[str, Any]] = []
+                total_files = 0
+
+                for match in paged_matches:
+                    folder = folders_map.get(match["folder_id"])
+                    if not folder:
+                        continue
+
+                    stl_query = session.query(STLFile).filter(STLFile.folder_id == folder.id)
+                    if cutoff is not None:
+                        stl_query = stl_query.filter(STLFile.created_at >= cutoff)
+
+                    if not match.get("folder_name_matched"):
+                        matched_file_ids = list(match.get("matched_file_ids", set()))
+                        if matched_file_ids:
+                            stl_query = stl_query.filter(STLFile.id.in_(matched_file_ids))
+                        else:
+                            stl_query = stl_query.filter(text("1=0"))
+
+                    stl_query = self._apply_stl_sorting(stl_query, sort_by, sort_order)
+                    stl_files = stl_query.all()
+                    three_mf_projects = self.get_folder_three_mf_projects(folder.name)
+
+                    folder_files = [
+                        {"file_name": stl_file.file_name, "rel_path": stl_file.rel_path}
+                        for stl_file in stl_files
+                    ]
+
+                    has_three_mf = bool(three_mf_projects)
+                    if folder_files or has_three_mf:
+                        total_files += len(folder_files)
+                        result.append(
+                            {
+                                "folder_name": folder.name,
+                                "top_level_folder": folder.name,
+                                "files": folder_files,
+                                "three_mf_projects": three_mf_projects,
+                            }
+                        )
+
+                return {
+                    "folders": result,
+                    "pagination": {
+                        "page": page,
+                        "per_page": per_page,
+                        "total_folders": total_folders,
+                        "total_files": total_files,
+                        "total_pages": (total_folders + per_page - 1) // per_page,
+                    },
+                    "filter": {
+                        "text": filter_text,
+                        "type": filter_type,
+                        "sort_by": sort_by,
+                        "sort_order": sort_order,
+                    },
+                }
+
             # Base query for folders
             query = session.query(Folder)
+            cutoff = self._filter_cutoff(filter_type)
 
             # Apply filter type
-            if filter_type == "today":
-                # Filter folders created within the last 24 hours
-                from datetime import datetime, timedelta
-
-                twenty_four_hours_ago = datetime.utcnow() - timedelta(hours=24)
-                query = query.filter(Folder.created_at >= twenty_four_hours_ago)
-            elif filter_type == "week":
-                # Filter folders created within the last 7 days
-                from datetime import datetime, timedelta
-
-                seven_days_ago = datetime.utcnow() - timedelta(days=7)
-                query = query.filter(Folder.created_at >= seven_days_ago)
-
-            # Apply text filtering if provided
-            if filter_text:
-                query = query.filter(Folder.name.contains(filter_text))
+            if cutoff is not None:
+                query = query.filter(Folder.created_at >= cutoff)
 
             # Apply sorting
             if sort_by == "folder_name":
@@ -573,39 +902,9 @@ class DatabaseManager:
                 stl_query = session.query(STLFile).filter(STLFile.folder_id == folder.id)
 
                 # Apply filter type to files
-                if filter_type == "today":
-                    # Filter files created within the last 24 hours
-                    from datetime import datetime, timedelta
-
-                    twenty_four_hours_ago = datetime.utcnow() - timedelta(hours=24)
-                    stl_query = stl_query.filter(STLFile.created_at >= twenty_four_hours_ago)
-                elif filter_type == "week":
-                    # Filter files created within the last 7 days
-                    from datetime import datetime, timedelta
-
-                    seven_days_ago = datetime.utcnow() - timedelta(days=7)
-                    stl_query = stl_query.filter(STLFile.created_at >= seven_days_ago)
-
-                # Apply file-level filtering if provided
-                if filter_text:
-                    stl_query = stl_query.filter(STLFile.file_name.contains(filter_text))
-
-                # Apply sorting to files
-                if sort_by == "file_name":
-                    if sort_order.lower() == "desc":
-                        stl_query = stl_query.order_by(STLFile.file_name.desc())
-                    else:
-                        stl_query = stl_query.order_by(STLFile.file_name.asc())
-                elif sort_by == "created_at":
-                    if sort_order.lower() == "desc":
-                        stl_query = stl_query.order_by(STLFile.created_at.desc())
-                    else:
-                        stl_query = stl_query.order_by(STLFile.created_at.asc())
-                elif sort_by == "updated_at":
-                    if sort_order.lower() == "desc":
-                        stl_query = stl_query.order_by(STLFile.updated_at.desc())
-                    else:
-                        stl_query = stl_query.order_by(STLFile.updated_at.asc())
+                if cutoff is not None:
+                    stl_query = stl_query.filter(STLFile.created_at >= cutoff)
+                stl_query = self._apply_stl_sorting(stl_query, sort_by, sort_order)
 
                 stl_files = stl_query.all()
                 three_mf_projects = self.get_folder_three_mf_projects(folder.name)
@@ -1059,8 +1358,53 @@ class DatabaseManager:
 
     def search_stl_files(self, query: str, limit: int = 25) -> List[Dict[str, Any]]:
         """Search STL files and folders."""
-        stl_folders = self.get_stl_files()
-        return search.search_files_and_folders(query, stl_folders, limit)
+        if not query.strip():
+            return self.get_stl_files()
+
+        with self.get_session() as session:
+            folder_matches = self._search_folder_matches(
+                session,
+                query_text=query,
+                filter_type="all",
+                limit=max(200, limit * 20),
+            )[:limit]
+            if not folder_matches:
+                return []
+
+            folder_ids = [match["folder_id"] for match in folder_matches]
+            folders = session.query(Folder).filter(Folder.id.in_(folder_ids)).all()
+            folders_map = {folder.id: folder for folder in folders}
+
+            result: List[Dict[str, Any]] = []
+            for match in folder_matches:
+                folder = folders_map.get(match["folder_id"])
+                if not folder:
+                    continue
+
+                stl_query = session.query(STLFile).filter(STLFile.folder_id == folder.id)
+                if not match.get("folder_name_matched"):
+                    matched_file_ids = list(match.get("matched_file_ids", set()))
+                    if matched_file_ids:
+                        stl_query = stl_query.filter(STLFile.id.in_(matched_file_ids))
+                    else:
+                        stl_query = stl_query.filter(text("1=0"))
+
+                stl_files = stl_query.order_by(STLFile.file_name.asc()).all()
+                folder_files = [
+                    {"file_name": stl_file.file_name, "rel_path": stl_file.rel_path}
+                    for stl_file in stl_files
+                ]
+                three_mf_projects = self.get_folder_three_mf_projects(folder.name)
+                if folder_files or three_mf_projects:
+                    result.append(
+                        {
+                            "folder_name": folder.name,
+                            "top_level_folder": folder.name,
+                            "files": folder_files,
+                            "three_mf_projects": three_mf_projects,
+                        }
+                    )
+            return result
 
     def search_gcode_files(self, query: str, limit: int = 25) -> List[Dict[str, Any]]:
         """Search G-code files."""
@@ -1095,6 +1439,7 @@ class DatabaseManager:
             if folder:
                 session.delete(folder)
                 session.commit()
+                self.rebuild_search_index()
                 return True
             return False
 
@@ -1122,6 +1467,7 @@ class DatabaseManager:
             )
             session.add(folder)
             session.commit()
+            self.rebuild_search_index()
             return folder
 
     def add_stl_file(
@@ -1162,6 +1508,7 @@ class DatabaseManager:
                 folder.updated_at = file_updated_at
 
             session.commit()
+            self.rebuild_search_index()
             return stl_file
 
     def update_moonraker_stats(

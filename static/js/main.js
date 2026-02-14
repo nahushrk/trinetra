@@ -47,27 +47,10 @@ function init() {
             hideUploadModal();
         }
     });
-
-    // Get data from data attributes
-    const contentDiv = document.getElementById('content');
-    const stlFilesData = contentDiv ? contentDiv.getAttribute('data-stl-files') : null;
-    let initialStlFiles = [];
-    if (stlFilesData) {
-        try {
-            // Check if stlFilesData is already an object (not a string)
-            if (typeof stlFilesData === 'object') {
-                initialStlFiles = stlFilesData.folders || stlFilesData;
-            } else {
-                // Try to parse as JSON
-                const parsedData = JSON.parse(stlFilesData);
-                initialStlFiles = parsedData.folders || parsedData;
-            }
-        } catch (e) {
-            console.error('Error parsing STL files data:', e);
-        }
+    const urlParams = new URLSearchParams(window.location.search);
+    if (searchInput && urlParams.has('filter')) {
+        searchInput.value = urlParams.get('filter') || '';
     }
-
-    loadSTLFiles(initialStlFiles);
 
     // Initialize sort/filter dropdowns
     if (typeof initSortFilterDropdowns !== 'undefined') {
@@ -513,21 +496,6 @@ function extractPlateUsageInfo(plate) {
     };
 }
 
-function performSearch(searchTerm) {
-    fetch(`/search?q=${encodeURIComponent(searchTerm)}`)
-        .then(response => response.json())
-        .then(data => {
-            loadSTLFiles(data.stl_files);
-            updateMetadata(data.metadata.matches);
-        });
-}
-
-function updateMetadata(matches) {
-    const metadataDiv = document.getElementById('metadata');
-    metadataDiv.innerText = `Number of matches: ${matches}`;
-    metadataDiv.style.color = 'grey';
-}
-
 // View management functions
 let currentView = 'paginated'; // 'infinite-scroll' or 'paginated'
 let currentPage = 1;
@@ -543,24 +511,26 @@ document.addEventListener('DOMContentLoaded', function() {
         paginationControls.style.display = 'flex';
     }
     
-    // Load first page
-    loadPage(1);
+    const urlParams = new URLSearchParams(window.location.search);
+    const initialPage = parseInt(urlParams.get('page')) || 1;
+    loadPage(initialPage, {pushState: false});
 });
 
-function loadPage(page) {
+function loadPage(page, options = {}) {
+    const pushState = options.pushState !== false;
     currentPage = page;
     
     // Get filter and sort options
     const searchInput = document.getElementById('search-input');
     const sortBySelect = document.getElementById('sort-by');
     const sortOrderSelect = document.getElementById('sort-order');
+    const urlParams = new URLSearchParams(window.location.search);
     
     const filterText = searchInput ? searchInput.value : '';
-    const sortBy = sortBySelect ? sortBySelect.value : 'folder_name';
-    const sortOrder = sortOrderSelect ? sortOrderSelect.value : 'asc';
+    const sortBy = sortBySelect ? sortBySelect.value : (urlParams.get('sort_by') || 'folder_name');
+    const sortOrder = sortOrderSelect ? sortOrderSelect.value : (urlParams.get('sort_order') || 'asc');
     
     // Get filter type from URL parameters
-    const urlParams = new URLSearchParams(window.location.search);
     const filterType = urlParams.get('filter_type') || 'all';
     
     // Update current values
@@ -569,9 +539,19 @@ function loadPage(page) {
     currentSortOrder = sortOrder;
     
     // Update URL without page reload
-    const newUrl = new URL(window.location);
-    newUrl.searchParams.set('page', page);
-    window.history.pushState({}, '', newUrl);
+    if (pushState) {
+        const newUrl = new URL(window.location);
+        newUrl.searchParams.set('page', page);
+        newUrl.searchParams.set('sort_by', sortBy);
+        newUrl.searchParams.set('sort_order', sortOrder);
+        newUrl.searchParams.set('filter_type', filterType);
+        if (filterText) {
+            newUrl.searchParams.set('filter', filterText);
+        } else {
+            newUrl.searchParams.delete('filter');
+        }
+        window.history.pushState({}, '', newUrl);
+    }
     
     // Make API call
     const url = `/api/stl_files?page=${page}&filter=${encodeURIComponent(filterText)}&sort_by=${encodeURIComponent(sortBy)}&sort_order=${encodeURIComponent(sortOrder)}&filter_type=${encodeURIComponent(filterType)}`;
@@ -697,30 +677,12 @@ function updatePaginationControls(pagination) {
 }
 
 function refreshCurrentView() {
-    if (currentView === 'paginated') {
-        loadPage(1); // Reload first page with new sort/filter options
-    } else {
-        // For infinite scroll, we would normally reapply filters
-        // But for now, we'll just reload with current settings
-        performSearch(currentFilter);
-    }
+    loadPage(1);
 }
 
-// Override performSearch to work with both views
 function performSearch(searchTerm) {
-    if (currentView === 'paginated') {
-        // For paginated view, update filter and reload first page
-        currentFilter = searchTerm;
-        loadPage(1);
-    } else {
-        // For infinite scroll view, use existing search functionality
-        fetch(`/search?q=${encodeURIComponent(searchTerm)}`)
-            .then(response => response.json())
-            .then(data => {
-                loadSTLFiles(data.stl_files);
-                updateMetadata(data.metadata.matches);
-            });
-    }
+    currentFilter = searchTerm;
+    loadPage(1);
 }
 
 // Handle browser back/forward buttons
@@ -728,7 +690,10 @@ window.addEventListener('popstate', function(event) {
     // Get page from URL parameters
     const urlParams = new URLSearchParams(window.location.search);
     const page = parseInt(urlParams.get('page')) || 1;
+    const searchInput = document.getElementById('search-input');
+    if (searchInput) {
+        searchInput.value = urlParams.get('filter') || '';
+    }
     
-    // Load the page
-    loadPage(page);
+    loadPage(page, {pushState: false});
 });

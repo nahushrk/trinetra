@@ -50,6 +50,13 @@ class TestAppRoutes:
             "search_result_limit": 25,
             "moonraker_url": "http://localhost:7125",
             "mode": "DEV",
+            "library": {
+                "history": {
+                    "enabled": True,
+                    "ttl_days": 180,
+                    "cleanup_trigger": "refresh",
+                }
+            },
         }
         self.app = create_app(config_overrides=self.config)
         self.client = self.app.test_client()
@@ -195,6 +202,61 @@ class TestAppRoutes:
         assert target_folder is not None
         assert "three_mf_projects" in target_folder
         assert len(target_folder["three_mf_projects"]) == 1
+
+    def test_api_stl_files_fuzzy_search_matches_separator_variants(self):
+        folder_path = os.path.join(self.stl_path, "pegboard-hooks-us-model_files")
+        os.makedirs(folder_path, exist_ok=True)
+        with open(os.path.join(folder_path, "F45 Long hook 3IN.STL"), "w", encoding="utf-8") as f:
+            f.write("solid test\nendsolid test\n")
+
+        self.client.post("/reload_index")
+        response = self.client.get(
+            "/api/stl_files?filter=pegboard hooks&per_page=10&page=1&sort_by=folder_name&sort_order=asc"
+        )
+        assert response.status_code == 200
+        payload = json.loads(response.data)
+        folder_names = [folder["folder_name"] for folder in payload["folders"]]
+        assert "pegboard-hooks-us-model_files" in folder_names
+
+    def test_api_stl_files_fuzzy_search_handles_typo(self):
+        folder_path = os.path.join(self.stl_path, "pegboard-hooks-us-model_files")
+        os.makedirs(folder_path, exist_ok=True)
+        with open(os.path.join(folder_path, "F45 Long hook 2IN.STL"), "w", encoding="utf-8") as f:
+            f.write("solid test\nendsolid test\n")
+
+        self.client.post("/reload_index")
+        response = self.client.get("/api/stl_files?filter=pegbord&per_page=10&page=1")
+        assert response.status_code == 200
+        payload = json.loads(response.data)
+        folder_names = [folder["folder_name"] for folder in payload["folders"]]
+        assert "pegboard-hooks-us-model_files" in folder_names
+
+    def test_api_stl_files_search_pagination_stays_consistent(self):
+        for idx in range(7):
+            folder_path = os.path.join(self.stl_path, f"pegboard_set_{idx}")
+            os.makedirs(folder_path, exist_ok=True)
+            with open(os.path.join(folder_path, f"hook_{idx}.stl"), "w", encoding="utf-8") as f:
+                f.write("solid test\nendsolid test\n")
+
+        self.client.post("/reload_index")
+
+        page_1_response = self.client.get("/api/stl_files?filter=pegboard&per_page=3&page=1")
+        page_2_response = self.client.get("/api/stl_files?filter=pegboard&per_page=3&page=2")
+
+        assert page_1_response.status_code == 200
+        assert page_2_response.status_code == 200
+
+        page_1_payload = json.loads(page_1_response.data)
+        page_2_payload = json.loads(page_2_response.data)
+
+        assert page_1_payload["pagination"]["total_folders"] == 7
+        assert page_1_payload["pagination"]["total_pages"] == 3
+        assert len(page_1_payload["folders"]) == 3
+        assert len(page_2_payload["folders"]) == 3
+
+        page_1_names = {folder["folder_name"] for folder in page_1_payload["folders"]}
+        page_2_names = {folder["folder_name"] for folder in page_2_payload["folders"]}
+        assert page_1_names.isdisjoint(page_2_names)
 
     def test_serve_file_route(self):
         """Test serving general files"""
