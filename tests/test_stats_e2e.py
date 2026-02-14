@@ -6,7 +6,7 @@ def test_stats_page_loads(page, base_url):
     """Test basic page load with correct title and no errors"""
     response = page.goto(f"{base_url}/stats", wait_until="networkidle")
     assert response.ok, f"Failed to load stats page: {response.status}"
-    expect(page).to_have_title("Statistics - Trinetra 3D Model Manager")
+    expect(page).to_have_title("Statistics - Trinetra")
     
     # Verify key elements are present and have content
     expect(page.locator('[data-test-id="stat-total-folders"]')).to_be_visible(timeout=15000)

@@ -59,7 +59,7 @@
 </div>
 
 <!-- Hidden file input for uploads -->
-<input type="file" id="file-input" style="display: none;" multiple accept=".zip,.3mf,.gcode" data-test-id="file-input">
+<input type="file" id="file-input" style="display: none;" multiple accept=".zip,.stl,.3mf,.gcode" data-test-id="file-input">
 
 <!-- Upload Progress Modal -->
 <div id="upload-modal" class="upload-modal" data-test-id="upload-modal">
@@ -68,25 +68,21 @@
             <h3 class="upload-modal-title">Importing Files</h3>
             <span class="upload-modal-close" id="upload-modal-close" data-test-id="upload-modal-close">&times;</span>
         </div>
-        <div class="upload-progress">
-            <div class="upload-progress-bar">
-                <div class="upload-progress-fill" id="upload-progress-fill" data-test-id="upload-progress-fill"></div>
+        <div class="upload-modal-body">
+            <div class="upload-progress">
+                <div class="upload-progress-bar">
+                    <div class="upload-progress-fill" id="upload-progress-fill" data-test-id="upload-progress-fill"></div>
+                </div>
+                <div class="upload-progress-text" id="upload-progress-text" data-test-id="upload-progress-text">Preparing upload...</div>
+                <div style="text-align: center;">
+                    <div class="upload-timer" id="upload-timer" data-test-id="upload-timer">00:00</div>
+                </div>
             </div>
-            <div class="upload-progress-text" id="upload-progress-text" data-test-id="upload-progress-text">Preparing upload...</div>
-            <div style="text-align: center;">
-                <div class="upload-timer" id="upload-timer" data-test-id="upload-timer">00:00</div>
-            </div>
-        </div>
-        <div id="upload-status" class="upload-status info" data-test-id="upload-status">
-            Ready to upload
-        </div>
-        <div id="upload-conflict-dialog" class="upload-conflict-dialog" style="display: none;" data-test-id="upload-conflict-dialog">
-            <strong>Name Conflict:</strong> One or more files/folders with the same name already exist.<br>
-            What would you like to do?
-            <div class="upload-conflict-buttons">
-                <button class="upload-conflict-btn stop" id="upload-stop-btn" data-test-id="upload-stop-btn">Stop All</button>
-                <button class="upload-conflict-btn skip" id="upload-skip-btn" data-test-id="upload-skip-btn">Skip Existing</button>
-                <button class="upload-conflict-btn overwrite" id="upload-overwrite-btn" data-test-id="upload-overwrite-btn">Overwrite</button>
+            <div class="upload-status-panel">
+                <div id="upload-status" class="upload-status info" data-test-id="upload-status">
+                    Ready to upload
+                </div>
+                <div id="upload-status-log" class="upload-status-log" data-test-id="upload-status-log"></div>
             </div>
         </div>
     </div>

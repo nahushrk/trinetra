@@ -60,22 +60,24 @@ function init() {
 
 let uploadStartTime = null;
 let uploadTimerInterval = null;
+const supportedUploadExtensions = ['.zip', '.stl', '.3mf', '.gcode'];
 
 function showUploadModal() {
     const modal = document.getElementById('upload-modal');
     const progressFill = document.getElementById('upload-progress-fill');
     const progressText = document.getElementById('upload-progress-text');
     const status = document.getElementById('upload-status');
+    const statusLog = document.getElementById('upload-status-log');
     const timer = document.getElementById('upload-timer');
-    
+
     modal.style.display = 'block';
     progressFill.style.width = '0%';
     progressText.textContent = 'Preparing upload...';
     status.textContent = 'Ready to upload';
     status.className = 'upload-status info';
+    statusLog.innerHTML = '';
     timer.textContent = '00:00';
-    
-    // Reset timer variables
+
     uploadStartTime = null;
     if (uploadTimerInterval) {
         clearInterval(uploadTimerInterval);
@@ -86,8 +88,7 @@ function showUploadModal() {
 function hideUploadModal() {
     const modal = document.getElementById('upload-modal');
     modal.style.display = 'none';
-    
-    // Clear timer interval
+
     if (uploadTimerInterval) {
         clearInterval(uploadTimerInterval);
         uploadTimerInterval = null;
@@ -97,191 +98,211 @@ function hideUploadModal() {
 function startUploadTimer() {
     uploadStartTime = Date.now();
     const timer = document.getElementById('upload-timer');
-    
+
     uploadTimerInterval = setInterval(() => {
         const elapsed = Date.now() - uploadStartTime;
         const seconds = Math.floor(elapsed / 1000);
         const minutes = Math.floor(seconds / 60);
         const remainingSeconds = seconds % 60;
-        
+
         timer.textContent = `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
     }, 1000);
 }
 
-function updateUploadProgress(percent, text, statusType = 'info', statusText = null) {
-    const progressFill = document.getElementById('upload-progress-fill');
-    const progressText = document.getElementById('upload-progress-text');
-    const status = document.getElementById('upload-status');
-    
-    progressFill.style.width = percent + '%';
-    progressText.textContent = text;
-    
-    if (statusText) {
-        status.textContent = statusText;
-        status.className = `upload-status ${statusType}`;
+function stopUploadTimer() {
+    if (uploadTimerInterval) {
+        clearInterval(uploadTimerInterval);
+        uploadTimerInterval = null;
     }
 }
 
-async function checkFolderExists(folderName) {
-    const response = await fetch('/check_folder_exists', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ folder_name: folderName })
-    });
-    const data = await response.json();
-    return data.exists;
+function updateUploadProgress(percent, text) {
+    const progressFill = document.getElementById('upload-progress-fill');
+    const progressText = document.getElementById('upload-progress-text');
+
+    progressFill.style.width = percent + '%';
+    progressText.textContent = text;
+}
+
+function setUploadSummary(statusType, summaryText) {
+    const status = document.getElementById('upload-status');
+    status.textContent = summaryText;
+    status.className = `upload-status ${statusType}`;
+}
+
+function appendUploadLog(message, level = 'info') {
+    const statusLog = document.getElementById('upload-status-log');
+    const entry = document.createElement('div');
+    entry.className = `upload-log-entry ${level}`;
+    entry.textContent = message;
+    statusLog.appendChild(entry);
+    statusLog.scrollTop = statusLog.scrollHeight;
+}
+
+function getUploadExtension(filename) {
+    const dotIndex = filename.lastIndexOf('.');
+    return dotIndex >= 0 ? filename.slice(dotIndex).toLowerCase() : '';
+}
+
+function isSupportedUploadFile(filename) {
+    return supportedUploadExtensions.includes(getUploadExtension(filename));
+}
+
+function formatBatchSummary(totalFiles, successCount, skippedCount, errorCount) {
+    return `Batch finished: ${successCount} uploaded, ${skippedCount} skipped, ${errorCount} failed (total ${totalFiles}).`;
+}
+
+async function uploadSingleFile(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('conflict_action', 'skip');
+    formData.append('refresh_index', 'false');
+
+    let response;
+    try {
+        response = await fetch('/upload', {
+            method: 'POST',
+            body: formData
+        });
+    } catch (error) {
+        return {
+            status: 'error',
+            filename: file.name,
+            error: `Network error: ${error.message || 'upload request failed'}`
+        };
+    }
+
+    let data = {};
+    try {
+        data = await response.json();
+    } catch (error) {
+        return {
+            status: 'error',
+            filename: file.name,
+            error: 'Server returned an invalid response'
+        };
+    }
+
+    if (!response.ok || !data.success) {
+        return {
+            status: 'error',
+            filename: file.name,
+            error: data.error || `Upload failed with status ${response.status}`
+        };
+    }
+
+    const result = Array.isArray(data.results) ? data.results[0] : null;
+    if (!result) {
+        return {
+            status: 'error',
+            filename: file.name,
+            error: 'Upload completed but returned no result entry'
+        };
+    }
+    return result;
+}
+
+async function refreshIndexAfterBatchUpload() {
+    const response = await fetch('/reload_index?mode=files', { method: 'POST' });
+    let data = {};
+    try {
+        data = await response.json();
+    } catch (error) {
+        return { ok: false, error: 'Invalid reload response' };
+    }
+    return {
+        ok: response.ok && data.success === true,
+        error: data.error || null,
+    };
 }
 
 async function uploadFiles(files) {
-    // Validate files are supported upload types
-    for (const file of files) {
-        const name = file.name.toLowerCase();
-        if (!name.endsWith('.zip') && !name.endsWith('.3mf') && !name.endsWith('.gcode')) {
-            updateUploadProgress(0, 'Upload failed', 'error', 'Only ZIP, 3MF, and GCODE files are allowed.');
+    const selectedFiles = Array.from(files || []);
+    if (selectedFiles.length === 0) {
+        return;
+    }
+
+    showUploadModal();
+
+    for (const file of selectedFiles) {
+        if (!isSupportedUploadFile(file.name)) {
+            updateUploadProgress(0, 'Upload failed');
+            setUploadSummary('error', 'Only ZIP, STL, 3MF, and GCODE files are allowed.');
+            appendUploadLog(`[ERROR] ${file.name}: unsupported file type`, 'error');
             return;
         }
     }
-    showUploadModal();
-    // First, always send with conflict_action=check
-    const formData = new FormData();
-    for (const file of files) {
-        formData.append('file', file);
-    }
-    formData.append('conflict_action', 'check');
-    updateUploadProgress(10, 'Checking for conflicts...', 'info', 'Checking for file/folder conflicts...');
-    // Send the check request
-    const response = await fetch('/upload', {
-        method: 'POST',
-        body: formData
-    });
-    const data = await response.json();
-    if (data.ask_user) {
-        // There are conflicts, show dialog
-        const conflictDialog = document.getElementById('upload-conflict-dialog');
-        conflictDialog.style.display = 'block';
-        document.getElementById('upload-modal-close').style.pointerEvents = 'none';
-        // Show the list of conflicts as a <ul>
-        const conflictList = data.conflicts.map(f => `<li>${f}</li>`).join('');
-        conflictDialog.querySelector('strong').innerHTML = `Name Conflict:<br>Conflicting items:<ul style='color:#dc3545; margin: 0 0 0 1em;'>${conflictList}</ul>`;
-        return new Promise((resolve) => {
-            const stopBtn = document.getElementById('upload-stop-btn');
-            const skipBtn = document.getElementById('upload-skip-btn');
-            const overwriteBtn = document.getElementById('upload-overwrite-btn');
-            function cleanup() {
-                conflictDialog.style.display = 'none';
-                document.getElementById('upload-modal-close').style.pointerEvents = '';
-                stopBtn.removeEventListener('click', onStop);
-                skipBtn.removeEventListener('click', onSkip);
-                overwriteBtn.removeEventListener('click', onOverwrite);
-            }
-            function onStop() {
-                cleanup();
-                hideUploadModal();
-                resolve();
-            }
-            function onSkip() {
-                cleanup();
-                actuallyUploadFiles(files, 'skip');
-                resolve();
-            }
-            function onOverwrite() {
-                cleanup();
-                actuallyUploadFiles(files, 'overwrite');
-                resolve();
-            }
-            stopBtn.addEventListener('click', onStop);
-            skipBtn.addEventListener('click', onSkip);
-            overwriteBtn.addEventListener('click', onOverwrite);
-        });
-    } else if (data.success) {
-        // No conflicts, upload already done, show results
-        updateUploadProgress(100, 'Upload complete!', 'success', 'Files uploaded successfully!');
-        if (uploadTimerInterval) {
-            clearInterval(uploadTimerInterval);
-            uploadTimerInterval = null;
-        }
-        let resultText = 'Upload Results:<br>';
-        data.results.forEach(result => {
-            if (result.status === 'success') {
-                resultText += `✓ ${result.filename} - ${result.folder_name}`;
-                if (result.folder_existed) {
-                    resultText += ' (overwritten)';
-                }
-                resultText += '<br>';
-            } else if (result.status === 'skipped') {
-                resultText += `⏭️ ${result.filename} - ${result.folder_name} (skipped)<br>`;
-            } else {
-                resultText += `✗ ${result.filename} - Error: ${result.error}<br>`;
-            }
-        });
-        const status = document.getElementById('upload-status');
-        status.innerHTML = resultText;
-        status.className = 'upload-status success';
-    } else {
-        // Some other error
-        updateUploadProgress(0, 'Upload failed', 'error', data.error || 'Upload failed');
-        if (uploadTimerInterval) {
-            clearInterval(uploadTimerInterval);
-            uploadTimerInterval = null;
-        }
-    }
-}
 
-function actuallyUploadFiles(files, conflictAction) {
-    if (!files || files.length === 0) return;
-    showUploadModal();
-    const formData = new FormData();
-    for (const file of files) {
-        formData.append('file', file);
-    }
-    formData.append('conflict_action', conflictAction);
-    updateUploadProgress(10, 'Uploading files...', 'info', 'Uploading files to server...');
+    let successCount = 0;
+    let skippedCount = 0;
+    let errorCount = 0;
+    const totalFiles = selectedFiles.length;
+
+    setUploadSummary('info', `Uploading ${totalFiles} file(s)...`);
     startUploadTimer();
-    fetch('/upload', {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            updateUploadProgress(100, 'Upload complete!', 'success', 'Files uploaded successfully!');
-            if (uploadTimerInterval) {
-                clearInterval(uploadTimerInterval);
-                uploadTimerInterval = null;
-            }
-            let resultText = 'Upload Results:<br>';
-            data.results.forEach(result => {
-                if (result.status === 'success') {
-                    resultText += `✓ ${result.filename} - ${result.folder_name}`;
-                    if (result.folder_existed) {
-                        resultText += ' (overwritten)';
-                    }
-                    resultText += '<br>';
-                } else if (result.status === 'skipped') {
-                    resultText += `⏭️ ${result.filename} - ${result.folder_name} (skipped)<br>`;
-                } else {
-                    resultText += `✗ ${result.filename} - Error: ${result.error}<br>`;
-                }
-            });
-            const status = document.getElementById('upload-status');
-            status.innerHTML = resultText;
-            status.className = 'upload-status success';
+
+    for (let idx = 0; idx < selectedFiles.length; idx++) {
+        const file = selectedFiles[idx];
+        const current = idx + 1;
+
+        updateUploadProgress(
+            Math.round((idx / totalFiles) * 100),
+            `Uploading ${current}/${totalFiles}: ${file.name}`
+        );
+
+        const result = await uploadSingleFile(file);
+        const label = result.folder_name || result.filename || file.name;
+
+        if (result.status === 'success') {
+            successCount += 1;
+            appendUploadLog(`[OK] ${result.filename} -> ${label}`, 'success');
+        } else if (result.status === 'skipped') {
+            skippedCount += 1;
+            appendUploadLog(`[SKIP] ${result.filename}: skipped (name conflict)`, 'skipped');
         } else {
-            updateUploadProgress(0, 'Upload failed', 'error', data.error || 'Upload failed');
-            if (uploadTimerInterval) {
-                clearInterval(uploadTimerInterval);
-                uploadTimerInterval = null;
+            errorCount += 1;
+            appendUploadLog(`[ERROR] ${result.filename}: ${result.error || 'upload failed'}`, 'error');
+        }
+
+        setUploadSummary('info', formatBatchSummary(totalFiles, successCount, skippedCount, errorCount));
+        updateUploadProgress(
+            Math.round((current / totalFiles) * 90),
+            `Processed ${current}/${totalFiles} files`
+        );
+    }
+
+    updateUploadProgress(95, 'Refreshing library index...');
+    try {
+        const refreshResult = await refreshIndexAfterBatchUpload();
+        if (refreshResult.ok) {
+            appendUploadLog('Index refresh completed.', 'success');
+            // Jump to first page so newly uploaded models are visible immediately.
+            if (typeof loadPage === 'function') {
+                loadPage(1);
             }
+        } else {
+            appendUploadLog(
+                `Index refresh failed${refreshResult.error ? `: ${refreshResult.error}` : ''}. Data may be stale until next refresh.`,
+                'error'
+            );
+            errorCount += 1;
         }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        updateUploadProgress(0, 'Upload failed', 'error', 'An error occurred during upload');
-        if (uploadTimerInterval) {
-            clearInterval(uploadTimerInterval);
-            uploadTimerInterval = null;
-        }
-    });
+    } catch (error) {
+        appendUploadLog(`Index refresh failed: ${error.message || 'unknown error'}`, 'error');
+        errorCount += 1;
+    }
+
+    stopUploadTimer();
+    updateUploadProgress(100, 'Upload complete');
+    setUploadSummary(
+        errorCount > 0 ? 'error' : 'success',
+        formatBatchSummary(totalFiles, successCount, skippedCount, errorCount)
+    );
+
+    const fileInput = document.getElementById('file-input');
+    if (fileInput) {
+        fileInput.value = '';
+    }
 }
 
 function loadSTLFiles(folders) {
@@ -500,8 +521,10 @@ function extractPlateUsageInfo(plate) {
 let currentView = 'paginated'; // 'infinite-scroll' or 'paginated'
 let currentPage = 1;
 let currentFilter = '';
-let currentSortBy = 'folder_name';
-let currentSortOrder = 'asc';
+const defaultSortBy = 'created_at';
+const defaultSortOrder = 'desc';
+let currentSortBy = defaultSortBy;
+let currentSortOrder = defaultSortOrder;
 
 // Initialize with paginated view
 document.addEventListener('DOMContentLoaded', function() {
@@ -527,8 +550,8 @@ function loadPage(page, options = {}) {
     const urlParams = new URLSearchParams(window.location.search);
     
     const filterText = searchInput ? searchInput.value : '';
-    const sortBy = sortBySelect ? sortBySelect.value : (urlParams.get('sort_by') || 'folder_name');
-    const sortOrder = sortOrderSelect ? sortOrderSelect.value : (urlParams.get('sort_order') || 'asc');
+    const sortBy = sortBySelect ? sortBySelect.value : (urlParams.get('sort_by') || defaultSortBy);
+    const sortOrder = sortOrderSelect ? sortOrderSelect.value : (urlParams.get('sort_order') || defaultSortOrder);
     
     // Get filter type from URL parameters
     const filterType = urlParams.get('filter_type') || 'all';

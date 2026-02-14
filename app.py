@@ -1,6 +1,8 @@
 import io
 import logging
 import os
+import shutil
+import tempfile
 import zipfile
 from datetime import datetime, timedelta
 
@@ -35,6 +37,8 @@ DEFAULT_LIBRARY_HISTORY_SETTINGS = {
     "ttl_days": 180,
     "cleanup_trigger": "refresh",
 }
+DEFAULT_STL_SORT_BY = "created_at"
+DEFAULT_STL_SORT_ORDER = "desc"
 POPULAR_PRINTERS = [
     {"id": "bambu_a1_mini", "name": "Bambu Lab A1 mini", "x": 180, "y": 180, "z": 180},
     {"id": "bambu_a1", "name": "Bambu Lab A1", "x": 256, "y": 256, "z": 256},
@@ -331,8 +335,8 @@ def create_app(config_file=None, config_overrides=None):
         # Check if pagination is requested
         page = request.args.get("page", 1, type=int)
         per_page = request.args.get("per_page", 15, type=int)
-        sort_by = request.args.get("sort_by", "folder_name")
-        sort_order = request.args.get("sort_order", "asc")
+        sort_by = request.args.get("sort_by", DEFAULT_STL_SORT_BY)
+        sort_order = request.args.get("sort_order", DEFAULT_STL_SORT_ORDER)
         filter_text = request.args.get("filter", "")
         filter_type = request.args.get("filter_type", "all")
 
@@ -463,7 +467,7 @@ def create_app(config_file=None, config_overrides=None):
 
     @app.route("/upload", methods=["POST"])
     def upload():
-        allowed_extensions = {".zip", ".3mf", ".gcode"}
+        allowed_extensions = {".zip", ".3mf", ".gcode", ".stl"}
 
         def get_extension(filename: str) -> str:
             return os.path.splitext(filename)[1].lower()
@@ -473,59 +477,74 @@ def create_app(config_file=None, config_overrides=None):
             if ext == ".zip":
                 folder_name = os.path.splitext(filename)[0]
                 return "zip", os.path.join(app.config["STL_FILES_PATH"], folder_name)
+            if ext == ".stl":
+                folder_name = os.path.splitext(filename)[0]
+                return "stl", os.path.join(app.config["STL_FILES_PATH"], folder_name)
             if ext == ".3mf":
                 return "3mf", os.path.join(app.config["STL_FILES_PATH"], filename)
             if ext == ".gcode":
                 return "gcode", os.path.join(app.config["GCODE_FILES_PATH"], filename)
             return "unknown", ""
 
-        conflict_action = request.form.get("conflict_action", "check")
+        def parse_bool_form(key: str, default: bool = True) -> bool:
+            raw_value = str(request.form.get(key, str(default))).strip().lower()
+            return raw_value not in {"0", "false", "no", "off"}
+
+        conflict_action = str(request.form.get("conflict_action", "skip")).strip().lower()
+        if conflict_action not in {"check", "skip", "overwrite"}:
+            conflict_action = "skip"
+        refresh_index = parse_bool_form("refresh_index", True)
         if "file" not in request.files:
             return jsonify({"error": "No file part"}), 400
-        files = request.files.getlist("file")
+        raw_files = request.files.getlist("file")
+        if not raw_files:
+            return jsonify({"error": "No files selected"}), 400
+
+        files = []
+        for file in raw_files:
+            filename = secure_filename(file.filename or "")
+            if not filename:
+                continue
+            ext = get_extension(filename)
+            if ext not in allowed_extensions:
+                return jsonify({"error": "Only ZIP, STL, 3MF, and GCODE files are allowed"}), 400
+            files.append((file, filename))
         if not files:
             return jsonify({"error": "No files selected"}), 400
-        # Only accept supported file types
-        for file in files:
-            ext = get_extension(file.filename or "")
-            if ext not in allowed_extensions:
-                return jsonify({"error": "Only ZIP, 3MF, and GCODE files are allowed"}), 400
+
         # Step 1: Check for conflicts if conflict_action is missing or 'check'
         if conflict_action == "check":
             conflicts = []
-            for file in files:
-                filename = secure_filename(file.filename)
-                if not filename:
-                    continue
+            for _, filename in files:
                 upload_kind, target_path = upload_target_for(filename)
                 if target_path and os.path.exists(target_path):
-                    if upload_kind == "zip":
+                    if upload_kind in {"zip", "stl"}:
                         conflicts.append(os.path.splitext(filename)[0])
                     else:
                         conflicts.append(filename)
             if conflicts:
                 return jsonify({"ask_user": True, "conflicts": conflicts}), 200
             # If no conflicts, proceed as normal (fall through)
+
         # Step 2: Actually process files (skip/overwrite)
         results = []
-        for file in files:
-            filename = secure_filename(file.filename)
-            if not filename:
-                continue
+        for file, filename in files:
             ext = get_extension(filename)
             upload_kind, target_path = upload_target_for(filename)
-            item_name = os.path.splitext(filename)[0] if upload_kind == "zip" else filename
+            item_name = (
+                os.path.splitext(filename)[0] if upload_kind in {"zip", "stl"} else filename
+            )
             item_exists = target_path and os.path.exists(target_path)
 
-            # If skipping, skip existing conflicting items
-            if conflict_action == "skip" and item_exists:
+            # Skip existing items by default. Overwrite only when explicitly requested.
+            if conflict_action != "overwrite" and item_exists:
                 results.append(
                     {
                         "filename": filename,
                         "folder_name": item_name,
                         "status": "skipped",
                         "folder_existed": True,
-                        "error": "Item already exists, skipped as per user choice.",
+                        "error": "Item already exists, skipped.",
                     }
                 )
                 continue
@@ -539,14 +558,13 @@ def create_app(config_file=None, config_overrides=None):
                 try:
                     with zipfile.ZipFile(temp_zip_path, "r") as zip_ref:
                         if folder_exists:
-                            import shutil
-
-                            shutil.rmtree(extract_to)
+                            if os.path.isdir(extract_to):
+                                shutil.rmtree(extract_to)
+                            else:
+                                os.remove(extract_to)
                         os.makedirs(extract_to, exist_ok=True)
 
                         # Extract to a temporary location first to handle folder duplication
-                        import tempfile
-
                         with tempfile.TemporaryDirectory() as temp_dir:
                             safe_extract(zip_ref, temp_dir)
 
@@ -563,33 +581,17 @@ def create_app(config_file=None, config_overrides=None):
                                 for item in os.listdir(source_folder):
                                     source_path = os.path.join(source_folder, item)
                                     dest_path = os.path.join(extract_to, item)
-                                    if os.path.isdir(source_path):
-                                        import shutil
-
-                                        shutil.move(source_path, dest_path)
-                                    else:
-                                        import shutil
-
-                                        shutil.move(source_path, dest_path)
+                                    shutil.move(source_path, dest_path)
                             else:
                                 # Normal case: move all contents from temp_dir to extract_to
                                 for item in os.listdir(temp_dir):
                                     source_path = os.path.join(temp_dir, item)
                                     dest_path = os.path.join(extract_to, item)
-                                    if os.path.isdir(source_path):
-                                        import shutil
-
-                                        shutil.move(source_path, dest_path)
-                                    else:
-                                        import shutil
-
-                                        shutil.move(source_path, dest_path)
+                                    shutil.move(source_path, dest_path)
 
                         # Remove __MACOSX folder if present
                         macosx_path = os.path.join(extract_to, "__MACOSX")
                         if os.path.exists(macosx_path):
-                            import shutil
-
                             shutil.rmtree(macosx_path, ignore_errors=True)
                     results.append(
                         {
@@ -612,6 +614,36 @@ def create_app(config_file=None, config_overrides=None):
                 finally:
                     if os.path.exists(temp_zip_path):
                         os.remove(temp_zip_path)
+            elif upload_kind == "stl" and target_path:
+                try:
+                    file_dir = target_path
+                    file_path = os.path.join(file_dir, filename)
+                    folder_exists = os.path.exists(file_dir)
+                    if folder_exists and conflict_action == "overwrite":
+                        if os.path.isdir(file_dir):
+                            shutil.rmtree(file_dir)
+                        else:
+                            os.remove(file_dir)
+                    os.makedirs(file_dir, exist_ok=True)
+                    file.save(file_path)
+                    results.append(
+                        {
+                            "filename": filename,
+                            "folder_name": item_name,
+                            "status": "success",
+                            "folder_existed": bool(folder_exists),
+                        }
+                    )
+                except Exception as e:
+                    app.logger.error(f"Error saving STL file {filename}: {e}")
+                    results.append(
+                        {
+                            "filename": filename,
+                            "folder_name": item_name,
+                            "status": "error",
+                            "error": str(e),
+                        }
+                    )
             elif upload_kind in {"3mf", "gcode"} and target_path:
                 try:
                     target_dir = os.path.dirname(target_path)
@@ -644,28 +676,31 @@ def create_app(config_file=None, config_overrides=None):
                         "error": f"Unsupported file type: {ext}",
                     }
                 )
-        # Refresh DB index once after all upload processing is complete.
+        # Refresh DB index once after all upload processing is complete (optional).
         index_refresh = {"success": False}
-        try:
-            moonraker_url = get_enabled_moonraker_url()
-            moonraker_client = get_enabled_moonraker_client()
-            counts = db_manager.reload_index(
-                app.config["STL_FILES_PATH"],
-                app.config["GCODE_FILES_PATH"],
-                moonraker_url,
-                moonraker_client,
-            )
-            bambu_sync = sync_bambu_history(cleanup_expired=True)
-            counts["bambu_history_synced"] = bambu_sync
-            index_refresh = {"success": True, "counts": counts}
-        except Exception as e:
-            app.logger.error(f"Error refreshing index after upload: {e}")
-            index_refresh = {"success": False, "error": str(e)}
+        if refresh_index:
+            try:
+                moonraker_url = get_enabled_moonraker_url()
+                moonraker_client = get_enabled_moonraker_client()
+                counts = db_manager.reload_index(
+                    app.config["STL_FILES_PATH"],
+                    app.config["GCODE_FILES_PATH"],
+                    moonraker_url,
+                    moonraker_client,
+                )
+                bambu_sync = sync_bambu_history(cleanup_expired=True)
+                counts["bambu_history_synced"] = bambu_sync
+                index_refresh = {"success": True, "counts": counts}
+            except Exception as e:
+                app.logger.error(f"Error refreshing index after upload: {e}")
+                index_refresh = {"success": False, "error": str(e)}
+        else:
+            index_refresh = {"success": True, "skipped": True}
 
         return jsonify({"success": True, "results": results, "index_refresh": index_refresh}), 200
 
     def allowed_file(filename):
-        return filename.lower().endswith((".zip", ".3mf", ".gcode"))
+        return filename.lower().endswith((".zip", ".stl", ".3mf", ".gcode"))
 
     def safe_extract(zip_file, path):
         """Safely extract zip files to prevent zip slip vulnerabilities."""
@@ -808,8 +843,8 @@ def create_app(config_file=None, config_overrides=None):
         """API endpoint for paginated STL files."""
         page = request.args.get("page", 1, type=int)
         per_page = request.args.get("per_page", 15, type=int)
-        sort_by = request.args.get("sort_by", "folder_name")
-        sort_order = request.args.get("sort_order", "asc")
+        sort_by = request.args.get("sort_by", DEFAULT_STL_SORT_BY)
+        sort_order = request.args.get("sort_order", DEFAULT_STL_SORT_ORDER)
         filter_text = request.args.get("filter", "")
         filter_type = request.args.get("filter_type", "all")
 

@@ -8,6 +8,6 @@ def test_homepage_loads(page, base_url):
     assert response.ok, f"Failed to load homepage: {response.status}"
     
     # Verify core elements
-    expect(page).to_have_title("Trinetra 3D Model Manager")
+    expect(page).to_have_title("Trinetra")
     expect(page.locator('[data-test-id="search-bar"]')).to_be_visible()
     expect(page.locator('[data-test-id="search-input"]')).to_be_visible()

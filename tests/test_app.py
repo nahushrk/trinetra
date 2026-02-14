@@ -307,7 +307,7 @@ class TestAppRoutes:
         response = self.client.post("/upload", data=data)
         assert response.status_code == 400
         data = json.loads(response.data)
-        assert data["error"] == "Only ZIP, 3MF, and GCODE files are allowed"
+        assert data["error"] == "No files selected"
 
     def test_upload_route_invalid_file_type(self):
         """Test upload route with invalid file type"""
@@ -315,7 +315,7 @@ class TestAppRoutes:
         response = self.client.post("/upload", data=data)
         assert response.status_code == 400
         data = json.loads(response.data)
-        assert data["error"] == "Only ZIP, 3MF, and GCODE files are allowed"
+        assert data["error"] == "Only ZIP, STL, 3MF, and GCODE files are allowed"
 
     def test_upload_route_success(self):
         """Test successful file upload"""
@@ -351,6 +351,39 @@ class TestAppRoutes:
         assert payload["success"] is True
         assert payload["results"][0]["status"] == "success"
         assert os.path.exists(os.path.join(self.gcode_path, "single_job.gcode"))
+
+    def test_upload_route_success_stl_creates_folder(self):
+        """Direct STL upload should be placed under a folder named after the file base."""
+        stl_bytes = BytesIO(b"solid test\nendsolid test\n")
+        data = {"file": (stl_bytes, "widget_top.stl")}
+        response = self.client.post("/upload", data=data)
+        assert response.status_code == 200
+        payload = json.loads(response.data)
+        assert payload["success"] is True
+        assert payload["results"][0]["status"] == "success"
+        assert payload["results"][0]["folder_name"] == "widget_top"
+        assert os.path.exists(os.path.join(self.stl_path, "widget_top", "widget_top.stl"))
+
+    def test_upload_route_skips_conflicting_items_but_continues_batch(self):
+        """Conflicting names should be skipped individually without failing the whole batch."""
+        existing = os.path.join(self.stl_path, "existing_model.3mf")
+        with open(existing, "wb") as f:
+            f.write(b"existing")
+
+        data = {
+            "file": [
+                (BytesIO(b"new bytes"), "existing_model.3mf"),
+                (BytesIO(b";FLAVOR:Marlin\nG28 ;Home\n"), "new_job.gcode"),
+            ]
+        }
+        response = self.client.post("/upload", data=data)
+        assert response.status_code == 200
+        payload = json.loads(response.data)
+        assert payload["success"] is True
+        assert len(payload["results"]) == 2
+        assert payload["results"][0]["status"] == "skipped"
+        assert payload["results"][1]["status"] == "success"
+        assert os.path.exists(os.path.join(self.gcode_path, "new_job.gcode"))
 
     def test_upload_route_conflict_check_for_3mf(self):
         """Conflict check should detect existing 3MF file names."""
@@ -395,6 +428,22 @@ class TestAppRoutes:
         assert payload["success"] is True
         assert payload.get("index_refresh", {}).get("success") is True
         mock_reload.assert_called_once()
+
+    def test_upload_route_refresh_index_false_skips_reload(self):
+        """When refresh_index is false, upload should not trigger reload_index."""
+        data = {
+            "file": (BytesIO(b"dummy 3mf bytes"), "no_refresh.3mf"),
+            "refresh_index": "false",
+        }
+        with patch.object(self.app.config["DB_MANAGER"], "reload_index") as mock_reload:
+            response = self.client.post("/upload", data=data)
+
+        assert response.status_code == 200
+        payload = json.loads(response.data)
+        assert payload["success"] is True
+        assert payload.get("index_refresh", {}).get("success") is True
+        assert payload.get("index_refresh", {}).get("skipped") is True
+        mock_reload.assert_not_called()
 
     def test_upload_route_reload_failure_does_not_fail_upload(self):
         """Upload result should still return success even if post-upload reload fails."""
@@ -620,6 +669,39 @@ class TestAppRoutes:
             self.app.config["STL_FILES_PATH"], self.app.config["GCODE_FILES_PATH"]
         )
         mock_moonraker_reload.assert_not_called()
+
+    def test_reload_index_failure_preserves_existing_catalog_data(self):
+        """A failed reload should not wipe already indexed rows."""
+        folder_path = os.path.join(self.stl_path, "persist_me")
+        os.makedirs(folder_path, exist_ok=True)
+        with open(os.path.join(folder_path, "fixture.stl"), "w", encoding="utf-8") as f:
+            f.write("solid fixture\nendsolid fixture\n")
+
+        initial_reload = self.client.post("/reload_index?mode=files")
+        assert initial_reload.status_code == 200
+
+        before = self.client.get("/api/stl_files")
+        assert before.status_code == 200
+        before_payload = json.loads(before.data)
+        before_names = {folder["folder_name"] for folder in before_payload.get("folders", [])}
+        assert "persist_me" in before_names
+
+        with patch.object(
+            self.app.config["DB_MANAGER"],
+            "_process_stl_base_path",
+            side_effect=RuntimeError("forced reload failure"),
+        ):
+            failed_reload = self.client.post("/reload_index?mode=files")
+
+        assert failed_reload.status_code == 500
+        failed_payload = json.loads(failed_reload.data)
+        assert failed_payload["success"] is False
+
+        after = self.client.get("/api/stl_files")
+        assert after.status_code == 200
+        after_payload = json.loads(after.data)
+        after_names = {folder["folder_name"] for folder in after_payload.get("folders", [])}
+        assert "persist_me" in after_names
 
     def test_reload_index_rejects_invalid_mode(self):
         response = self.client.post("/reload_index?mode=invalid")
@@ -922,10 +1004,10 @@ class TestAppRoutes:
         """Test allowed_file function"""
         assert self.app.allowed_file("test.zip") is True
         assert self.app.allowed_file("test.ZIP") is True
+        assert self.app.allowed_file("test.stl") is True
         assert self.app.allowed_file("test.3mf") is True
         assert self.app.allowed_file("test.gcode") is True
         assert self.app.allowed_file("test.txt") is False
-        assert self.app.allowed_file("test.stl") is False
 
     def test_safe_extract_function(self):
         """Test safe_extract function"""

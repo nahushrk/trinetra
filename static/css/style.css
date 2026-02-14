@@ -504,22 +504,35 @@ button {
 
 .upload-modal-content {
     background-color: #fefefe;
-    margin: 15% auto;
+    margin: 5vh auto;
     padding: 20px;
     border: 1px solid #888;
     border-radius: 8px;
     width: 80%;
     max-width: 500px;
     position: relative;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
 }
 
 .upload-modal-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 20px;
+    margin-bottom: 12px;
     padding-bottom: 10px;
     border-bottom: 1px solid #eee;
+    flex-shrink: 0;
+}
+
+.upload-modal-body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
 }
 
 .upload-modal-title {
@@ -541,7 +554,7 @@ button {
 }
 
 .upload-progress {
-    margin-bottom: 20px;
+    flex-shrink: 0;
 }
 
 .upload-progress-bar {
@@ -582,14 +595,59 @@ button {
 }
 
 .upload-status {
-    margin-top: 15px;
     padding: 10px;
     border-radius: 4px;
     font-size: 14px;
     word-wrap: break-word;
     overflow-wrap: break-word;
-    max-height: 100px;
+    flex-shrink: 0;
+}
+
+.upload-status-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.upload-status-log {
+    border: 1px solid #e2e5e9;
+    border-radius: 4px;
+    background-color: #f8f9fa;
+    padding: 8px 10px;
     overflow-y: auto;
+    min-height: 110px;
+    max-height: 36vh;
+}
+
+.upload-status-log:empty::before {
+    content: "Batch results will appear here.";
+    color: #6c757d;
+    font-size: 13px;
+}
+
+.upload-log-entry {
+    font-size: 13px;
+    line-height: 1.4;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+}
+
+.upload-log-entry + .upload-log-entry {
+    margin-top: 4px;
+}
+
+.upload-log-entry.success {
+    color: #155724;
+}
+
+.upload-log-entry.skipped {
+    color: #856404;
+}
+
+.upload-log-entry.error {
+    color: #721c24;
 }
 
 .upload-status.success {
@@ -610,41 +668,16 @@ button {
     border: 1px solid #bee5eb;
 }
 
-.upload-conflict-dialog {
-    display: none;
-    margin-top: 15px;
-    padding: 15px;
-    background-color: #fff3cd;
-    border: 1px solid #ffeaa7;
-    border-radius: 4px;
-}
+@media (max-width: 576px) {
+    .upload-modal-content {
+        width: 94%;
+        padding: 14px;
+        max-height: 92vh;
+    }
 
-.upload-conflict-buttons {
-    display: flex;
-    gap: 10px;
-    margin-top: 10px;
-}
-
-.upload-conflict-btn {
-    padding: 8px 16px;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 14px;
-}
-
-.upload-conflict-btn.skip {
-    background-color: #6c757d;
-    color: white;
-}
-
-.upload-conflict-btn.overwrite {
-    background-color: #dc3545;
-    color: white;
-}
-
-.upload-conflict-btn:hover {
-    opacity: 0.8;
+    .upload-status-log {
+        max-height: 42vh;
+    }
 }
 
 /* Modern Button Styles for File Actions */

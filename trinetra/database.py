@@ -342,58 +342,62 @@ class DatabaseManager:
         """
         logger.info(f"Starting full index reload - STL: {stl_base_path}, GCODE: {gcode_base_path}")
 
+        counts = {
+            "folders": 0,
+            "stl_files": 0,
+            "image_files": 0,
+            "pdf_files": 0,
+            "gcode_files": 0,
+        }
         with self.get_session() as session:
-            # Clear all existing data
-            session.query(GCodeFile).delete()
-            session.query(PDFFile).delete()
-            session.query(ImageFile).delete()
-            session.query(STLFile).delete()
-            session.query(Folder).delete()
-            session.commit()
+            try:
+                # Clear all existing data. Keep this uncommitted until a successful rebuild
+                # so a scan/index failure cannot leave the DB empty.
+                session.query(GCodeFile).delete()
+                session.query(PDFFile).delete()
+                session.query(ImageFile).delete()
+                session.query(STLFile).delete()
+                session.query(Folder).delete()
 
-            counts = {
-                "folders": 0,
-                "stl_files": 0,
-                "image_files": 0,
-                "pdf_files": 0,
-                "gcode_files": 0,
-            }
+                # Process STL base path
+                if os.path.exists(stl_base_path):
+                    stl_counts = self._process_stl_base_path(session, stl_base_path)
+                    # Add STL base path counts to total counts
+                    for key, value in stl_counts.items():
+                        if key in counts:
+                            counts[key] += value
+                        else:
+                            counts[key] = value
 
-            # Process STL base path
-            if os.path.exists(stl_base_path):
-                stl_counts = self._process_stl_base_path(session, stl_base_path)
-                # Add STL base path counts to total counts
-                for key, value in stl_counts.items():
-                    if key in counts:
-                        counts[key] += value
-                    else:
-                        counts[key] = value
+                # Process GCODE base path
+                if os.path.exists(gcode_base_path):
+                    gcode_counts = self._process_gcode_base_path(
+                        session, gcode_base_path, stl_base_path
+                    )
+                    # Add GCODE base path counts to total counts
+                    for key, value in gcode_counts.items():
+                        if key in counts:
+                            counts[key] += value
+                        else:
+                            counts[key] = value
 
-            # Process GCODE base path
-            if os.path.exists(gcode_base_path):
-                gcode_counts = self._process_gcode_base_path(
-                    session, gcode_base_path, stl_base_path
-                )
-                # Add GCODE base path counts to total counts
-                for key, value in gcode_counts.items():
-                    if key in counts:
-                        counts[key] += value
-                    else:
-                        counts[key] = value
+                self._rebuild_search_index_locked(session)
+                session.commit()
+            except Exception:
+                session.rollback()
+                logger.exception("Index reload failed. Existing DB state has been preserved.")
+                raise
 
-            self._rebuild_search_index_locked(session)
-            session.commit()
+        # Update Moonraker stats only after file/index transaction is committed.
+        if moonraker_url:
+            logger.debug(f"Updating Moonraker stats from URL: {moonraker_url}")
+            stats_result = self.update_moonraker_stats(moonraker_url, moonraker_client)
+            logger.debug(f"Moonraker stats update result: {stats_result}")
+            counts["moonraker_stats_updated"] = stats_result["updated"]
+            counts["moonraker_stats_failed"] = stats_result["failed"]
 
-            # Update Moonraker stats if URL is provided
-            if moonraker_url:
-                logger.debug(f"Updating Moonraker stats from URL: {moonraker_url}")
-                stats_result = self.update_moonraker_stats(moonraker_url, moonraker_client)
-                logger.debug(f"Moonraker stats update result: {stats_result}")
-                counts["moonraker_stats_updated"] = stats_result["updated"]
-                counts["moonraker_stats_failed"] = stats_result["failed"]
-
-            logger.info(f"Index reload completed: {counts}")
-            return counts
+        logger.info(f"Index reload completed: {counts}")
+        return counts
 
     def _process_stl_base_path(self, session: Session, stl_base_path: str) -> Dict[str, int]:
         """Process STL base path and extract all files."""

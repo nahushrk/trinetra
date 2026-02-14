@@ -58,6 +58,41 @@ class TestSortFilter:
 
     # STL Files API Sorting Tests
 
+    def test_stl_files_api_default_sort_created_desc(self):
+        """STL API should default to created_at descending when sort params are omitted."""
+        mock_paginated_data = {
+            "folders": [],
+            "pagination": {
+                "page": 1,
+                "per_page": 15,
+                "total_folders": 0,
+                "total_files": 0,
+                "total_pages": 0,
+            },
+            "filter": {
+                "text": "",
+                "type": "all",
+                "sort_by": "created_at",
+                "sort_order": "desc",
+            },
+        }
+
+        with patch.object(
+            self.app.config["DB_MANAGER"],
+            "get_stl_files_paginated",
+            return_value=mock_paginated_data,
+        ) as mock_get_paginated:
+            response = self.client.get("/api/stl_files")
+            assert response.status_code == 200
+            mock_get_paginated.assert_called_once_with(
+                page=1,
+                per_page=15,
+                sort_by="created_at",
+                sort_order="desc",
+                filter_text="",
+                filter_type="all",
+            )
+
     def test_stl_files_api_sort_by_folder_name_asc(self):
         """Test STL files API sorting by folder name ascending"""
         # Mock the database manager's get_stl_files_paginated method

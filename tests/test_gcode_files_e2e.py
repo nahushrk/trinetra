@@ -4,13 +4,9 @@ from playwright.sync_api import expect
 @pytest.mark.playwright
 def test_gcode_page_loads(page, base_url):
     """Test basic page load with correct title and no errors"""
-    # Debug: Print page content
-    print("\n=== PAGE CONTENT ===\n")
-    print(page.content())
-    print("\n===================\n")
     response = page.goto(f"{base_url}/gcode_files", wait_until="networkidle")
     assert response.ok, f"Failed to load G-code files page: {response.status}"
-    expect(page).to_have_title("Sliced Files - Trinetra 3D Model Manager")
+    expect(page).to_have_title("Trinetra")
     
     # Verify key elements are present
     expect(page.locator('[data-test-id="gcode-canvas"]')).to_have_count(1, timeout=15000)
@@ -98,5 +94,5 @@ def test_responsive_layout(page, base_url):
     filter_btn = page.locator('[data-test-id="filter-btn"]')
     filter_btn.click()
     expect(page.locator('text="File Name (A-Z)"')).to_be_visible(timeout=10000)
-    expect(page.locator('[data-test-id="metadata"]')).to_have_text("Loading library files...")
+    expect(page.locator('[data-test-id="metadata"]')).to_have_text("Loading files...")
     expect(page.locator('[data-test-id="gcode-canvas"]')).to_be_visible()
