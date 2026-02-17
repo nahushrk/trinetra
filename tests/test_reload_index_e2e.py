@@ -9,8 +9,11 @@ import shutil
 import unittest
 from unittest.mock import Mock, patch
 import json
+import zipfile
 
 from trinetra.database import DatabaseManager
+from trinetra.models import ThreeMFProjectCache
+from trinetra import three_mf
 from trinetra.integrations.moonraker.api import MoonrakerAPI
 from trinetra.integrations.moonraker.service import MoonrakerService
 
@@ -71,6 +74,31 @@ G1 X10 Y10 Z0.2
     def tearDown(self):
         """Clean up test fixtures"""
         shutil.rmtree(self.test_dir)
+
+    def _write_simple_three_mf(self, path: str, edge_len: int = 10) -> None:
+        model_xml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<model xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  <resources>
+    <object id="1" type="model">
+      <mesh>
+        <vertices>
+          <vertex x="0" y="0" z="0"/>
+          <vertex x="{edge_len}" y="0" z="0"/>
+          <vertex x="0" y="{edge_len}" z="0"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="1" v3="2"/>
+        </triangles>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="1"/>
+  </build>
+</model>
+"""
+        with zipfile.ZipFile(path, "w") as archive:
+            archive.writestr("3D/3dmodel.model", model_xml)
 
     @patch("trinetra.integrations.moonraker.api.MoonrakerAPI")
     def test_reload_index_with_moonraker_stats(self, mock_moonraker_api_class):
@@ -183,8 +211,6 @@ G1 X10 Y10 Z0.2
   </build>
 </model>
 """
-        import zipfile
-
         with zipfile.ZipFile(root_three_mf, "w") as archive:
             archive.writestr("3D/3dmodel.model", model_xml)
 
@@ -196,6 +222,49 @@ G1 X10 Y10 Z0.2
         three_mf_projects = self.db_manager.get_folder_three_mf_projects("swirl_root")
         self.assertEqual(len(three_mf_projects), 1)
         self.assertEqual(three_mf_projects[0]["file_name"], "swirl_root.3mf")
+
+    def test_three_mf_projects_are_cached_between_calls(self):
+        project_path = os.path.join(self.test_folder, "cached.3mf")
+        self._write_simple_three_mf(project_path, edge_len=10)
+
+        self.db_manager.reload_index(self.stl_dir, self.gcode_dir)
+
+        with patch(
+            "trinetra.database.three_mf.load_3mf_project", wraps=three_mf.load_3mf_project
+        ) as mocked_loader:
+            first = self.db_manager.get_folder_three_mf_projects("test_folder")
+            second = self.db_manager.get_folder_three_mf_projects("test_folder")
+
+        self.assertEqual(len(first), 1)
+        self.assertEqual(first, second)
+        self.assertEqual(mocked_loader.call_count, 1)
+
+    def test_three_mf_cache_refreshes_on_change_and_prunes_on_delete(self):
+        project_path = os.path.join(self.test_folder, "mutable.3mf")
+        self._write_simple_three_mf(project_path, edge_len=10)
+        self.db_manager.reload_index(self.stl_dir, self.gcode_dir)
+
+        baseline = self.db_manager.get_folder_three_mf_projects("test_folder")
+        self.assertEqual(len(baseline), 1)
+
+        # Rewrite the same file so cache key (mtime/size) changes.
+        self._write_simple_three_mf(project_path, edge_len=12)
+
+        with patch(
+            "trinetra.database.three_mf.load_3mf_project", wraps=three_mf.load_3mf_project
+        ) as mocked_loader:
+            refreshed = self.db_manager.get_folder_three_mf_projects("test_folder")
+
+        self.assertEqual(len(refreshed), 1)
+        self.assertEqual(mocked_loader.call_count, 1)
+
+        os.remove(project_path)
+        after_delete = self.db_manager.get_folder_three_mf_projects("test_folder")
+        self.assertEqual(after_delete, [])
+
+        with self.db_manager.get_session() as session:
+            cache_count = session.query(ThreeMFProjectCache).count()
+        self.assertEqual(cache_count, 0)
 
     @patch("trinetra.integrations.moonraker.api.MoonrakerAPI")
     def test_reload_moonraker_only(self, mock_moonraker_api_class):

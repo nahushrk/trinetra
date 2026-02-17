@@ -90,11 +90,7 @@
 
 <canvas id="c" class="d-block mx-auto" data-test-id="3d-canvas"></canvas>
 
-<div id="content" class="mt-4"
-     data-stl-files="{{ stl_files.folders | tojson | safe }}"
-     data-pagination="{{ stl_files.pagination | tojson | safe if stl_files.pagination else 'null' }}"
-     data-filter="{{ stl_files.filter | tojson | safe if stl_files.filter else 'null' }}">
-</div>
+<div id="content" class="mt-4"></div>
 
 <!-- Bottom Pagination Controls -->
 <div id="pagination-controls-bottom" class="d-flex justify-content-center mt-3" data-test-id="pagination-controls-bottom">

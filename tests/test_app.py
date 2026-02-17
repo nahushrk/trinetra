@@ -91,10 +91,13 @@ class TestAppRoutes:
 
     def test_index_route(self):
         """Test the index route"""
-        response = self.client.get("/")
+        db_manager = self.app.config["DB_MANAGER"]
+        with patch.object(db_manager, "get_stl_files_paginated") as mocked_paginated:
+            response = self.client.get("/")
         assert response.status_code == 200
         # Check for HTML content instead of specific text
         assert b"<!DOCTYPE html>" in response.data
+        mocked_paginated.assert_not_called()
 
     def test_gcode_files_route(self):
         """Test the gcode files route"""

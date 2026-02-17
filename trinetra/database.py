@@ -20,6 +20,7 @@ from trinetra.models import (
     PDFFile,
     GCodeFile,
     GCodeFileStats,
+    ThreeMFProjectCache,
     PrintHistoryEvent,
     IntegrationSyncState,
     create_database_engine,
@@ -38,6 +39,7 @@ logger = get_logger(__name__)
 
 class DatabaseManager:
     """Manages database operations for Trinetra."""
+    THREE_MF_SUMMARY_VERSION = 1
 
     def __init__(self, db_path="trinetra.db"):
         self.engine = create_database_engine(db_path)
@@ -53,6 +55,67 @@ class DatabaseManager:
     def get_session(self) -> Session:
         """Get a new database session."""
         return self.SessionFactory()
+
+    def _three_mf_cache_scope_condition(self, folder_name: str):
+        """Match cache rows belonging to a folder (real or virtual root-level folder)."""
+        return or_(
+            ThreeMFProjectCache.rel_path.like(f"{folder_name}/%"),
+            ThreeMFProjectCache.rel_path == f"{folder_name}.3mf",
+        )
+
+    def _prune_three_mf_cache_for_folder_locked(
+        self, session: Session, folder_name: str, valid_rel_paths: set[str]
+    ) -> int:
+        removed = 0
+        cached_rows = (
+            session.query(ThreeMFProjectCache)
+            .filter(self._three_mf_cache_scope_condition(folder_name))
+            .all()
+        )
+        for cached_row in cached_rows:
+            if cached_row.rel_path in valid_rel_paths:
+                continue
+            session.delete(cached_row)
+            removed += 1
+        return removed
+
+    def _prune_three_mf_cache_for_folder(self, folder_name: str, valid_rel_paths: set[str]) -> int:
+        with self.get_session() as session:
+            removed = self._prune_three_mf_cache_for_folder_locked(
+                session, folder_name, valid_rel_paths
+            )
+            if removed:
+                session.commit()
+            return removed
+
+    def _collect_all_three_mf_rel_paths(self) -> set[str]:
+        """Collect all currently existing 3MF files relative to STL base path."""
+        if not self.stl_base_path or not os.path.isdir(self.stl_base_path):
+            return set()
+
+        rel_paths: set[str] = set()
+        for root, _dirs, files in os.walk(self.stl_base_path):
+            for file_name in files:
+                if not file_name.lower().endswith(".3mf"):
+                    continue
+                abs_path = os.path.join(root, file_name)
+                rel_paths.add(os.path.relpath(abs_path, self.stl_base_path))
+        return rel_paths
+
+    def _prune_three_mf_cache_deleted_files(self, valid_rel_paths: set[str]) -> int:
+        """Remove cached summaries for 3MF files that no longer exist."""
+        with self.get_session() as session:
+            removed = 0
+            cached_rows = session.query(ThreeMFProjectCache).all()
+            for cached_row in cached_rows:
+                if cached_row.rel_path in valid_rel_paths:
+                    continue
+                session.delete(cached_row)
+                removed += 1
+
+            if removed:
+                session.commit()
+            return removed
 
     def _ensure_search_index(self) -> None:
         """Initialize SQLite FTS5 search index for STL discovery."""
@@ -387,6 +450,15 @@ class DatabaseManager:
                 session.rollback()
                 logger.exception("Index reload failed. Existing DB state has been preserved.")
                 raise
+
+        # Prune stale 3MF cache rows after filesystem indexing succeeds.
+        try:
+            valid_three_mf_rel_paths = self._collect_all_three_mf_rel_paths()
+            pruned_three_mf_cache = self._prune_three_mf_cache_deleted_files(valid_three_mf_rel_paths)
+            if pruned_three_mf_cache:
+                counts["three_mf_cache_pruned"] = pruned_three_mf_cache
+        except Exception as exc:
+            logger.warning("Failed to prune stale 3MF cache entries after reload: %s", exc)
 
         # Update Moonraker stats only after file/index transaction is committed.
         if moonraker_url:
@@ -1083,14 +1155,11 @@ class DatabaseManager:
 
             return stl_files, image_files, pdf_files, deduped_gcode_files
 
-    def get_folder_three_mf_projects(self, folder_name: str) -> List[Dict[str, Any]]:
-        """Get parsed 3MF project data for a folder."""
+    def _discover_three_mf_candidate_paths(self, folder_name: str) -> List[str]:
         if not self.stl_base_path:
             return []
 
         folder_path = os.path.join(self.stl_base_path, folder_name)
-
-        results: List[Dict[str, Any]] = []
         candidate_paths: List[str] = []
 
         if os.path.isdir(folder_path):
@@ -1099,49 +1168,140 @@ class DatabaseManager:
                     if file_name.lower().endswith(".3mf"):
                         candidate_paths.append(os.path.join(root, file_name))
         else:
-            # Virtual folder support for top-level 3MF files:
-            # <base>/<folder_name>.3mf
             root_three_mf = os.path.join(self.stl_base_path, f"{folder_name}.3mf")
             if os.path.isfile(root_three_mf):
                 candidate_paths.append(root_three_mf)
 
+        candidate_paths.sort()
+        return candidate_paths
+
+    def _build_three_mf_summary_payload(self, abs_path: str, rel_path: str) -> Dict[str, Any]:
+        file_name = os.path.basename(abs_path)
+        try:
+            parsed = three_mf.load_3mf_project(abs_path)
+            summary = three_mf.project_to_summary(parsed)
+            settings = three_mf.summarize_settings(summary.get("project_settings", {}), max_items=10)
+            model_metadata = three_mf.summarize_model_metadata(
+                summary.get("model_metadata", {}), max_items=4
+            )
+            return {
+                "file_name": file_name,
+                "rel_path": rel_path,
+                "model_metadata": model_metadata,
+                "project_settings": settings,
+                "plates": summary.get("plates", []),
+            }
+        except Exception as exc:
+            logger.warning("Failed to parse 3MF project %s: %s", abs_path, exc)
+            return {
+                "file_name": file_name,
+                "rel_path": rel_path,
+                "model_metadata": {},
+                "project_settings": {},
+                "plates": [],
+                "error": str(exc),
+            }
+
+    def get_folder_three_mf_projects(self, folder_name: str) -> List[Dict[str, Any]]:
+        """Get parsed 3MF project data for a folder with persistent cache."""
+        if not self.stl_base_path:
+            return []
+
+        candidate_paths = self._discover_three_mf_candidate_paths(folder_name)
+        if not candidate_paths:
+            self._prune_three_mf_cache_for_folder(folder_name, valid_rel_paths=set())
+            return []
+
+        candidate_records: List[Dict[str, Any]] = []
         for abs_path in candidate_paths:
-            file_name = os.path.basename(abs_path)
-            rel_path = os.path.relpath(abs_path, self.stl_base_path)
-
             try:
-                parsed = three_mf.load_3mf_project(abs_path)
-                summary = three_mf.project_to_summary(parsed)
-                settings = three_mf.summarize_settings(
-                    summary.get("project_settings", {}), max_items=10
-                )
-                model_metadata = three_mf.summarize_model_metadata(
-                    summary.get("model_metadata", {}), max_items=4
-                )
+                stat = os.stat(abs_path)
+            except OSError as exc:
+                logger.warning("Skipping unreadable 3MF file %s: %s", abs_path, exc)
+                continue
+            candidate_records.append(
+                {
+                    "abs_path": abs_path,
+                    "rel_path": os.path.relpath(abs_path, self.stl_base_path),
+                    "file_mtime_ns": int(stat.st_mtime_ns),
+                    "file_size": int(stat.st_size),
+                }
+            )
 
-                results.append(
+        if not candidate_records:
+            self._prune_three_mf_cache_for_folder(folder_name, valid_rel_paths=set())
+            return []
+
+        candidate_records.sort(key=lambda item: item["rel_path"])
+        candidate_rel_paths = {item["rel_path"] for item in candidate_records}
+
+        with self.get_session() as session:
+            cache_rows = (
+                session.query(ThreeMFProjectCache)
+                .filter(ThreeMFProjectCache.rel_path.in_(list(candidate_rel_paths)))
+                .all()
+            )
+        cache_by_rel_path = {row.rel_path: row for row in cache_rows}
+
+        results: List[Dict[str, Any]] = []
+        cache_updates: List[Dict[str, Any]] = []
+
+        for item in candidate_records:
+            rel_path = item["rel_path"]
+            cache_row = cache_by_rel_path.get(rel_path)
+            payload: Optional[Dict[str, Any]] = None
+
+            if (
+                cache_row
+                and cache_row.summary_version == self.THREE_MF_SUMMARY_VERSION
+                and cache_row.file_mtime_ns == item["file_mtime_ns"]
+                and cache_row.file_size == item["file_size"]
+            ):
+                try:
+                    decoded_payload = json.loads(cache_row.summary_json)
+                    if isinstance(decoded_payload, dict):
+                        payload = decoded_payload
+                except (TypeError, json.JSONDecodeError):
+                    payload = None
+
+            if payload is None:
+                payload = self._build_three_mf_summary_payload(item["abs_path"], rel_path)
+                cache_updates.append(
                     {
-                        "file_name": file_name,
                         "rel_path": rel_path,
-                        "model_metadata": model_metadata,
-                        "project_settings": settings,
-                        "plates": summary.get("plates", []),
+                        "file_mtime_ns": item["file_mtime_ns"],
+                        "file_size": item["file_size"],
+                        "summary_json": json.dumps(payload, ensure_ascii=True),
                     }
                 )
-            except Exception as e:
-                logger.warning(f"Failed to parse 3MF project {abs_path}: {e}")
-                results.append(
-                    {
-                        "file_name": file_name,
-                        "rel_path": rel_path,
-                        "model_metadata": {},
-                        "project_settings": {},
-                        "plates": [],
-                        "error": str(e),
-                    }
-                )
 
-        results.sort(key=lambda project: project["rel_path"])
+            results.append(payload)
+
+        with self.get_session() as session:
+            if cache_updates:
+                existing_rows = (
+                    session.query(ThreeMFProjectCache)
+                    .filter(ThreeMFProjectCache.rel_path.in_([item["rel_path"] for item in cache_updates]))
+                    .all()
+                )
+                existing_by_rel_path = {row.rel_path: row for row in existing_rows}
+                for update in cache_updates:
+                    row = existing_by_rel_path.get(update["rel_path"])
+                    if row is None:
+                        row = ThreeMFProjectCache(rel_path=update["rel_path"])
+                        session.add(row)
+                    row.file_mtime_ns = update["file_mtime_ns"]
+                    row.file_size = update["file_size"]
+                    row.summary_version = self.THREE_MF_SUMMARY_VERSION
+                    row.summary_json = update["summary_json"]
+
+            pruned = self._prune_three_mf_cache_for_folder_locked(
+                session, folder_name, valid_rel_paths=candidate_rel_paths
+            )
+
+            if cache_updates or pruned:
+                session.commit()
+
         return results
 
     def get_all_gcode_files(self) -> List[Dict[str, Any]]:
@@ -1444,6 +1604,7 @@ class DatabaseManager:
                 session.delete(folder)
                 session.commit()
                 self.rebuild_search_index()
+                self._prune_three_mf_cache_for_folder(folder_name, valid_rel_paths=set())
                 return True
             return False
 

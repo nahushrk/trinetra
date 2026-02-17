@@ -206,6 +206,26 @@ class GCodeFileStats(Base):
         return f"<GCodeFileStats(file_id={self.gcode_file_id}, prints={self.print_count})>"
 
 
+class ThreeMFProjectCache(Base):
+    """Cached summary payload for parsed 3MF project previews."""
+
+    __tablename__ = "three_mf_project_cache"
+
+    id = Column(Integer, primary_key=True)
+    rel_path = Column(String(500), nullable=False, unique=True)
+    file_mtime_ns = Column(Integer, nullable=False)
+    file_size = Column(Integer, nullable=False, default=0)
+    summary_version = Column(Integer, nullable=False, default=1)
+    summary_json = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (Index("idx_three_mf_cache_rel_path", "rel_path"),)
+
+    def __repr__(self):
+        return f"<ThreeMFProjectCache(rel_path='{self.rel_path}')>"
+
+
 class PrintHistoryEvent(Base):
     """Normalized print history events synchronized from integrations."""
 

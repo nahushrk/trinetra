@@ -332,32 +332,8 @@ def create_app(config_file=None, config_overrides=None):
     # --- All routes below, using app.config for paths ---
     @app.route("/")
     def index():
-        # Check if pagination is requested
-        page = request.args.get("page", 1, type=int)
-        per_page = request.args.get("per_page", 15, type=int)
-        sort_by = request.args.get("sort_by", DEFAULT_STL_SORT_BY)
-        sort_order = request.args.get("sort_order", DEFAULT_STL_SORT_ORDER)
-        filter_text = request.args.get("filter", "")
-        filter_type = request.args.get("filter_type", "all")
-
-        # Get paginated data
-        paginated_data = db_manager.get_stl_files_paginated(
-            page=page,
-            per_page=per_page,
-            sort_by=sort_by,
-            sort_order=sort_order,
-            filter_text=filter_text,
-            filter_type=filter_type,
-        )
-
-        # Ensure proper JSON serialization
-        formatted_data = {
-            "folders": paginated_data.get("folders", []),
-            "pagination": paginated_data.get("pagination", {}),
-            "filter": paginated_data.get("filter", {})
-        }
-        
-        return render_template("index.html", stl_files=formatted_data)
+        # Render shell only; initial data loads through /api/stl_files on client startup.
+        return render_template("index.html")
 
     @app.route("/gcode_files")
     def gcode_files_view():
