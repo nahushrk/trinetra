@@ -59,7 +59,7 @@
             </div>
         </div>
         
-        <div id="metadata" class="text-center text-muted" data-test-id="metadata">Loading library files...</div>
+        <div id="metadata" class="text-center text-muted" data-test-id="metadata">Loading files...</div>
         
         <!-- Pagination Controls -->
         <div id="pagination-controls" class="d-flex justify-content-center mt-3">
@@ -76,11 +76,7 @@
 <canvas id="c" class="d-block mx-auto" data-test-id="gcode-canvas"></canvas>
 
 <!-- G-code Files Content -->
-<div id="content" class="mt-4"
-     data-gcode-files="{{ gcode_files.files | tojson | safe }}"
-     data-pagination="{{ gcode_files.pagination | tojson | safe if gcode_files.pagination else 'null' }}"
-     data-filter="{{ gcode_files.filter | tojson | safe if gcode_files.filter else 'null' }}">
-</div>
+<div id="content" class="mt-4"></div>
 
 <!-- Bottom Pagination Controls -->
 <div id="pagination-controls-bottom" class="d-flex justify-content-center mt-3">

@@ -101,8 +101,12 @@ class TestAppRoutes:
 
     def test_gcode_files_route(self):
         """Test the gcode files route"""
-        response = self.client.get("/gcode_files")
+        db_manager = self.app.config["DB_MANAGER"]
+        with patch.object(db_manager, "get_gcode_files_paginated") as mocked_paginated:
+            response = self.client.get("/gcode_files")
         assert response.status_code == 200
+        mocked_paginated.assert_not_called()
+        assert b"data-gcode-files" not in response.data
 
     def test_folder_view_route(self):
         """Test the folder view route"""
@@ -156,6 +160,9 @@ class TestAppRoutes:
         three_mf_file = os.path.join(self.stl_path, "simple.3mf")
         with zipfile.ZipFile(three_mf_file, "w") as archive:
             archive.writestr("3D/3dmodel.model", model_xml)
+
+        reload_response = self.client.post("/reload_index?mode=files")
+        assert reload_response.status_code == 200
 
         response = self.client.get("/3mf_plate?file=simple.3mf&plate=1")
         assert response.status_code == 200
@@ -405,7 +412,7 @@ class TestAppRoutes:
         assert "existing_model.3mf" in payload.get("conflicts", [])
 
     def test_upload_route_triggers_single_reload_after_mixed_batch(self):
-        """A mixed upload batch should trigger one DB reload after all processing."""
+        """A mixed upload batch should trigger one targeted refresh after all processing."""
         zip_data = BytesIO()
         with zipfile.ZipFile(zip_data, "w") as zipf:
             zipf.writestr("inside.stl", "solid test\nendsolid test\n")
@@ -421,24 +428,27 @@ class TestAppRoutes:
 
         with patch.object(
             self.app.config["DB_MANAGER"],
-            "reload_index",
+            "refresh_changed_files",
             return_value={"folders": 1, "stl_files": 1, "gcode_files": 1},
-        ) as mock_reload:
+        ) as mock_refresh:
             response = self.client.post("/upload", data=data)
 
         assert response.status_code == 200
         payload = json.loads(response.data)
         assert payload["success"] is True
         assert payload.get("index_refresh", {}).get("success") is True
-        mock_reload.assert_called_once()
+        mock_refresh.assert_called_once()
+        kwargs = mock_refresh.call_args.kwargs
+        assert set(kwargs.get("stl_folder_names") or []) == {"mixed_pack", "mixed_model"}
+        assert set(kwargs.get("gcode_rel_paths") or []) == {"mixed_job.gcode"}
 
     def test_upload_route_refresh_index_false_skips_reload(self):
-        """When refresh_index is false, upload should not trigger reload_index."""
+        """When refresh_index is false, upload should not trigger incremental refresh."""
         data = {
             "file": (BytesIO(b"dummy 3mf bytes"), "no_refresh.3mf"),
             "refresh_index": "false",
         }
-        with patch.object(self.app.config["DB_MANAGER"], "reload_index") as mock_reload:
+        with patch.object(self.app.config["DB_MANAGER"], "refresh_changed_files") as mock_refresh:
             response = self.client.post("/upload", data=data)
 
         assert response.status_code == 200
@@ -446,14 +456,16 @@ class TestAppRoutes:
         assert payload["success"] is True
         assert payload.get("index_refresh", {}).get("success") is True
         assert payload.get("index_refresh", {}).get("skipped") is True
-        mock_reload.assert_not_called()
+        mock_refresh.assert_not_called()
 
     def test_upload_route_reload_failure_does_not_fail_upload(self):
         """Upload result should still return success even if post-upload reload fails."""
         data = {"file": (BytesIO(b"dummy 3mf bytes"), "reload_fail.3mf")}
         with patch.object(
-            self.app.config["DB_MANAGER"], "reload_index", side_effect=RuntimeError("reload failed")
-        ) as mock_reload:
+            self.app.config["DB_MANAGER"],
+            "refresh_changed_files",
+            side_effect=RuntimeError("reload failed"),
+        ) as mock_refresh:
             response = self.client.post("/upload", data=data)
 
         assert response.status_code == 200
@@ -461,7 +473,7 @@ class TestAppRoutes:
         assert payload["success"] is True
         assert payload.get("index_refresh", {}).get("success") is False
         assert "reload failed" in payload.get("index_refresh", {}).get("error", "")
-        mock_reload.assert_called_once()
+        mock_refresh.assert_called_once()
 
     def test_delete_folder_route_no_folder_name(self):
         """Test delete folder route with no folder name"""
@@ -554,16 +566,10 @@ class TestAppRoutes:
 
     def test_moonraker_stats_route_success(self):
         """Test successful Moonraker stats retrieval from database"""
-        # Mock the database manager to return file with stats
-        mock_gcode_files = [
-            {
-                "file_name": "test.gcode",
-                "stats": {"total_prints": 5, "successful_prints": 4, "canceled_prints": 1},
-            }
-        ]
-
         with patch.object(
-            self.app.config["DB_MANAGER"], "get_all_gcode_files", return_value=mock_gcode_files
+            self.app.config["DB_MANAGER"],
+            "get_moonraker_stats_for_file",
+            return_value={"total_prints": 5, "successful_prints": 4, "canceled_prints": 1},
         ):
             response = self.client.get("/moonraker_stats/test.gcode")
             assert response.status_code == 200
@@ -573,16 +579,8 @@ class TestAppRoutes:
 
     def test_moonraker_stats_route_no_stats(self):
         """Test Moonraker stats route with no stats in database"""
-        # Mock the database manager to return files without matching stats
-        mock_gcode_files = [
-            {
-                "file_name": "other.gcode",
-                "stats": {"total_prints": 1, "successful_prints": 1, "canceled_prints": 0},
-            }
-        ]
-
         with patch.object(
-            self.app.config["DB_MANAGER"], "get_all_gcode_files", return_value=mock_gcode_files
+            self.app.config["DB_MANAGER"], "get_moonraker_stats_for_file", return_value=None
         ):
             response = self.client.get("/moonraker_stats/test.gcode")
             assert response.status_code == 200
@@ -691,7 +689,7 @@ class TestAppRoutes:
 
         with patch.object(
             self.app.config["DB_MANAGER"],
-            "_process_stl_base_path",
+            "_reconcile_stl_folders_locked",
             side_effect=RuntimeError("forced reload failure"),
         ):
             failed_reload = self.client.post("/reload_index?mode=files")

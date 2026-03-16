@@ -2,6 +2,140 @@
 // This module contains all G-code parsing and rendering logic
 // Used by both folder_view.js and gcode_files.js
 
+const sharedVisibilityCallbacks = new WeakMap();
+let sharedVisibilityObserver = null;
+
+function getSharedVisibilityObserver() {
+    if (sharedVisibilityObserver) {
+        return sharedVisibilityObserver;
+    }
+
+    sharedVisibilityObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (!entry.isIntersecting) {
+                return;
+            }
+
+            const callback = sharedVisibilityCallbacks.get(entry.target);
+            if (callback) {
+                sharedVisibilityCallbacks.delete(entry.target);
+                sharedVisibilityObserver.unobserve(entry.target);
+                callback();
+            }
+        });
+    }, {
+        root: null,
+        rootMargin: '50px',
+        threshold: 0.1
+    });
+
+    return sharedVisibilityObserver;
+}
+
+function observeWhenVisible(element, callback) {
+    const observer = getSharedVisibilityObserver();
+    sharedVisibilityCallbacks.set(element, callback);
+    observer.observe(element);
+}
+
+function ensureSharedRenderer(canvasElement) {
+    if (!canvasElement) {
+        return null;
+    }
+
+    if (renderer && renderer.domElement === canvasElement) {
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setAnimationLoop(animate);
+        return renderer;
+    }
+
+    if (renderer) {
+        renderer.setAnimationLoop(null);
+        renderer.dispose();
+    }
+
+    renderer = new THREE.WebGLRenderer({canvas: canvasElement, antialias: true});
+    renderer.setClearColor(0xffffff, 1);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setAnimationLoop(animate);
+    return renderer;
+}
+
+function disposeMaterial(material) {
+    if (!material) {
+        return;
+    }
+
+    const materials = Array.isArray(material) ? material : [material];
+    materials.forEach(item => {
+        if (!item) {
+            return;
+        }
+        Object.keys(item).forEach(key => {
+            const value = item[key];
+            if (value && typeof value.dispose === 'function' && value !== item) {
+                value.dispose();
+            }
+        });
+        if (typeof item.dispose === 'function') {
+            item.dispose();
+        }
+    });
+}
+
+function disposeScene(scene) {
+    if (!scene) {
+        return;
+    }
+
+    if (scene.userData && scene.userData.controls && typeof scene.userData.controls.dispose === 'function') {
+        scene.userData.controls.dispose();
+    }
+
+    scene.traverse(object => {
+        if (object.geometry && typeof object.geometry.dispose === 'function') {
+            object.geometry.dispose();
+        }
+        if (object.material) {
+            disposeMaterial(object.material);
+        }
+    });
+}
+
+function renderGCodeStats(statsElement, stats) {
+    if (!stats) {
+        statsElement.innerHTML = '<em>No connector print history available</em>';
+        statsElement.className = 'moonraker-stats stats-none';
+        return;
+    }
+
+    const totalPrints = Number(stats.print_count ?? stats.total_prints ?? 0);
+    const successfulPrints = Number(stats.successful_prints ?? 0);
+    const canceledPrints = Number(stats.canceled_prints ?? 0);
+    const avgDuration = Number(stats.avg_duration ?? 0);
+    const avgDurationHours = Math.floor(avgDuration / 3600);
+    const avgDurationMinutes = Math.floor((avgDuration % 3600) / 60);
+
+    let statsContent = '<div class="stats-header"><strong>Print Statistics:</strong></div>';
+    statsContent += `<div>Total prints: ${totalPrints}</div>`;
+    statsContent += `<div>Successful: ${successfulPrints}</div>`;
+    statsContent += `<div>Canceled: ${canceledPrints}</div>`;
+
+    if (avgDuration > 0) {
+        statsContent += `<div>Avg duration: ${avgDurationHours}h ${avgDurationMinutes}m</div>`;
+    }
+
+    if (stats.last_print_date) {
+        const recentDate = new Date(stats.last_print_date);
+        statsContent += `<div>Last printed: ${recentDate.toLocaleDateString()}</div>`;
+    }
+
+    statsElement.innerHTML = statsContent;
+    statsElement.className = 'moonraker-stats stats-loaded';
+}
+
 // Parse G-code and render it in a Three.js scene
 function getConfiguredPrinterVolume() {
     const fallback = {x: 220, y: 220, z: 270};
@@ -263,7 +397,7 @@ function createGCodeItem(file, containerElement, scene, rowContainer) {
     const gcodeFile = file.file_name;
     const relPath = file.rel_path;
     const basePath = file.base_path || file.path || file.basePath;
-    const metadata = file.metadata;
+    const metadata = file.metadata || {};
 
     const sceneElement = document.createElement('div');
     sceneElement.className = 'rendering';
@@ -296,13 +430,7 @@ function createGCodeItem(file, containerElement, scene, rowContainer) {
     // Add connector statistics section
     const statsElement = document.createElement('div');
     statsElement.className = 'moonraker-stats';
-    
-    // Check if stats data is available in the file object
-    
-    statsElement.innerHTML = '<em>Loading connector statistics...</em>';
-    // Load connector statistics if not available
-    loadMoonrakerStats(gcodeFile, statsElement);
-    
+    renderGCodeStats(statsElement, file.stats || null);
     containerElement.appendChild(statsElement);
 
     // Create buttons using shared function
@@ -337,31 +465,7 @@ function loadMoonrakerStats(filename, statsElement) {
     fetch(`/moonraker_stats/${encodeURIComponent(filename)}`)
         .then(response => response.json())
         .then(data => {
-            if (data.success && data.stats) {
-                const stats = data.stats;
-                const avgDurationHours = Math.floor(stats.avg_duration / 3600);
-                const avgDurationMinutes = Math.floor((stats.avg_duration % 3600) / 60);
-                
-                let statsContent = '<div class="stats-header"><strong>Print Statistics:</strong></div>';
-                statsContent += `<div>Total prints: ${stats.total_prints}</div>`;
-                statsContent += `<div>Successful: ${stats.successful_prints}</div>`;
-                statsContent += `<div>Canceled: ${stats.canceled_prints}</div>`;
-                
-                if (stats.avg_duration > 0) {
-                    statsContent += `<div>Avg duration: ${avgDurationHours}h ${avgDurationMinutes}m</div>`;
-                }
-                
-                if (stats.last_print_date) {
-                    const recentDate = new Date(stats.last_print_date);
-                    statsContent += `<div>Last printed: ${recentDate.toLocaleDateString()}</div>`;
-                }
-                
-                statsElement.innerHTML = statsContent;
-                statsElement.className = 'moonraker-stats stats-loaded';
-            } else {
-                statsElement.innerHTML = '<em>No connector print history available</em>';
-                statsElement.className = 'moonraker-stats stats-none';
-            }
+            renderGCodeStats(statsElement, data.success ? data.stats : null);
         })
         .catch(error => {
             console.error('Error loading connector stats:', error);
@@ -398,9 +502,10 @@ function createFileActionButtons(containerElement, fileData, buttonTypes = ['dow
         copyButton.className = 'file-action-btn copy-path';
         copyButton.innerHTML = '<i class="fas fa-copy"></i> Copy Path';
         copyButton.onclick = function () {
+            const relPath = fileData.rel_path || fileData.relPath || '';
             const endpoint = fileData.file_name && fileData.file_name.toLowerCase().endsWith('.gcode') 
-                ? `/copy_gcode_path/${encodeURIComponent(fileData.base_path || fileData.basePath || fileData.path)}/${encodeURIComponent(fileData.relPath)}`
-                : `/copy_path/${encodeURIComponent(fileData.relPath)}`;
+                ? `/copy_gcode_path/${encodeURIComponent(fileData.base_path || fileData.basePath || fileData.path)}/${encodeURIComponent(relPath)}`
+                : `/copy_path/${encodeURIComponent(relPath)}`;
             
             fetch(endpoint)
                 .then(response => response.json())
@@ -431,6 +536,7 @@ function createFileActionButtons(containerElement, fileData, buttonTypes = ['dow
             addToQueueButton.disabled = true;
             addToQueueButton.classList.add('loading');
             addToQueueButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Queueing...';
+            const relPath = fileData.rel_path || fileData.relPath || '';
             
             fetch('/api/add_to_queue', {
                 method: 'POST',
@@ -438,7 +544,7 @@ function createFileActionButtons(containerElement, fileData, buttonTypes = ['dow
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    filenames: [fileData.relPath],
+                    filenames: [relPath],
                     reset: false
                 })
             })
@@ -612,6 +718,9 @@ function loadSTLFile(stlFile, scene, controls, sizeElement, camera) {
 
 // Shared animation and utility functions
 function clearScenes() {
+    if (Array.isArray(scenes)) {
+        scenes.forEach(scene => disposeScene(scene));
+    }
     const content = document.getElementById('content');
     if (content) {
         while (content.firstChild) {
@@ -625,7 +734,7 @@ function updateSize() {
     const width = window.innerWidth;
     const height = window.innerHeight;
 
-    if (canvas && canvas.width !== width || canvas.height !== height) {
+    if (canvas && renderer && (canvas.width !== width || canvas.height !== height)) {
         renderer.setSize(width, height, false);
     }
 }
@@ -678,6 +787,9 @@ window.loadSTLFromUrl = loadSTLFromUrl;
 window.loadSTLFile = loadSTLFile;
 window.loadGCodeFile = loadGCodeFile;
 window.loadMoonrakerStats = loadMoonrakerStats;
+window.ensureSharedRenderer = ensureSharedRenderer;
+window.observeWhenVisible = observeWhenVisible;
+window.renderGCodeStats = renderGCodeStats;
 window.clearScenes = clearScenes;
 window.updateSize = updateSize;
 // Shared sort and filter functionality

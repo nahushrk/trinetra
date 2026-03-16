@@ -7,12 +7,22 @@ import os
 import tempfile
 import shutil
 import unittest
+import time
 from unittest.mock import Mock, patch
 import json
 import zipfile
 
 from trinetra.database import DatabaseManager
-from trinetra.models import ThreeMFProjectCache
+from trinetra.models import (
+    Folder,
+    STLFile,
+    ThreeMFFile,
+    ImageFile,
+    PDFFile,
+    GCodeFile,
+    ThreeMFProjectCache,
+    ThreeMFPlateCache,
+)
 from trinetra import three_mf
 from trinetra.integrations.moonraker.api import MoonrakerAPI
 from trinetra.integrations.moonraker.service import MoonrakerService
@@ -265,6 +275,138 @@ G1 X10 Y10 Z0.2
         with self.db_manager.get_session() as session:
             cache_count = session.query(ThreeMFProjectCache).count()
         self.assertEqual(cache_count, 0)
+
+    def test_get_folder_three_mf_projects_uses_indexed_rows_not_os_walk(self):
+        project_path = os.path.join(self.test_folder, "indexed.3mf")
+        self._write_simple_three_mf(project_path, edge_len=10)
+        self.db_manager.reload_index(self.stl_dir, self.gcode_dir)
+
+        with patch("trinetra.database.os.walk", side_effect=AssertionError("unexpected os.walk")):
+            projects = self.db_manager.get_folder_three_mf_projects("test_folder")
+
+        self.assertEqual(len(projects), 1)
+        self.assertEqual(projects[0]["file_name"], "indexed.3mf")
+
+    def test_three_mf_plate_cache_populates_hits_and_invalidates(self):
+        project_path = os.path.join(self.test_folder, "plates.3mf")
+        rel_path = "test_folder/plates.3mf"
+        self._write_simple_three_mf(project_path, edge_len=10)
+        self.db_manager.reload_index(self.stl_dir, self.gcode_dir)
+
+        with patch(
+            "trinetra.database.three_mf.load_3mf_project", wraps=three_mf.load_3mf_project
+        ) as mocked_loader:
+            first_bytes = self.db_manager.get_three_mf_plate_stl_bytes(rel_path, 1)
+            second_bytes = self.db_manager.get_three_mf_plate_stl_bytes(rel_path, 1)
+
+        self.assertIsNotNone(first_bytes)
+        self.assertEqual(first_bytes, second_bytes)
+        self.assertEqual(mocked_loader.call_count, 1)
+
+        with self.db_manager.get_session() as session:
+            self.assertEqual(session.query(ThreeMFPlateCache).count(), 1)
+
+        self._write_simple_three_mf(project_path, edge_len=15)
+        now_ns = time.time_ns()
+        os.utime(project_path, ns=(now_ns, now_ns))
+
+        with patch(
+            "trinetra.database.three_mf.load_3mf_project", wraps=three_mf.load_3mf_project
+        ) as mocked_loader:
+            refreshed_bytes = self.db_manager.get_three_mf_plate_stl_bytes(rel_path, 1)
+
+        self.assertIsNotNone(refreshed_bytes)
+        self.assertNotEqual(first_bytes, refreshed_bytes)
+        self.assertEqual(mocked_loader.call_count, 1)
+
+    def test_three_mf_plate_cache_prunes_on_reconcile_delete(self):
+        project_path = os.path.join(self.test_folder, "prune_plate.3mf")
+        rel_path = "test_folder/prune_plate.3mf"
+        self._write_simple_three_mf(project_path, edge_len=10)
+        self.db_manager.reload_index(self.stl_dir, self.gcode_dir)
+
+        stl_bytes = self.db_manager.get_three_mf_plate_stl_bytes(rel_path, 1)
+        self.assertIsNotNone(stl_bytes)
+
+        with self.db_manager.get_session() as session:
+            self.assertEqual(session.query(ThreeMFPlateCache).count(), 1)
+
+        os.remove(project_path)
+        self.db_manager.reload_index(self.stl_dir, self.gcode_dir)
+
+        with self.db_manager.get_session() as session:
+            self.assertEqual(session.query(ThreeMFPlateCache).count(), 0)
+
+    def test_reload_index_reconciles_add_modify_delete_without_wiping_unaffected_rows(self):
+        unchanged_folder_path = os.path.join(self.stl_dir, "unchanged_folder")
+        os.makedirs(unchanged_folder_path)
+        with open(os.path.join(unchanged_folder_path, "keep.stl"), "w", encoding="utf-8") as file:
+            file.write("solid keep\nendsolid keep\n")
+
+        image_path = os.path.join(self.test_folder, "preview.png")
+        pdf_path = os.path.join(self.test_folder, "guide.pdf")
+        project_path = os.path.join(self.test_folder, "mutable.3mf")
+        with open(image_path, "wb") as file:
+            file.write(b"png")
+        with open(pdf_path, "wb") as file:
+            file.write(b"%PDF-1.4\n")
+        self._write_simple_three_mf(project_path, edge_len=10)
+
+        self.db_manager.reload_index(self.stl_dir, self.gcode_dir)
+
+        with self.db_manager.get_session() as session:
+            unchanged_folder = (
+                session.query(Folder).filter(Folder.name == "unchanged_folder").first()
+            )
+            self.assertIsNotNone(unchanged_folder)
+            unchanged_folder_id = unchanged_folder.id
+
+        os.remove(self.stl_file_path)
+        with open(os.path.join(self.test_folder, "replacement.stl"), "w", encoding="utf-8") as file:
+            file.write("solid replacement\nendsolid replacement\n")
+        os.remove(image_path)
+        with open(os.path.join(self.test_folder, "detail.jpg"), "wb") as file:
+            file.write(b"jpg")
+        os.remove(pdf_path)
+        with open(os.path.join(self.test_folder, "notes.pdf"), "wb") as file:
+            file.write(b"%PDF-1.4 updated\n")
+        self._write_simple_three_mf(project_path, edge_len=14)
+        now_ns = time.time_ns()
+        os.utime(project_path, ns=(now_ns, now_ns))
+        os.remove(self.gcode_file_path)
+        with open(os.path.join(self.test_folder, "updated.gcode"), "w", encoding="utf-8") as file:
+            file.write(";FLAVOR:Marlin\n;TIME:120\nG28 ;Home\n")
+
+        self.db_manager.reload_index(self.stl_dir, self.gcode_dir)
+
+        with self.db_manager.get_session() as session:
+            unchanged_folder_after = (
+                session.query(Folder).filter(Folder.name == "unchanged_folder").first()
+            )
+            self.assertIsNotNone(unchanged_folder_after)
+            self.assertEqual(unchanged_folder_after.id, unchanged_folder_id)
+
+            stl_rel_paths = {rel_path for (rel_path,) in session.query(STLFile.rel_path).all()}
+            self.assertIn("unchanged_folder/keep.stl", stl_rel_paths)
+            self.assertIn("test_folder/replacement.stl", stl_rel_paths)
+            self.assertNotIn("test_folder/test.stl", stl_rel_paths)
+
+            image_rel_paths = {rel_path for (rel_path,) in session.query(ImageFile.rel_path).all()}
+            self.assertIn("test_folder/detail.jpg", image_rel_paths)
+            self.assertNotIn("test_folder/preview.png", image_rel_paths)
+
+            pdf_rel_paths = {rel_path for (rel_path,) in session.query(PDFFile.rel_path).all()}
+            self.assertIn("test_folder/notes.pdf", pdf_rel_paths)
+            self.assertNotIn("test_folder/guide.pdf", pdf_rel_paths)
+
+            three_mf_rel_paths = {
+                rel_path for (rel_path,) in session.query(ThreeMFFile.rel_path).all()
+            }
+            self.assertIn("test_folder/mutable.3mf", three_mf_rel_paths)
+
+            gcode_rel_paths = {rel_path for (rel_path,) in session.query(GCodeFile.rel_path).all()}
+            self.assertIn("test_folder/updated.gcode", gcode_rel_paths)
+            self.assertNotIn("test_folder/test.gcode", gcode_rel_paths)
 
     @patch("trinetra.integrations.moonraker.api.MoonrakerAPI")
     def test_reload_moonraker_only(self, mock_moonraker_api_class):

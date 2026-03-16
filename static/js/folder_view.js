@@ -1,10 +1,5 @@
 let canvas, renderer;
 let scenes = [];
-const observerOptions = {
-    root: null,
-    rootMargin: '0px',
-    threshold: 0.1
-};
 
 let modal;
 let modalImg;
@@ -25,6 +20,7 @@ function init() {
         canvas.setAttribute('data-test-id', '3d-canvas');
         document.body.appendChild(canvas);
     }
+    renderer = ensureSharedRenderer(canvas);
 
     if (stlFiles && stlFiles.length > 0) {
         loadSTLFiles(stlFiles);
@@ -41,13 +37,6 @@ function init() {
     if (pdfFiles && pdfFiles.length > 0) {
         loadPDFs(pdfFiles);
     }
-
-    // Initialize the renderer after loading the scenes
-    renderer = new THREE.WebGLRenderer({canvas: canvas, antialias: true});
-    renderer.setClearColor(0xffffff, 1);
-    renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setAnimationLoop(animate);
 
     // Get modal elements
     modal = document.getElementById('image-modal');
@@ -143,17 +132,9 @@ function loadSTLFiles(files) {
         const stlItem = createSTLItem(file, containerElement, scene, rowContainer);
         scenes.push(scene);
 
-        const observer = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    // Using shared loadSTLFile function from shared_3d_renderer.js
-                    loadSTLFile(relPath, scene, stlItem.controls, containerElement.querySelector('div:nth-child(3)'), stlItem.camera);
-                    observer.unobserve(containerElement);
-                }
-            });
-        }, observerOptions);
-
-        observer.observe(containerElement);
+        observeWhenVisible(containerElement, () => {
+            loadSTLFile(relPath, scene, stlItem.controls, containerElement.querySelector('div:nth-child(3)'), stlItem.camera);
+        });
     });
 
     content.appendChild(rowContainer);
@@ -263,16 +244,9 @@ function loadGCodeFiles(files) {
         
         scenes.push(scene);
 
-        const observer = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    loadGCodeFile(gcodeItem.relPath, gcodeItem.basePath, scene, gcodeItem.controls, gcodeItem.camera);
-                    observer.unobserve(containerElement);
-                }
-            });
-        }, observerOptions);
-
-        observer.observe(containerElement);
+        observeWhenVisible(containerElement, () => {
+            loadGCodeFile(gcodeItem.relPath, gcodeItem.basePath, scene, gcodeItem.controls, gcodeItem.camera);
+        });
     });
 
     content.appendChild(rowContainer);
@@ -426,24 +400,16 @@ function loadThreeMfProjects(projects) {
             light.position.set(1, 1, 1).normalize();
             scene.add(light);
 
-            const observer = new IntersectionObserver((entries) => {
-                entries.forEach(entry => {
-                    if (!entry.isIntersecting) {
-                        return;
-                    }
-                    const plateUrl = `/3mf_plate?file=${encodeURIComponent(project.rel_path)}&plate=${encodeURIComponent(plate.index)}`;
-                    loadSTLFromUrl(
-                        plateUrl,
-                        scene,
-                        controls,
-                        sizeElement,
-                        camera
-                    );
-                    observer.unobserve(containerElement);
-                });
-            }, observerOptions);
-
-            observer.observe(containerElement);
+            observeWhenVisible(containerElement, () => {
+                const plateUrl = `/3mf_plate?file=${encodeURIComponent(project.rel_path)}&plate=${encodeURIComponent(plate.index)}`;
+                loadSTLFromUrl(
+                    plateUrl,
+                    scene,
+                    controls,
+                    sizeElement,
+                    camera
+                );
+            });
         });
 
         projectContainer.appendChild(rowContainer);

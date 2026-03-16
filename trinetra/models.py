@@ -10,6 +10,7 @@ from sqlalchemy import (
     Float,
     String,
     Text,
+    LargeBinary,
     DateTime,
     Boolean,
     ForeignKey,
@@ -35,6 +36,9 @@ class Folder(Base):
 
     # Relationships
     stl_files = relationship("STLFile", back_populates="folder", cascade="all, delete-orphan")
+    three_mf_files = relationship(
+        "ThreeMFFile", back_populates="folder", cascade="all, delete-orphan"
+    )
     image_files = relationship("ImageFile", back_populates="folder", cascade="all, delete-orphan")
     pdf_files = relationship("PDFFile", back_populates="folder", cascade="all, delete-orphan")
     gcode_files = relationship("GCodeFile", back_populates="folder", cascade="all, delete-orphan")
@@ -206,6 +210,31 @@ class GCodeFileStats(Base):
         return f"<GCodeFileStats(file_id={self.gcode_file_id}, prints={self.print_count})>"
 
 
+class ThreeMFFile(Base):
+    """Represents a 3MF project file within a folder or virtual root-level folder."""
+
+    __tablename__ = "three_mf_files"
+
+    id = Column(Integer, primary_key=True)
+    folder_id = Column(Integer, ForeignKey("folders.id"), nullable=False)
+    file_name = Column(String(255), nullable=False)
+    rel_path = Column(String(500), nullable=False)
+    abs_path = Column(String(500), nullable=False)
+    file_size = Column(Integer)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    folder = relationship("Folder", back_populates="three_mf_files")
+
+    __table_args__ = (
+        Index("idx_three_mf_folder_name", "folder_id", "file_name"),
+        Index("idx_three_mf_rel_path", "rel_path"),
+    )
+
+    def __repr__(self):
+        return f"<ThreeMFFile(file_name='{self.file_name}', folder_id={self.folder_id})>"
+
+
 class ThreeMFProjectCache(Base):
     """Cached summary payload for parsed 3MF project previews."""
 
@@ -224,6 +253,30 @@ class ThreeMFProjectCache(Base):
 
     def __repr__(self):
         return f"<ThreeMFProjectCache(rel_path='{self.rel_path}')>"
+
+
+class ThreeMFPlateCache(Base):
+    """Cached binary STL preview per 3MF plate."""
+
+    __tablename__ = "three_mf_plate_cache"
+
+    id = Column(Integer, primary_key=True)
+    rel_path = Column(String(500), nullable=False)
+    plate_index = Column(Integer, nullable=False)
+    file_mtime_ns = Column(Integer, nullable=False)
+    file_size = Column(Integer, nullable=False, default=0)
+    summary_version = Column(Integer, nullable=False, default=1)
+    stl_blob = Column(LargeBinary, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("rel_path", "plate_index", name="uq_three_mf_plate_cache_rel_path_plate"),
+        Index("idx_three_mf_plate_cache_rel_path", "rel_path"),
+    )
+
+    def __repr__(self):
+        return f"<ThreeMFPlateCache(rel_path='{self.rel_path}', plate_index={self.plate_index})>"
 
 
 class PrintHistoryEvent(Base):

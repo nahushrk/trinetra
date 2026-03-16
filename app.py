@@ -338,25 +338,7 @@ def create_app(config_file=None, config_overrides=None):
     @app.route("/gcode_files")
     def gcode_files_view():
         """Display all G-code files across all folders with links to their parent folders."""
-        # Check if pagination is requested
-        page = request.args.get("page", 1, type=int)
-        per_page = request.args.get("per_page", 15, type=int)
-        sort_by = request.args.get("sort_by", "folder_name")
-        sort_order = request.args.get("sort_order", "asc")
-        filter_text = request.args.get("filter", "")
-        filter_type = request.args.get("filter_type", "all")
-
-        # Get paginated data
-        paginated_data = db_manager.get_gcode_files_paginated(
-            page=page,
-            per_page=per_page,
-            sort_by=sort_by,
-            sort_order=sort_order,
-            filter_text=filter_text,
-            filter_type=filter_type,
-        )
-
-        return render_template("gcode_files.html", gcode_files=paginated_data)
+        return render_template("gcode_files.html")
 
     @app.route("/folder/<path:folder_name>")
     def folder_view(folder_name):
@@ -384,20 +366,10 @@ def create_app(config_file=None, config_overrides=None):
             return "Invalid file type", 400
 
         try:
-            abs_path = safe_join(app.config["STL_FILES_PATH"], filename)
-            if not os.path.isfile(abs_path):
-                return "File not found", 404
-
-            parsed = three_mf.load_3mf_project(abs_path)
-            triangles = three_mf.get_plate_triangles(parsed, plate_index)
-            if not triangles:
+            stl_bytes = db_manager.get_three_mf_plate_stl_bytes(filename, plate_index)
+            if not stl_bytes:
                 return "Plate not found or empty", 404
 
-            stl_bytes = three_mf.build_plate_stl_bytes(
-                parsed,
-                plate_index,
-                header_text=f"{os.path.basename(filename)} plate {plate_index}",
-            )
             return send_file(
                 io.BytesIO(stl_bytes),
                 mimetype="model/stl",
@@ -502,6 +474,9 @@ def create_app(config_file=None, config_overrides=None):
                 return jsonify({"ask_user": True, "conflicts": conflicts}), 200
             # If no conflicts, proceed as normal (fall through)
 
+        affected_stl_folders = set()
+        affected_gcode_rel_paths = set()
+
         # Step 2: Actually process files (skip/overwrite)
         results = []
         for file, filename in files:
@@ -577,6 +552,7 @@ def create_app(config_file=None, config_overrides=None):
                             "folder_existed": folder_exists,
                         }
                     )
+                    affected_stl_folders.add(folder_name)
                 except Exception as e:
                     app.logger.error(f"Error extracting zip file {filename}: {e}")
                     results.append(
@@ -610,6 +586,7 @@ def create_app(config_file=None, config_overrides=None):
                             "folder_existed": bool(folder_exists),
                         }
                     )
+                    affected_stl_folders.add(item_name)
                 except Exception as e:
                     app.logger.error(f"Error saving STL file {filename}: {e}")
                     results.append(
@@ -633,6 +610,10 @@ def create_app(config_file=None, config_overrides=None):
                             "folder_existed": bool(item_exists),
                         }
                     )
+                    if upload_kind == "3mf":
+                        affected_stl_folders.add(os.path.splitext(filename)[0])
+                    elif upload_kind == "gcode":
+                        affected_gcode_rel_paths.add(filename)
                 except Exception as e:
                     app.logger.error(f"Error saving file {filename}: {e}")
                     results.append(
@@ -656,16 +637,12 @@ def create_app(config_file=None, config_overrides=None):
         index_refresh = {"success": False}
         if refresh_index:
             try:
-                moonraker_url = get_enabled_moonraker_url()
-                moonraker_client = get_enabled_moonraker_client()
-                counts = db_manager.reload_index(
-                    app.config["STL_FILES_PATH"],
-                    app.config["GCODE_FILES_PATH"],
-                    moonraker_url,
-                    moonraker_client,
+                counts = db_manager.refresh_changed_files(
+                    stl_folder_names=sorted(affected_stl_folders) if affected_stl_folders else None,
+                    gcode_rel_paths=sorted(affected_gcode_rel_paths)
+                    if affected_gcode_rel_paths
+                    else None,
                 )
-                bambu_sync = sync_bambu_history(cleanup_expired=True)
-                counts["bambu_history_synced"] = bambu_sync
                 index_refresh = {"success": True, "counts": counts}
             except Exception as e:
                 app.logger.error(f"Error refreshing index after upload: {e}")
@@ -773,15 +750,7 @@ def create_app(config_file=None, config_overrides=None):
     def get_moonraker_stats(filename):
         """Get Moonraker print statistics for a G-code file from database."""
         try:
-            # Get file stats from database
-            all_gcode_files = db_manager.get_all_gcode_files()
-
-            # Find the file with matching name
-            file_stats = None
-            for gcode_file in all_gcode_files:
-                if gcode_file["file_name"] == filename:
-                    file_stats = gcode_file["stats"]
-                    break
+            file_stats = db_manager.get_moonraker_stats_for_file(filename)
 
             if file_stats:
                 return jsonify({"success": True, "stats": file_stats})

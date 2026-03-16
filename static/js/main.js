@@ -1,15 +1,11 @@
 let canvas, renderer;
 let scenes = [];
-const observerOptions = {
-    root: null,
-    rootMargin: '50px',  // Only trigger when 50px of the element is visible
-    threshold: 0.1
-};
 
 init();
 
 function init() {
     canvas = document.getElementById('c');
+    renderer = ensureSharedRenderer(canvas);
     const searchInput = document.getElementById('search-input');
     const uploadButton = document.getElementById('upload-button');
     const fileInput = document.getElementById('file-input');
@@ -152,70 +148,6 @@ function formatBatchSummary(totalFiles, successCount, skippedCount, errorCount) 
     return `Batch finished: ${successCount} uploaded, ${skippedCount} skipped, ${errorCount} failed (total ${totalFiles}).`;
 }
 
-async function uploadSingleFile(file) {
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('conflict_action', 'skip');
-    formData.append('refresh_index', 'false');
-
-    let response;
-    try {
-        response = await fetch('/upload', {
-            method: 'POST',
-            body: formData
-        });
-    } catch (error) {
-        return {
-            status: 'error',
-            filename: file.name,
-            error: `Network error: ${error.message || 'upload request failed'}`
-        };
-    }
-
-    let data = {};
-    try {
-        data = await response.json();
-    } catch (error) {
-        return {
-            status: 'error',
-            filename: file.name,
-            error: 'Server returned an invalid response'
-        };
-    }
-
-    if (!response.ok || !data.success) {
-        return {
-            status: 'error',
-            filename: file.name,
-            error: data.error || `Upload failed with status ${response.status}`
-        };
-    }
-
-    const result = Array.isArray(data.results) ? data.results[0] : null;
-    if (!result) {
-        return {
-            status: 'error',
-            filename: file.name,
-            error: 'Upload completed but returned no result entry'
-        };
-    }
-    return result;
-}
-
-async function refreshIndexAfterBatchUpload() {
-    const response = await fetch('/reload_index?mode=files', { method: 'POST' });
-    let data = {};
-    try {
-        data = await response.json();
-    } catch (error) {
-        return { ok: false, error: 'Invalid reload response' };
-    }
-    return {
-        ok: response.ok && data.success === true,
-        error: data.error || null,
-    };
-}
-
 async function uploadFiles(files) {
     const selectedFiles = Array.from(files || []);
     if (selectedFiles.length === 0) {
@@ -241,18 +173,43 @@ async function uploadFiles(files) {
     setUploadSummary('info', `Uploading ${totalFiles} file(s)...`);
     startUploadTimer();
 
-    for (let idx = 0; idx < selectedFiles.length; idx++) {
-        const file = selectedFiles[idx];
-        const current = idx + 1;
+    const formData = new FormData();
+    selectedFiles.forEach(file => {
+        formData.append('file', file);
+    });
+    formData.append('conflict_action', 'skip');
+    formData.append('refresh_index', 'true');
 
-        updateUploadProgress(
-            Math.round((idx / totalFiles) * 100),
-            `Uploading ${current}/${totalFiles}: ${file.name}`
-        );
+    updateUploadProgress(20, `Uploading ${totalFiles} file(s)...`);
 
-        const result = await uploadSingleFile(file);
-        const label = result.folder_name || result.filename || file.name;
+    let response;
+    let payload;
+    try {
+        response = await fetch('/upload', {
+            method: 'POST',
+            body: formData
+        });
+        payload = await response.json();
+    } catch (error) {
+        stopUploadTimer();
+        updateUploadProgress(100, 'Upload failed');
+        setUploadSummary('error', `Upload failed: ${error.message || 'request failed'}`);
+        appendUploadLog(`[ERROR] Batch upload failed: ${error.message || 'request failed'}`, 'error');
+        return;
+    }
 
+    if (!response.ok || !payload.success) {
+        stopUploadTimer();
+        updateUploadProgress(100, 'Upload failed');
+        setUploadSummary('error', payload.error || `Upload failed with status ${response.status}`);
+        appendUploadLog(`[ERROR] Batch upload failed: ${payload.error || `status ${response.status}`}`, 'error');
+        return;
+    }
+
+    updateUploadProgress(80, 'Processing uploaded files...');
+    const results = Array.isArray(payload.results) ? payload.results : [];
+    results.forEach(result => {
+        const label = result.folder_name || result.filename || 'unknown';
         if (result.status === 'success') {
             successCount += 1;
             appendUploadLog(`[OK] ${result.filename} -> ${label}`, 'success');
@@ -263,33 +220,19 @@ async function uploadFiles(files) {
             errorCount += 1;
             appendUploadLog(`[ERROR] ${result.filename}: ${result.error || 'upload failed'}`, 'error');
         }
+    });
 
-        setUploadSummary('info', formatBatchSummary(totalFiles, successCount, skippedCount, errorCount));
-        updateUploadProgress(
-            Math.round((current / totalFiles) * 90),
-            `Processed ${current}/${totalFiles} files`
-        );
-    }
-
-    updateUploadProgress(95, 'Refreshing library index...');
-    try {
-        const refreshResult = await refreshIndexAfterBatchUpload();
-        if (refreshResult.ok) {
-            appendUploadLog('Index refresh completed.', 'success');
-            // Jump to first page so newly uploaded models are visible immediately.
-            if (typeof loadPage === 'function') {
-                loadPage(1);
-            }
-        } else {
-            appendUploadLog(
-                `Index refresh failed${refreshResult.error ? `: ${refreshResult.error}` : ''}. Data may be stale until next refresh.`,
-                'error'
-            );
-            errorCount += 1;
-        }
-    } catch (error) {
-        appendUploadLog(`Index refresh failed: ${error.message || 'unknown error'}`, 'error');
+    if (payload.index_refresh && payload.index_refresh.success === false) {
         errorCount += 1;
+        appendUploadLog(
+            `Index refresh failed${payload.index_refresh.error ? `: ${payload.index_refresh.error}` : ''}.`,
+            'error'
+        );
+    } else {
+        appendUploadLog('Index refresh completed.', 'success');
+        if (typeof loadPage === 'function') {
+            loadPage(1);
+        }
     }
 
     stopUploadTimer();
@@ -344,7 +287,6 @@ function loadSTLFiles(folders) {
         rowContainer.className = 'row';
 
         files.forEach(file => {
-            const stlFile = file['file_name'];
             const relPath = file['rel_path'];
 
             const scene = new THREE.Scene();
@@ -356,17 +298,9 @@ function loadSTLFiles(folders) {
             const stlItem = createSTLItem(file, containerElement, scene, rowContainer);
             scenes.push(scene);
 
-            const observer = new IntersectionObserver((entries) => {
-                entries.forEach(entry => {
-                    if (entry.isIntersecting) {
-                        // Using shared loadSTLFile function from shared_3d_renderer.js
-                        loadSTLFile(relPath, scene, stlItem.controls, containerElement.querySelector('div:nth-child(3)'), stlItem.camera);
-                        observer.unobserve(containerElement);
-                    }
-                });
-            }, observerOptions);
-
-            observer.observe(containerElement);
+            observeWhenVisible(containerElement, () => {
+                loadSTLFile(relPath, scene, stlItem.controls, containerElement.querySelector('div:nth-child(3)'), stlItem.camera);
+            });
         });
 
         // Render 3MF plates in the same folder grid as STL files.
@@ -445,36 +379,23 @@ function loadSTLFiles(folders) {
                 light.position.set(1, 1, 1).normalize();
                 scene.add(light);
 
-                const observer = new IntersectionObserver((entries) => {
-                    entries.forEach(entry => {
-                        if (!entry.isIntersecting) {
-                            return;
-                        }
-                        const plateUrl = `/3mf_plate?file=${encodeURIComponent(project.rel_path)}&plate=${encodeURIComponent(plate.index)}`;
-                        loadSTLFromUrl(
-                            plateUrl,
-                            scene,
-                            controls,
-                            sizeElement,
-                            camera
-                        );
-                        observer.unobserve(containerElement);
-                    });
-                }, observerOptions);
-
-                observer.observe(containerElement);
+                observeWhenVisible(containerElement, () => {
+                    const plateUrl = `/3mf_plate?file=${encodeURIComponent(project.rel_path)}&plate=${encodeURIComponent(plate.index)}`;
+                    loadSTLFromUrl(
+                        plateUrl,
+                        scene,
+                        controls,
+                        sizeElement,
+                        camera
+                    );
+                });
             });
         });
 
         folderContainer.appendChild(rowContainer);
         content.appendChild(folderContainer);
     });
-
-    renderer = new THREE.WebGLRenderer({canvas: canvas, antialias: true});
-    renderer.setClearColor(0xffffff, 1);
-    renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setAnimationLoop(animate);
+    renderer = ensureSharedRenderer(canvas);
 }
 
 function extractPlateUsageInfo(plate) {

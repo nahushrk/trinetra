@@ -113,27 +113,18 @@ def format_metadata_keys_for_display(metadata):
     return formatted_metadata
 
 
-def extract_gcode_metadata(file):
-    # Handle both string and file inputs
-    if isinstance(file, str):
-        content = file
-    else:
-        content = file.read()
-        file.seek(0)  # Reset file pointer for potential future reads
-
-    lines = content.splitlines()
+def extract_gcode_metadata_from_parts(header_content: str, tail_content: str = ""):
     header_lines = []
     cura_config_lines = []
     in_cura_config = False
 
-    for line in lines:
+    for line in (header_content or "").splitlines():
         line = line.strip()
         if "G28 ;Home" in line:
             break
         header_lines.append(line)
 
-    # Look for Cura config after "End of Gcode"
-    for line in lines:
+    for line in (tail_content or "").splitlines():
         line = line.strip()
         if ";End of Gcode" in line:
             in_cura_config = True
@@ -142,7 +133,6 @@ def extract_gcode_metadata(file):
             cura_config_lines.append(line.replace(";SETTING_3 ", ""))
 
     cura_config_data = "".join(cura_config_lines).replace("\n", "")
-
     metadata_from_header = {}
     metadata_from_cura = {}
 
@@ -157,6 +147,14 @@ def extract_gcode_metadata(file):
             logger.debug(f"Cura config data: {cura_config_data[:200]}...")
 
     metadata = {**metadata_from_header, **metadata_from_cura}
-
-    # Format keys for HTML display
     return format_metadata_keys_for_display(metadata)
+
+
+def extract_gcode_metadata(file):
+    # Handle both string and file inputs
+    if isinstance(file, str):
+        content = file
+    else:
+        content = file.read()
+        file.seek(0)  # Reset file pointer for potential future reads
+    return extract_gcode_metadata_from_parts(content, content)
